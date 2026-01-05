@@ -1,0 +1,11 @@
+[[permission]]
+identifier = "http:allow-lm-studio"
+description = "Allow HTTP access to local LM Studio server"
+
+scope = [
+  [
+    "http://localhost:1234/*",
+    "http://127.0.0.1:1234/*"
+  ],
+  []
+]
