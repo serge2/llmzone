@@ -27,6 +27,9 @@
   let apiKey = '';
   let modelName = 'local-model';
 
+  // Sidebar visibility
+  let sidebarVisible = true; // Track visibility state
+
   onMount(() => {
     // load settings if any
     try {
@@ -160,6 +163,10 @@
     }
   }
 
+  function toggleSidebar() {
+    sidebarVisible = !sidebarVisible;
+  }
+
   // Обработка нажатия Enter
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -171,26 +178,56 @@
 
 <main class="app-container">
   <header>
-    <h1>AI Chat</h1>
+    <div class="header-content">
+      {#if selectedTab === 'chats'}
+        <button class="sidebar-toggle" title="Показать/скрыть панель чатов" on:click={toggleSidebar}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9h18M3 15h18"></path>
+          </svg>
+        </button>
+      {/if}
+    </div>
   </header>
 
   <div class="main-row">
     <aside class="side left">
       <ul class="left-tabs">
-        <li class:active={selectedTab === 'chats'} on:click={() => selectTab('chats')}>Чаты</li>
-        <li class:active={selectedTab === 'settings'} on:click={() => selectTab('settings')}>Настройки</li>
+        <li class="tab tab-chats" class:active={selectedTab === 'chats'} on:click={() => selectTab('chats')}>
+          <span class="tab-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/></svg>
+          </span>
+          <span class="tab-text">Чаты</span>
+        </li>
+        <li class="tab tab-settings" class:active={selectedTab === 'settings'} on:click={() => selectTab('settings')}>
+          <span class="tab-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15c.1.5.1.9.1 1.3a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2c0-.4 0-.8.1-1.3a2 2 0 0 1 .6-1.1l1.1-.9a2 2 0 0 0 .6-1.5V9.2a2 2 0 0 0-.6-1.5L4.7 6a2 2 0 0 1-.6-1.1C4 4.2 4.1 3.8 4.2 3.4A2 2 0 0 1 6 2h10a2 2 0 0 1 1.8 1.4c.1.4.2.8.1 1.2-.1.5-.4.9-.6 1.1l-1.1.9a2 2 0 0 0-.6 1.5v1.1c0 .6.2 1.1.6 1.5l1.1.9c.3.2.5.6.6 1.1z"/></svg>
+          </span>
+          <span class="tab-text">Настройки</span>
+        </li>
       </ul>
     </aside>
 
     {#if selectedTab === 'chats'}
       <div class="chats-layout">
+        {#if sidebarVisible}
         <div class="chats-list">
           <div class="chats-list-header">
             <div class="toolbar">
               <button class="icon" title="Опции">⋯</button>
               <button class="icon" title="Поиск" on:click={() => searchActive = !searchActive}>🔍</button>
-              <button class="icon" title="Новый workspace" on:click={createWorkspace}>📁+</button>
-              <button class="icon create-icon" title="Новый чат" aria-label="Создать чат" on:click={createChat}>+</button>
+              <button class="icon" title="Новый workspace" on:click={createWorkspace} aria-label="Новый workspace">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <path d="M3 7a2 2 0 0 1 2-2h3l2 2h7a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path>
+                  <path d="M12 10v6"></path>
+                  <path d="M9 13h6"></path>
+                </svg>
+              </button>
+              <button class="icon icon-right" title="Новый чат" aria-label="Создать чат" on:click={createChat}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <path d="M12 5v14"></path>
+                  <path d="M5 12h14"></path>
+                </svg>
+              </button>
             </div>
             {#if searchActive}
               <input class="chat-search" placeholder="Поиск чатов..." bind:value={chatSearch} />
@@ -215,6 +252,7 @@
             {/each}
           </ul>
         </div>
+        {/if}
 
         <div class="chat-column">
           <div class="messages" bind:this={chatContainer}>
@@ -315,8 +353,6 @@
     text-align: center;
   }
 
-  h1 { margin: 0; font-size: 1.2rem; }
-
   .chat-window {
     flex: 1;
     overflow-y: auto;
@@ -364,6 +400,26 @@
     margin: 0 auto;
   }
 
+  .header-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .sidebar-toggle {
+    background: transparent;
+    border: none;
+    color: #333;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    display: none;
+  }
+
+  .sidebar-toggle:hover {
+    background: #eef2ff;
+  }
+
   .main-row {
     flex: 1;
     display: flex;
@@ -385,17 +441,17 @@
   .side.right { border-left: 1px solid #eee; }
 
   .left-tabs { padding: 0; margin: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-  .left-tabs li { padding: 10px 8px; cursor: pointer; border-radius: 6px; color: #333; }
+  .left-tabs li { padding: 10px 8px; cursor: pointer; border-radius: 6px; color: #333; display:flex; align-items:center; gap:10px; }
   .left-tabs li.active { background: #e8edf9; font-weight: 600; }
+  .left-tabs .tab-icon { display:inline-flex; width:18px; height:18px; align-items:center; justify-content:center; color: #333; }
+  .left-tabs .tab-text { display:inline-block; }
 
   .chats-layout { flex: 1; display: flex; min-height: 0; min-width: 0; }
   .chats-list { width: 260px; border-right: 1px solid #eee; padding: 12px; background: #fbfbfd; overflow-y: auto; display: none; }
   .chats-list .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-  .chats-list .icon { background: transparent; border: 1px solid transparent; padding: 6px 8px; border-radius: 6px; cursor: pointer; color: #333; }
+  .chats-list .icon { background: transparent; border: 1px solid transparent; padding: 6px 8px; border-radius: 6px; cursor: pointer; color: #333; display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; }
   .chats-list .icon:hover { background: #eef2ff; color: #08306b; }
-  .chats-list .create { margin-left: auto; padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd; background: white; cursor: pointer; }
-  .chats-list .create-icon { margin-left: auto; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: #007bff; color: #fff; border: none; font-weight: 700; cursor: pointer; box-shadow: 0 1px 0 rgba(0,0,0,0.06); }
-  .chats-list .create-icon:hover { background: #0066dd; }
+  .chats-list .icon-right { margin-left: auto; }
   .chat-search { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 8px; }
   .workspace-tree { list-style: none; padding: 0; margin: 0; }
   .workspace { margin-bottom: 6px; }
@@ -413,11 +469,30 @@
   .inspector-tabs button.active { background: #e6f0ff; border-color: #d3e0ff; color: #08306b; font-weight: 700; }
   .inspector-body { padding: 12px; color: #333; }
 
-  /* Show sidebars on medium+ screens */
-  @media (min-width: 720px) {
-    .side { display: block; }
+  /* Sidebars and responsive behavior */
+  @media (min-width: 10px) {
+    /* Show compact left tab bar (icon-only) */
+    .side { display: block; width: 32px; padding: 8px; }
+    .left-tabs { gap: 6px; }
+    .left-tabs li { padding: 8px; justify-content: left; }
+    .left-tabs .tab-text { display: none; }
+    .sidebar-toggle { display: none; }
+  }
+  @media (min-width: 900px) {
+   /* Medium layout: show left tab bar (full), chat list (depends on sidebarVisible) */
+    .side { display: block; width: 240px; padding: 8px; }
+    .chats-list { display: none; }
+    .inspector { display: none; }
+    .left-tabs .tab-text { display: inline-block; }
+    .sidebar-toggle { display: inline-block; }
+  }
+  @media (min-width: 1000px) {
+    /* Full layout: show chat list and inspector */
+    .side { display: block; width: 240px; padding: 8px; }
     .chats-list { display: block; }
     .inspector { display: block; }
+    .left-tabs .tab-text { display: inline-block; }
+    .sidebar-toggle { display: inline-block; }
   }
 
   .chat-column {
@@ -462,10 +537,7 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Show sidebars on medium+ screens */
-  @media (min-width: 720px) {
-    .side { display: block; }
-  }
+  /* Sidebars are handled in the responsive rules above */
 
   .input-area {
     padding: 16px;
