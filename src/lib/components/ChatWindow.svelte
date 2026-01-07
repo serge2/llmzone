@@ -67,7 +67,7 @@
 
 <style>
   .chat-column { flex: 1; display: flex; flex-direction: column; background: #fff; min-width: 0; height: 100%; }
-  .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; }
+  .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
   .input-area { padding: 15px; border-top: 1px solid #eee; display: flex; gap: 10px; background: #fff; flex-shrink: 0; }
   
   textarea { 

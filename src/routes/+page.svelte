@@ -189,7 +189,7 @@
 
 <main class="app-container">
   <header>
-    <button class="sidebar-toggle" on:click={() => sidebarVisible = !sidebarVisible}>
+    <button class="sidebar-toggle" on:click={() => sidebarVisible = !sidebarVisible} aria-label="Toggle sidebar">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
     </button>
     <span class="chat-title">{currentChat?.name || 'Выберите чат'}</span>
@@ -240,9 +240,9 @@
     {:else}
       <div class="settings-view">
         <h2>Настройки API</h2>
-        <div class="field"><label>API URL</label><input bind:value={apiUrl} /></div>
-        <div class="field"><label>API Key</label><input type="password" bind:value={apiKey} /></div>
-        <div class="field"><label>Имя модели</label><input bind:value={modelName} /></div>
+        <div class="field"><label for="apiUrl">API URL</label><input id="apiUrl" bind:value={apiUrl} /></div>
+        <div class="field"><label for="apiKey">API Key</label><input id="apiKey" type="password" bind:value={apiKey} /></div>
+        <div class="field"><label for="modelName">Имя модели</label><input id="modelName" bind:value={modelName} /></div>
         <button class="save-btn" on:click={handleSaveSettings}>Сохранить настройки</button>
       </div>
     {/if}
