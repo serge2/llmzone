@@ -8,8 +8,24 @@
     "opener:default",
     {
       "identifier": "http:default",
-      "allow": [{ "url": "http://localhost:1234/*" }],
+      "allow": [
+                 { "url": "http://*:*" },
+                 { "url": "https://*:*" }
+               ],
       "deny": []
+    },
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-mkdir",
+    "fs:allow-exists",
+    {
+      "identifier": "fs:allow-appconfig-read",
+      "preference": { "path": "**" }
+    },
+    {
+      "identifier": "fs:allow-appconfig-write",
+      "preference": { "path": "**" }
     }
+    
   ]
 }
