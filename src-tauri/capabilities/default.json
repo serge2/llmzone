@@ -6,26 +6,19 @@
   "permissions": [
     "core:default",
     "opener:default",
+
     {
       "identifier": "http:default",
       "allow": [
-                 { "url": "http://*:*" },
-                 { "url": "https://*:*" }
-               ],
+        { "url": "http://*:*" },
+        { "url": "https://*:*" }
+      ],
       "deny": []
     },
-    "fs:allow-read-text-file",
-    "fs:allow-write-text-file",
-    "fs:allow-mkdir",
-    "fs:allow-exists",
-    {
-      "identifier": "fs:allow-appconfig-read",
-      "preference": { "path": "**" }
-    },
-    {
-      "identifier": "fs:allow-appconfig-write",
-      "preference": { "path": "**" }
-    }
-    
+    "fs:scope-app-recursive",
+    "fs:scope-appconfig-recursive",
+    "fs:allow-app-meta-recursive",
+    "fs:allow-app-read-recursive",
+    "fs:allow-app-write-recursive"
   ]
 }
