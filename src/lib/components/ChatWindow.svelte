@@ -7,6 +7,10 @@
   export let isTyping: boolean;
   export let message: string;
   export let onSendMessage: () => void;
+  export let onEditMessage: (index: number, newText: string) => void = () => {};
+  export let onCopyMessage: (text: string) => void = () => {};
+  export let onDeleteMessage: (index: number) => void = () => {};
+  export let onRegenerateMessage: () => void = () => {};
 
   let chatContainer: HTMLElement;
 
@@ -25,8 +29,16 @@
 
 <section class="chat-column">
   <div class="messages" bind:this={chatContainer}>
-    {#each history as msg}
-      <MessageBubble text={msg.text} role={msg.role} />
+    {#each history as msg, index (index)}
+      <MessageBubble 
+        text={msg.text} 
+        role={msg.role}
+        isLastMessage={index === history.length - 1}
+        onEdit={() => onEditMessage(index, msg.text)}
+        onCopy={() => onCopyMessage(msg.text)}
+        onDelete={() => onDeleteMessage(index)}
+        onRegenerate={() => onRegenerateMessage()}
+      />
     {/each}
     
     {#if isTyping && (history.length === 0 || history[history.length-1].role !== 'ai')}

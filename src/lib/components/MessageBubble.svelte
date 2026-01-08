@@ -17,7 +17,23 @@
   import 'prismjs/components/prism-cpp';
 
   
-  let { text, role } = $props<{ text: string, role: string }>();
+  let { 
+    text, 
+    role, 
+    isLastMessage = false,
+    onEdit,
+    onCopy,
+    onDelete,
+    onRegenerate
+  } = $props<{ 
+    text: string, 
+    role: string,
+    isLastMessage?: boolean,
+    onEdit?: () => void,
+    onCopy?: () => void,
+    onDelete?: () => void,
+    onRegenerate?: () => void
+  }>();
   let htmlContent = $derived(marked.parse(text || ''));
   let proseEl: HTMLDivElement;
 
@@ -69,6 +85,16 @@
     if (htmlContent && proseEl) {
       // Таймаут нужен, чтобы Svelte успел отрендерить HTML в DOM и CSS загрузился
       setTimeout(() => {
+        // Сначала применяем стили выравнивания для wrapper
+        const wrapper = proseEl.closest('.message-wrapper');
+        if (wrapper) {
+          if (role === 'user') {
+            wrapper.setAttribute('style', 'display: flex !important; width: 100% !important; justify-content: flex-end !important;');
+          } else {
+            wrapper.setAttribute('style', 'display: flex !important; width: 100% !important; justify-content: flex-start !important;');
+          }
+        }
+        
         Prism.highlightAll();
         // Добавляем toolbar и кнопку копирования к каждому pre
         proseEl.querySelectorAll('pre').forEach(pre => {
@@ -180,21 +206,53 @@
             `);
           });
         });
-        
-        // Применяем стили выравнивания для wrapper
-        const wrapper = proseEl.closest('.message-wrapper');
-        if (wrapper && role === 'user') {
-          wrapper.setAttribute('style', 'display: flex !important; width: 100% !important; justify-content: flex-end !important;');
-        }
       }, 500);
     }
   });
 </script>
 
 <div class="message-wrapper {role}">
-  <div class="message">
-    <div class="prose" bind:this={proseEl}>
-      {@html htmlContent}
+  <div class="message-content">
+    <div class="message">
+      <div class="prose" bind:this={proseEl}>
+        {@html htmlContent}
+      </div>
+    </div>
+    
+    <div class="message-actions">
+      {#if role === 'user'}
+        <button class="action-btn" title="Редактировать" onclick={onEdit}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+        </button>
+      {/if}
+      
+      <button class="action-btn" title="Копировать" onclick={onCopy}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+      </button>
+      
+      <button class="action-btn" title="Удалить" onclick={onDelete}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+      </button>
+      
+      {#if role === 'ai' && isLastMessage}
+        <button class="action-btn" title="Перегенерировать" onclick={onRegenerate}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2-8.83"></path>
+          </svg>
+        </button>
+      {/if}
     </div>
   </div>
 </div>
@@ -206,6 +264,12 @@
   }
   .message-wrapper.user { 
     justify-content: flex-end;
+  }
+
+  .message-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
   
   .message { 
@@ -308,5 +372,41 @@
   }
   .copy-btn:hover {
     background: rgba(0,0,0,0.05);
+  }
+
+  /* Кнопки действий для сообщений */
+  .message-actions {
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .message-wrapper:hover .message-actions {
+    opacity: 1;
+  }
+
+  .action-btn {
+    background: none;
+    border: 1px solid rgba(0,0,0,0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    color: #666;
+  }
+
+  .action-btn:hover {
+    background: rgba(0,0,0,0.05);
+    border-color: rgba(0,0,0,0.2);
+  }
+
+  .action-btn svg {
+    width: 16px;
+    height: 16px;
   }
 </style>

@@ -87,6 +87,55 @@
     }
   }
 
+  function handleEditMessage(index: number, currentText: string) {
+    const newText = prompt('Редактировать сообщение:', currentText);
+    if (newText !== null && newText !== currentText && currentChat) {
+      currentChat.history[index].text = newText;
+      workspaces = [...workspaces];
+      saveToLocal();
+    }
+  }
+
+  function handleCopyMessage(text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('Сообщение скопировано!');
+    });
+  }
+
+  function handleDeleteMessage(index: number) {
+    if (!currentChat) return;
+    if (confirm('Удалить это сообщение?')) {
+      currentChat.history = currentChat.history.filter((_, i) => i !== index);
+      workspaces = [...workspaces];
+      saveToLocal();
+    }
+  }
+
+  async function handleRegenerateMessage() {
+    if (!currentChat || isTyping) return;
+    
+    // Удаляем последнее AI сообщение
+    const lastIndex = currentChat.history.length - 1;
+    if (lastIndex >= 0 && currentChat.history[lastIndex].role === 'ai') {
+      currentChat.history.splice(lastIndex, 1);
+    }
+    
+    // Удаляем последнее user сообщение и сохраняем его текст
+    const userIndex = lastIndex - 1;
+    let userMessage = '';
+    if (userIndex >= 0 && currentChat.history[userIndex].role === 'user') {
+      userMessage = currentChat.history[userIndex].text;
+      currentChat.history.splice(userIndex, 1);
+    }
+    
+    workspaces = [...workspaces];
+    message = userMessage;
+    saveToLocal();
+    
+    // Отправляем сообщение заново
+    await sendMessage();
+  }
+
   async function sendMessage() {
     // Если модель уже отвечает, кнопка работает как "Стоп"
     if (isTyping) {
@@ -221,7 +270,13 @@
       <ChatWindow 
         bind:this={chatWindowComponent}
         history={currentChat?.history || []}
-        {isTyping} bind:message onSendMessage={sendMessage}
+        {isTyping} 
+        bind:message 
+        onSendMessage={sendMessage}
+        onEditMessage={handleEditMessage}
+        onCopyMessage={handleCopyMessage}
+        onDeleteMessage={handleDeleteMessage}
+        onRegenerateMessage={handleRegenerateMessage}
       />
 
       <aside class="inspector">
