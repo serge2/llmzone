@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { loadConfig, saveConfig } from '$lib/config';
   import type { Workspace, Message, Chat, Settings } from '$lib/types';
+  import { loadChats, saveChats } from '$lib/storage/chatStorage';
   
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ChatWindow from '$lib/components/ChatWindow.svelte';
@@ -35,16 +36,19 @@
   $: currentChat = currentWorkspace?.chats.find(c => c.id === selectedChatId);
 
   onMount(async () => {
-    // Загрузка конфига из файла через Tauri
-    const saved = await loadConfig();
-    if (saved) {
-      apiUrl = saved.apiUrl;
-      apiKey = saved.apiKey;
-      modelName = saved.modelName;
+    const savedConfig = await loadConfig();
+    if (savedConfig) {
+      apiUrl = savedConfig.apiUrl;
+      apiKey = savedConfig.apiKey;
+      modelName = savedConfig.modelName;
     }
-    // Загрузка данных чатов из localStorage
-    const savedData = localStorage.getItem('appData');
-    if (savedData) workspaces = JSON.parse(savedData);
+
+    const savedChats = await loadChats();
+    if (savedChats) {
+      workspaces = savedChats;
+      selectedWorkspaceId = savedChats[0]?.id;
+      selectedChatId = savedChats[0]?.chats[0]?.id;
+    }
   });
 
   async function handleSaveSettings() {
@@ -52,9 +56,9 @@
     alert('Настройки сохранены!');
   }
 
-  function saveToLocal() {
-    localStorage.setItem('appData', JSON.stringify(workspaces));
-  }
+  async function saveToLocal() {
+    await saveChats(workspaces);
+}
 
   function createWorkspace() {
     const newWs = { id: 'ws-' + Date.now(), name: 'Workspace ' + (workspaces.length + 1), chats: [] };
@@ -231,7 +235,7 @@
       abortController = null;
       wasAbortedManually = false;
       workspaces = [...workspaces];
-      saveToLocal();
+      await saveChats(workspaces);
     }
   }
 </script>
