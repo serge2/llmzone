@@ -85,16 +85,6 @@
     if (htmlContent && proseEl) {
       // Таймаут нужен, чтобы Svelte успел отрендерить HTML в DOM и CSS загрузился
       setTimeout(() => {
-        // Сначала применяем стили выравнивания для wrapper
-        const wrapper = proseEl.closest('.message-wrapper');
-        if (wrapper) {
-          if (role === 'user') {
-            wrapper.setAttribute('style', 'display: flex !important; width: 100% !important; justify-content: flex-end !important;');
-          } else {
-            wrapper.setAttribute('style', 'display: flex !important; width: 100% !important; justify-content: flex-start !important;');
-          }
-        }
-        
         Prism.highlightAll();
         // Добавляем toolbar и кнопку копирования к каждому pre
         proseEl.querySelectorAll('pre').forEach(pre => {
@@ -206,7 +196,17 @@
             `);
           });
         });
-      }, 500);
+        
+        // Применяем стили выравнивания для wrapper
+        const wrapper = proseEl.closest('.message-wrapper');
+        if (wrapper) {
+          if (role === 'user') {
+            wrapper.setAttribute('style', 'display: flex !important; width: 100% !important; justify-content: flex-end !important;');
+          } else {
+            wrapper.setAttribute('style', 'display: flex !important; width: 100% !important; justify-content: flex-start !important;');
+          }
+        }
+      }, 50);
     }
   });
 </script>
