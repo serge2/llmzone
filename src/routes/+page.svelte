@@ -208,12 +208,25 @@
               const json = JSON.parse(trimmed.slice(6));
               const content = json.choices?.[0]?.delta?.content || "";
               
-              // Наполняем текст текущего сообщения
-              currentChat.history[aiMsgIndex].text += content;
-              
-              // Триггер обновления интерфейса
-              workspaces = [...workspaces];
-              chatWindowComponent?.scrollToBottom();
+              if (content && currentChat) {
+                // 1. Создаем обновленное сообщение с новым текстом
+                const updatedMessage = {
+                  ...currentChat.history[aiMsgIndex],
+                  text: currentChat.history[aiMsgIndex].text + content
+                };
+
+                // 2. Создаем новый массив истории с обновленным сообщением
+                const updatedHistory = [...currentChat.history];
+                updatedHistory[aiMsgIndex] = updatedMessage;
+
+                // 3. Записываем обновленную историю обратно в текущий чат
+                currentChat.history = updatedHistory;
+
+                // 4. Триггерим обновление дерева состояний (для синхронизации с workspaces)
+                workspaces = [...workspaces];
+                
+                chatWindowComponent?.scrollToBottom();
+              }
             } catch (e) {
               // Игнорируем ошибки парсинга отдельных чанков
             }
