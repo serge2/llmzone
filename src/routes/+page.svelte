@@ -166,6 +166,14 @@
 
     if (!currentChat) return;
 
+    // ФИКСИРУЕМ целевой чат, чтобы при переключении вкладок текст не улетал в другой чат
+    const chatToUpdateId = selectedChatId;
+    const chatToUpdate = workspaces
+      .flatMap(ws => ws.chats)
+      .find(c => c.id === chatToUpdateId);
+
+    if (!chatToUpdate) return;
+
     // Инициализация контроллера отмены
     abortController = new AbortController();
     wasAbortedManually = false;
@@ -174,20 +182,24 @@
     // ИЗМЕНЕНО: Добавляем сообщение из инпута в историю только если оно там есть
     if (message.trim()) {
       const userText = message;
-      currentChat.history = [...currentChat.history, { role: "user", text: userText }];
+      chatToUpdate.history = [...chatToUpdate.history, { role: "user", text: userText }];
     }
     
     // Если история пуста (инпут был пуст и в истории ничего нет), выходим
-    if (currentChat.history.length === 0) return;
+    if (chatToUpdate.history.length === 0) return;
 
     // Подготовка "бульбы" для ответа ИИ
-    const aiMsgIndex = currentChat.history.length;
-    currentChat.history = [...currentChat.history, { role: "assistant", text: "" }];
+    const aiMsgIndex = chatToUpdate.history.length;
+    chatToUpdate.history = [...chatToUpdate.history, { role: "assistant", text: "" }];
     
     workspaces = [...workspaces];
     message = "";
     isTyping = true;
-    await chatWindowComponent?.scrollToBottom();
+    
+    // Скроллим, только если мы всё еще в том же чате
+    if (chatToUpdateId === selectedChatId) {
+        await chatWindowComponent?.scrollToBottom();
+    }
 
     try {
       const base = apiUrl.trim().replace(/\/+$/, '');
@@ -199,7 +211,7 @@
         },
         body: JSON.stringify({
           model: modelName,
-          messages: currentChat.history.slice(0, -1).map(m => {
+          messages: chatToUpdate.history.slice(0, -1).map(m => {
             const msg: any = { role: m.role, content: m.text };
             if (m.role === 'tool' && m.tool_call_id) msg.tool_call_id = m.tool_call_id;
             return msg;
@@ -232,24 +244,27 @@
               const json = JSON.parse(trimmed.slice(6));
               const content = json.choices?.[0]?.delta?.content || "";
               
-              if (content && currentChat) {
-                // 1. Создаем обновленное сообщение с новым текстом
+              if (content) {
+                // 1. Создаем обновленное сообщение с новым текстом (используем chatToUpdate)
                 const updatedMessage = {
-                  ...currentChat.history[aiMsgIndex],
-                  text: currentChat.history[aiMsgIndex].text + content
+                  ...chatToUpdate.history[aiMsgIndex],
+                  text: chatToUpdate.history[aiMsgIndex].text + content
                 };
 
                 // 2. Создаем новый массив истории с обновленным сообщением
-                const updatedHistory = [...currentChat.history];
+                const updatedHistory = [...chatToUpdate.history];
                 updatedHistory[aiMsgIndex] = updatedMessage;
 
-                // 3. Записываем обновленную историю обратно в текущий чат
-                currentChat.history = updatedHistory;
+                // 3. Записываем обновленную историю обратно в зафиксированный чат
+                chatToUpdate.history = updatedHistory;
 
-                // 4. Триггерим обновление дерева состояний (для синхронизации с workspaces)
+                // 4. Триггерим обновление дерева состояний
                 workspaces = [...workspaces];
                 
-                chatWindowComponent?.scrollToBottom();
+                // Скроллим только если этот чат открыт
+                if (chatToUpdateId === selectedChatId) {
+                    chatWindowComponent?.scrollToBottom();
+                }
               }
             } catch (e) {
               // Игнорируем ошибки парсинга отдельных чанков
@@ -260,16 +275,15 @@
     } catch (err: any) {
       // ПРОВЕРКА: Было ли прерывание ручным или это ошибка сети
       if (wasAbortedManually) {
-        const currentContent = currentChat.history[aiMsgIndex].text;
-        currentChat.history[aiMsgIndex].text = currentContent + "\n\n**[Генерация прервана пользователем]**";
+        const currentContent = chatToUpdate.history[aiMsgIndex].text;
+        chatToUpdate.history[aiMsgIndex].text = currentContent + "\n\n**[Генерация прервана пользователем]**";
       } else {
         // УДАЛЯЕМ заготовку сообщения ассистента, так как ответа нет
-        if (currentChat) {
-          currentChat.history = currentChat.history.filter((_, i) => i !== aiMsgIndex);
-        }
+        chatToUpdate.history = chatToUpdate.history.filter((_, i) => i !== aiMsgIndex);
         
         // ВЫВОДИМ ошибку во всплывающем окне
-        alert("Ошибка связи с моделью: " + (err.message || "Unknown error"));      }
+        alert("Ошибка связи с моделью: " + (err.message || "Unknown error"));
+      }
     } finally {
       isTyping = false;
       abortController = null;
