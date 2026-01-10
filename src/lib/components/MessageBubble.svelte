@@ -11,6 +11,17 @@
   import 'prismjs/components/prism-rust';
   import 'prismjs/components/prism-bash';
   import 'prismjs/components/prism-json';
+  import 'prismjs/components/prism-erlang';
+  import 'prismjs/components/prism-c';
+  import 'prismjs/components/prism-cpp';
+
+
+  import copyIconRaw from '$lib/assets/icons/copy.svg?raw';
+  import checkIconRaw from '$lib/assets/icons/check.svg?raw';
+  import editIconRaw from '$lib/assets/icons/edit.svg?raw';
+  import trashIconRaw from '$lib/assets/icons/trash.svg?raw';
+  import refreshIconRaw from '$lib/assets/icons/refresh.svg?raw';
+  import closeIconRaw from '$lib/assets/icons/close.svg?raw';
 
   // В Svelte 5 самый надежный способ передачи типов в $props — деструктуризация с типами
   let { 
@@ -25,16 +36,15 @@
     text: string, 
     role: string,
     isLastMessage?: boolean,
-    onEdit?: () => void,
+    onEdit?: (newText: string) => void,
     onCopy?: () => void,
     onDelete?: () => void,
     onRegenerate?: () => void
   } = $props();
 
-  $effect(() => {
-    console.log("DEBUG: MessageBubble получил текст:", text);
-    console.log("DEBUG: Длина текста:", text?.length);
-  });
+  let copied = $state(false);
+  let isConfirmingDelete = $state(false);
+  let deleteTimer: ReturnType<typeof setTimeout> | undefined;
 
   // Настройка рендерера
   const renderer = new marked.Renderer();
@@ -49,9 +59,7 @@
         <div class="code-toolbar">
           <span class="code-lang">${lang}</span>
           <button class="copy-code-btn" type="button" title="Копировать код">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-            </svg>
+            ${copyIconRaw}
           </button>
         </div>
         <pre class="language-${langClass}"><code>${codeVal}</code></pre>
@@ -74,15 +82,30 @@
   let proseEl: HTMLDivElement | undefined = $state();
 
   $effect(() => {
-    if (htmlContent && proseEl) {
-      tick().then(() => {
-        if (!proseEl) return;
-        proseEl.querySelectorAll('pre code').forEach((block) => {
-          if (!block.classList.contains('prism-highlighted') || isLastMessage) {
-            Prism.highlightElement(block);
-            block.classList.add('prism-highlighted');
-          }
-        });
+    const trigger = editText; 
+
+    if (isEditing && textareaEl) {
+      requestAnimationFrame(() => {
+        if (!textareaEl) return;
+        textareaEl.style.height = 'auto';
+        // Добавляем Math.max, чтобы высота не была меньше одной строки
+        const newHeight = textareaEl.scrollHeight;
+        textareaEl.style.height = (newHeight < 24 ? 24 : newHeight) + 'px';
+      });
+    }
+  });
+
+  // Эффект для авто-высоты textarea
+  $effect(() => {
+    // Эта строка заставляет эффект "слушать" каждое изменение editText
+    const trigger = editText; 
+
+    if (isEditing && textareaEl) {
+      // Используем requestAnimationFrame или tick, чтобы замер был после рендера текста
+      requestAnimationFrame(() => {
+        if (!textareaEl) return;
+        textareaEl.style.height = 'auto';
+        textareaEl.style.height = textareaEl.scrollHeight + 'px';
       });
     }
   });
@@ -95,11 +118,84 @@
     const pre = btn.closest('.code-block-wrapper')?.querySelector('pre');
     if (pre) {
       navigator.clipboard.writeText(pre.innerText).then(() => {
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<span style="font-size: 10px; color: #28a745">Copied!</span>';
-        setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
+        // Меняем иконку на галочку
+        btn.innerHTML = checkIconRaw;
+        btn.classList.add('success');
+        
+        setTimeout(() => { 
+          btn.innerHTML = copyIconRaw; 
+          btn.classList.remove('success');
+        }, 2000);
       });
     }
+  }
+
+  async function handleCopyClick() {
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+      // Вызываем внешний onCopy, если он нужен (например, для логов)
+      if (onCopy) onCopy(); 
+      // Возвращаем иконку через 2 секунды
+      setTimeout(() => {
+        copied = false;
+      }, 2000);
+    } catch (err) {
+      console.error('Ошибка копирования:', err);
+    }
+  }
+  
+
+  let isEditing = $state(false);
+  let editText = $state("");
+  let textareaEl: HTMLTextAreaElement | undefined = $state();
+
+  // Функция включения режима редактирования
+  function startEditing() {
+    editText = text; // Копируем текущий текст в буфер
+    isEditing = true;
+    
+    // Автофокус на поле ввода после его появления
+    tick().then(() => {
+      textareaEl?.focus();
+    });
+  }
+
+  // Функция сохранения
+  function saveEdit() {
+    const trimmedText = editText.trim();
+    if (trimmedText !== "") {
+      console.log("Bubble is sending:", trimmedText); 
+      if (onEdit) onEdit(trimmedText);
+      isEditing = false;
+    }
+  }
+
+  // Функция отмены
+  function cancelEdit() {
+    isEditing = false;
+    editText = text;
+  }
+
+  // Новая логика удаления
+  function askDelete() {
+    isConfirmingDelete = true;
+    // Авто-отмена через 5 секунд простоя
+    clearTimeout(deleteTimer);
+    deleteTimer = setTimeout(() => {
+      isConfirmingDelete = false;
+    }, 5000);
+  }
+
+  function confirmDelete() {
+    clearTimeout(deleteTimer);
+    isConfirmingDelete = false;
+    if (onDelete) onDelete();
+  }
+
+  function cancelDelete() {
+    clearTimeout(deleteTimer);
+    isConfirmingDelete = false;
   }
 </script>
 
@@ -107,7 +203,17 @@
   <div class="message-content">
     <div class="message">
       <div class="prose" bind:this={proseEl} onclick={handleProseClick} role="presentation">
-        {#if text}
+        {#if isEditing}
+          <textarea
+            bind:this={textareaEl}
+            bind:value={editText}
+            class="edit-textarea"
+            oninput={() => {}} onkeydown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveEdit();
+              if (e.key === 'Escape') cancelEdit();
+            }}
+          ></textarea>
+        {:else if text}
           {@html htmlContent}
         {:else if role === 'ai'}
           <span class="loading-dots">...</span>
@@ -116,21 +222,56 @@
     </div>
     
     <div class="message-actions">
-      {#if role === 'user'}
-        <button class="action-btn" title="Редактировать" onclick={onEdit}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+      {#if isEditing}
+        <button class="action-btn success" title="Сохранить" onclick={saveEdit}>
+          {@html checkIconRaw}
         </button>
-      {/if}
-      <button class="action-btn" title="Копировать" onclick={onCopy}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-      </button>
-      <button class="action-btn" title="Удалить" onclick={onDelete}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-      </button>
-      {#if role === 'ai' && isLastMessage}
-        <button class="action-btn" title="Перегенерировать" onclick={onRegenerate}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2-8.83"></path></svg>
+        <button class="action-btn delete-btn" title="Отменить" onclick={cancelEdit}>
+          {@html closeIconRaw}
         </button>
+      {:else if isConfirmingDelete}
+        <span class="confirm-text">Удалить?</span>
+        <button class="action-btn danger" title="Да, удалить" onclick={confirmDelete}>
+          {@html checkIconRaw}
+        </button>
+        <button class="action-btn" title="Отмена" onclick={cancelDelete}>
+          {@html closeIconRaw}
+        </button>
+      {:else}
+      
+        {#if role === 'ai' && isLastMessage}
+          <button class="action-btn" title="Перегенерировать" onclick={onRegenerate}>
+            {@html refreshIconRaw}
+          </button>
+        {/if}
+
+        {#if role === 'user'}
+          <button class="action-btn" title="Редактировать" onclick={startEditing}>
+            {@html editIconRaw}
+          </button>
+        {/if}
+
+        <button 
+          class="action-btn" 
+          class:success={copied} 
+          onclick={handleCopyClick}
+          title="Копировать сообщение"
+        >
+          {#if copied}
+            {@html checkIconRaw}
+          {:else}
+            {@html copyIconRaw}
+          {/if}
+        </button>
+
+        <button 
+          class="action-btn delete-btn" 
+          onclick={askDelete}
+          title="Удалить сообщение"
+        >
+          {@html trashIconRaw}
+        </button>
+
       {/if}
     </div>
   </div>
@@ -184,8 +325,72 @@
 
   .message-actions { display: flex; gap: 10px; opacity: 0; transition: opacity 0.2s; margin-top: 4px; padding: 0 6px; }
   .message-wrapper:hover .message-actions { opacity: 1; }
-  .action-btn { background: none; border: none; cursor: pointer; color: #b0bec5; }
-  .action-btn svg { width: 14px; height: 14px; }
+  .action-btn {transition: all 0.2s ease; background: none; border: none; cursor: pointer; color: #b0bec5; }
+  
+  /* Стили для кнопки удаления */
+  .action-btn.delete-btn.confirming {
+    color: #ef4444 !important; /* Красный цвет для подтверждения */
+    transform: scale(1.1);
+  }
+  
+  /* Добавляем поддержку цвета успеха для всех кнопок копирования */
+  .action-btn.success,
+  .prose :global(.copy-code-btn.success) {
+    color: #10b981 !important;
+  }
+
+  /* Класс для подтверждения деструктивных действий (удаление) */
+  .action-btn.danger {
+    color: #ef4444 !important;
+  }
+  
+  /* Для плавности иконок внутри пропса ?raw */
+  .prose :global(.copy-code-btn svg) {
+    display: block;
+  }
+
+  .action-btn :global(svg) { 
+    width: 14px;
+    height: 14px;
+    display: block; /* Гарантирует правильное центрирование */
+  }
+
+  .edit-textarea {
+    width: 100%;
+    display: block;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.55; /* Должно совпадать с .message */
+    resize: none;
+    outline: none;
+    color: inherit;
+    overflow: hidden;
+    box-sizing: border-box; /* Важно для точного расчета высоты */
+    min-height: 1.55em;    /* Высота одной строки */
+  }
+
+  .user .edit-textarea {
+    border-color: rgba(13, 71, 161, 0.2);
+  }
+
+  .confirm-text {
+    font-size: 0.75rem;
+    color: #ef4444;
+    font-weight: 600;
+    margin-right: 4px;
+    align-self: center;
+    user-select: none;
+  }
+
+  /* Подсвечиваем кнопку подтверждения (галочку) красным в режиме удаления, 
+     чтобы акцентировать внимание на деструктивном действии */
+  .isConfirmingDelete .action-btn.success {
+    color: #ef4444 !important;
+  }
 
   .loading-dots { color: #ccc; animation: blink 1.5s infinite; }
   @keyframes blink { 0% { opacity: 0.2; } 50% { opacity: 1; } 100% { opacity: 0.2; } }

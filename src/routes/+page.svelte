@@ -91,28 +91,45 @@
     }
   }
 
-  function handleEditMessage(index: number, currentText: string) {
-    const newText = prompt('Редактировать сообщение:', currentText);
-    if (newText !== null && newText !== currentText && currentChat) {
-      currentChat.history[index].text = newText;
-      workspaces = [...workspaces];
-      saveToLocal();
-    }
+  async function handleEditMessage(index: number, newText: string) {
+    console.log("Saving new text:", newText);
+    if (!currentChat) return;
+    
+    // Создаем копию истории
+    let newHistory = [...currentChat.history];
+    
+    // Обновляем текст в копии
+    newHistory[index] = { ...newHistory[index], text: newText };
+    
+    // Отрезаем хвост
+    newHistory = newHistory.slice(0, index + 1);
+    
+    // Записываем обратно
+    currentChat.history = newHistory;
+    
+    // Триггерим глобальное обновление
+    workspaces = [...workspaces];
+    await saveToLocal();
+
+    // Важно: если мы просто вызовем sendMessage(), она добавит в историю 
+    // текущее значение из переменной 'message'. 
+    // Поэтому мы вызываем sendMessage(), предварительно убедившись, 
+    // что 'message' пуста, так как пользовательское сообщение уже в истории.
+    
+    message = ""; // Очищаем инпут, чтобы sendMessage не дублировала сообщение
+    
+    await sendMessage();
   }
 
   function handleCopyMessage(text: string) {
-    navigator.clipboard.writeText(text).then(() => {
-      alert('Сообщение скопировано!');
-    });
+    navigator.clipboard.writeText(text);
   }
 
   function handleDeleteMessage(index: number) {
     if (!currentChat) return;
-    if (confirm('Удалить это сообщение?')) {
-      currentChat.history = currentChat.history.filter((_, i) => i !== index);
-      workspaces = [...workspaces];
-      saveToLocal();
-    }
+    currentChat.history = currentChat.history.filter((_, i) => i !== index);
+    workspaces = [...workspaces];
+    saveToLocal();
   }
 
   async function handleRegenerateMessage() {
@@ -147,16 +164,23 @@
       return;
     }
 
-    if (!message.trim() || !currentChat) return;
+    // ИЗМЕНЕНО: теперь мы не выходим, если message пуст, так как вызов может быть после редактирования
+    if (!currentChat) return;
 
     // Инициализация контроллера отмены
     abortController = new AbortController();
     wasAbortedManually = false;
     const { signal } = abortController;
 
-    const userText = message;
-    currentChat.history = [...currentChat.history, { role: "user", text: userText }];
+    // ИЗМЕНЕНО: Добавляем сообщение из инпута в историю только если оно там есть
+    if (message.trim()) {
+      const userText = message;
+      currentChat.history = [...currentChat.history, { role: "user", text: userText }];
+    }
     
+    // Если история пуста (инпут был пуст и в истории ничего нет), выходим
+    if (currentChat.history.length === 0) return;
+
     // Подготовка "бульбы" для ответа ИИ
     const aiMsgIndex = currentChat.history.length;
     currentChat.history = [...currentChat.history, { role: "ai", text: "" }];

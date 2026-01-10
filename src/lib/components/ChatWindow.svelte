@@ -69,7 +69,7 @@
           text={msg.text} 
           role={msg.role}
           isLastMessage={index === history.length - 1}
-          onEdit={() => onEditMessage(index, msg.text)}
+          onEdit={(newText) => onEditMessage(index, newText)}
           onCopy={() => onCopyMessage(msg.text)}
           onDelete={() => onDeleteMessage(index)}
           onRegenerate={() => onRegenerateMessage()}
