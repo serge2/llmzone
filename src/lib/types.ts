@@ -1,6 +1,7 @@
 export interface Message {
-  role: 'user' | 'ai' | 'error' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   text: string;
+  tool_call_id?: string; 
 }
 
 export interface Chat {

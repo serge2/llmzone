@@ -137,7 +137,7 @@
     
     // Удаляем последнее AI сообщение
     const lastIndex = currentChat.history.length - 1;
-    if (lastIndex >= 0 && currentChat.history[lastIndex].role === 'ai') {
+    if (lastIndex >= 0 && currentChat.history[lastIndex].role === 'assistant') {
       currentChat.history.splice(lastIndex, 1);
     }
     
@@ -164,7 +164,6 @@
       return;
     }
 
-    // ИЗМЕНЕНО: теперь мы не выходим, если message пуст, так как вызов может быть после редактирования
     if (!currentChat) return;
 
     // Инициализация контроллера отмены
@@ -183,7 +182,7 @@
 
     // Подготовка "бульбы" для ответа ИИ
     const aiMsgIndex = currentChat.history.length;
-    currentChat.history = [...currentChat.history, { role: "ai", text: "" }];
+    currentChat.history = [...currentChat.history, { role: "assistant", text: "" }];
     
     workspaces = [...workspaces];
     message = "";
@@ -200,10 +199,11 @@
         },
         body: JSON.stringify({
           model: modelName,
-          messages: currentChat.history.slice(0, -1).map(m => ({
-            role: (m.role === 'ai' || m.role === 'assistant') ? 'assistant' : 'user',
-            content: m.text
-          })),
+          messages: currentChat.history.slice(0, -1).map(m => {
+            const msg: any = { role: m.role, content: m.text };
+            if (m.role === 'tool' && m.tool_call_id) msg.tool_call_id = m.tool_call_id;
+            return msg;
+          }),
           stream: true
         }),
         signal 
@@ -263,10 +263,13 @@
         const currentContent = currentChat.history[aiMsgIndex].text;
         currentChat.history[aiMsgIndex].text = currentContent + "\n\n**[Генерация прервана пользователем]**";
       } else {
-        // Настоящая ошибка (модель упала, нет интернета и т.д.)
-        currentChat.history[aiMsgIndex].text = "Ошибка связи с моделью: " + (err.message || "Unknown error");
-        currentChat.history[aiMsgIndex].role = "error";
-      }
+        // УДАЛЯЕМ заготовку сообщения ассистента, так как ответа нет
+        if (currentChat) {
+          currentChat.history = currentChat.history.filter((_, i) => i !== aiMsgIndex);
+        }
+        
+        // ВЫВОДИМ ошибку во всплывающем окне
+        alert("Ошибка связи с моделью: " + (err.message || "Unknown error"));      }
     } finally {
       isTyping = false;
       abortController = null;

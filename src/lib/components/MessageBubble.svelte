@@ -28,6 +28,7 @@
     text = "", 
     role, 
     isLastMessage = false,
+    isTyping = false,
     onEdit,
     onCopy,
     onDelete,
@@ -36,6 +37,7 @@
     text: string, 
     role: string,
     isLastMessage?: boolean,
+    isTyping?: boolean,
     onEdit?: (newText: string) => void,
     onCopy?: () => void,
     onDelete?: () => void,
@@ -82,15 +84,15 @@
   let proseEl: HTMLDivElement | undefined = $state();
 
   $effect(() => {
-    const trigger = editText; 
-
-    if (isEditing && textareaEl) {
-      requestAnimationFrame(() => {
-        if (!textareaEl) return;
-        textareaEl.style.height = 'auto';
-        // Добавляем Math.max, чтобы высота не была меньше одной строки
-        const newHeight = textareaEl.scrollHeight;
-        textareaEl.style.height = (newHeight < 24 ? 24 : newHeight) + 'px';
+    if (htmlContent && proseEl) {
+      tick().then(() => {
+        if (!proseEl) return;
+        proseEl.querySelectorAll('pre code').forEach((block) => {
+          if (!block.classList.contains('prism-highlighted') || isLastMessage) {
+            Prism.highlightElement(block);
+            block.classList.add('prism-highlighted');
+          }
+        });
       });
     }
   });
@@ -199,7 +201,7 @@
   }
 </script>
 
-<div class="message-wrapper {role}">
+<div class="message-wrapper {role}" class:is-generating={isTyping}>
   <div class="message-content">
     <div class="message">
       <div class="prose" bind:this={proseEl} onclick={handleProseClick} role="presentation">
@@ -215,13 +217,13 @@
           ></textarea>
         {:else if text}
           {@html htmlContent}
-        {:else if role === 'ai'}
-          <span class="loading-dots">...</span>
+        {:else if role === 'assistant'}
+          <span class="thinking-text">ИИ думает...</span>
         {/if}
       </div>
     </div>
     
-    <div class="message-actions">
+    <div class="message-actions" class:hidden={isTyping}>
       {#if isEditing}
         <button class="action-btn success" title="Сохранить" onclick={saveEdit}>
           {@html checkIconRaw}
@@ -238,8 +240,8 @@
           {@html closeIconRaw}
         </button>
       {:else}
-      
-        {#if role === 'ai' && isLastMessage}
+
+        {#if role === 'assistant' && isLastMessage}
           <button class="action-btn" title="Перегенерировать" onclick={onRegenerate}>
             {@html refreshIconRaw}
           </button>
@@ -274,6 +276,10 @@
 
       {/if}
     </div>
+
+    {#if isTyping && text}
+      <div class="status-note">ИИ печатает...</div>
+    {/if}
   </div>
 </div>
 
@@ -287,7 +293,7 @@
   .message { padding: 14px 18px; border-radius: 16px; line-height: 1.55; font-size: 0.95rem; }
 
   .user .message { background: #e3f2fd; color: #0d47a1; border-bottom-right-radius: 4px; }
-  .ai .message { background: #ffffff; color: #263238; border: 1px solid #eceff1; border-bottom-left-radius: 4px; }
+  .assistant .message { background: #ffffff; color: #263238; border: 1px solid #eceff1; border-bottom-left-radius: 4px; }
 
   .prose :global(p) { margin: 0 0 1em 0; }
   .prose :global(p:last-child) { margin-bottom: 0; }
@@ -324,7 +330,8 @@
   }
 
   .message-actions { display: flex; gap: 10px; opacity: 0; transition: opacity 0.2s; margin-top: 4px; padding: 0 6px; }
-  .message-wrapper:hover .message-actions { opacity: 1; }
+  .message-actions.hidden { display: none !important; }
+  .message-wrapper:hover:not(.is-generating) .message-actions { opacity: 1; }
   .action-btn {transition: all 0.2s ease; background: none; border: none; cursor: pointer; color: #b0bec5; }
   
   /* Стили для кнопки удаления */
@@ -392,6 +399,30 @@
     color: #ef4444 !important;
   }
 
-  .loading-dots { color: #ccc; animation: blink 1.5s infinite; }
-  @keyframes blink { 0% { opacity: 0.2; } 50% { opacity: 1; } 100% { opacity: 0.2; } }
+  .status-note {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    margin-top: 2px;
+    padding-left: 6px;
+    animation: blink 1.5s infinite;
+  }
+
+  .thinking-text {
+    color: #94a3b8;
+    font-style: italic;
+    font-size: 0.9rem;
+    animation: pulse-opacity 1.5s infinite ease-in-out;
+  }
+
+  @keyframes pulse-opacity {
+    0% { opacity: 0.3; }
+    50% { opacity: 1; }
+    100% { opacity: 0.3; }
+  }
+
+  @keyframes blink {
+    0% { opacity: 0.2; }
+    50% { opacity: 1; }
+    100% { opacity: 0.2; }
+  }
 </style>
