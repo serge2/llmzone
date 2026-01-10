@@ -77,13 +77,6 @@
         />
       {/each}
       
-      {#if isTyping && (history.length === 0 || history[history.length-1].role !== 'assistant')}
-        <div class="message-wrapper assistant">
-          <div class="message typing">
-            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-          </div>
-        </div>
-      {/if}
     </div>
   </div>
 
@@ -93,7 +86,7 @@
         bind:value={message} 
         onkeydown={handleKeydown} 
         placeholder="Спросите о чем угодно..."
-        rows="1"
+        rows="3"
       ></textarea>
       
       <button 
@@ -128,7 +121,7 @@
   }
 
   .messages-list {
-    max-width: 800px;
+    max-width: 1000px;
     margin: 0 auto;
     padding: 40px 0;
     display: flex;
@@ -136,12 +129,12 @@
   }
 
   .input-container { 
-    padding: 10px 10% 24px 10%;
+    padding: 10px 10% 60px 10%;
     background: linear-gradient(transparent, #fdfdfd 20%);
   }
 
   .input-wrapper {
-    max-width: 800px;
+    max-width: 1000px;
     margin: 0 auto;
     display: flex;
     align-items: flex-end;
@@ -170,16 +163,12 @@
     width: 36px; height: 36px; background: #2f2f2f; color: white; border: none; border-radius: 12px; cursor: pointer; 
     display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform 0.1s;
   }
+
   .input-wrapper button:hover:not(:disabled) { transform: scale(1.05); background: #000; }
   .input-wrapper button:disabled { background: #e5e7eb; color: #a1a1aa; cursor: not-allowed; }
-  .input-wrapper button.stop-btn { background: #ef4444; }
+  .input-wrapper button.stop-btn { background: #e5e7eb; color: #ef4444;}
 
   .footer-note { text-align: center; font-size: 0.7rem; color: #9ca3af; margin-top: 8px; }
 
-  /* Анимация точек печати */
-  .typing { display: flex; gap: 4px; padding: 10px 15px !important; background: #f0f0f0 !important; width: fit-content; }
-  .dot { width: 4px; height: 4px; background: #888; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
-  .dot:nth-child(2) { animation-delay: 0.2s; }
-  .dot:nth-child(3) { animation-delay: 0.4s; }
   @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-5px); } }
 </style>

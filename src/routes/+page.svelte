@@ -15,7 +15,7 @@
   let wasAbortedManually = false; // Флаг для корректной обработки прерывания
 
   let selectedTab: 'chats' | 'settings' = 'chats';
-  let inspectorTab: 'context' | 'model' = 'model';
+  let inspectorTab: 'context' | 'model' | 'integrations' = 'model';
   let sidebarVisible = true;
   let searchActive = false;
   let chatSearch = '';
@@ -339,14 +339,17 @@
 
       <aside class="inspector">
         <div class="tabs">
-          <button class:active={inspectorTab === 'model'} on:click={() => inspectorTab = 'model'}>Model</button>
           <button class:active={inspectorTab === 'context'} on:click={() => inspectorTab = 'context'}>Context</button>
+          <button class:active={inspectorTab === 'model'} on:click={() => inspectorTab = 'model'}>Model</button>
+          <button class:active={inspectorTab === 'integrations'} on:click={() => inspectorTab = 'integrations'}>Integrations</button>
         </div>
         <div class="content">
-          {#if inspectorTab === 'model'}
-            <p>Текущая модель: <b>{modelName}</b></p>
-          {:else}
-            <p class="muted">Контекст пуст.</p>
+          {#if inspectorTab === 'context'}
+            <p>Настройки контекста рабочего пространства</p>
+          {:else if inspectorTab === 'model'}
+            <p>Настройки модели</p>
+          {:else if inspectorTab === 'integrations'}
+            <p>Настройки интеграций</p>
           {/if}
         </div>
       </aside>
