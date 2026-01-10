@@ -2,7 +2,7 @@
   import { fetch } from '@tauri-apps/plugin-http';
   import { onMount } from 'svelte';
   import { loadConfig, saveConfig } from '$lib/config';
-  import type { Workspace, Message, Chat, WorkspaceSettings } from '$lib/types';
+  import type { Workspace, Chat, Message, AppSettings } from '$lib/types';
   import { loadChats, saveChats } from '$lib/storage/chatStorage';
   import Inspector from '$lib/components/Inspector.svelte';
   
@@ -32,38 +32,88 @@
   const collapsedWorkspaces = $state<Record<string, boolean>>({});
 
   onMount(async () => {
-    // 1. Загружаем настройки воркспейсов (apiUrl, модель и т.д.)
-    const config = await loadConfig(); 
-    // 2. Загружаем сами чаты
-    const savedChatsData = await loadChats();
+    // 1. Загружаем данные из обоих источников
+    // config теперь имеет тип AppSettings | null благодаря правкам в loadConfig
+    const config = await loadConfig();
+    // Гарантируем, что history — это массив, даже если файл пуст
+    const savedChats = await loadChats();
+    const history = savedChats || [];
     
-    if (config.workspaces && config.workspaces.length > 0) {
-      // Сопоставляем настройки из конфига с чатами из хранилища
-      workspaces = config.workspaces.map(wsConfig => {
-        const chatsForWs = savedChatsData.find(c => c.id === wsConfig.id)?.chats || [];
-        return {
-          ...wsConfig,
-          chats: chatsForWs
-        };
-      });
+    if (config?.workspaces && config.workspaces.length > 0) {
+      // 2. Собираем воркспейсы: настройки из конфига + чаты из хранилища
+      workspaces = config.workspaces.map(ws => ({
+        ...ws,
+        // Ищем чаты в истории по ID воркспейса
+        chats: history.find(h => h.id === ws.id)?.chats || []
+      })) as Workspace[];
+
+      // 3. Восстанавливаем последнее выбранное состояние
+      selectedWorkspaceId = config.lastSelectedWorkspaceId || workspaces[0].id;
       
-      selectedWorkspaceId = workspaces[0].id;
-      selectedChatId = workspaces[0].chats[0]?.id || '';
+      // Находим актуальный воркспейс, чтобы корректно выбрать чат
+      const activeWs = workspaces.find(w => w.id === selectedWorkspaceId);
+      if (activeWs && activeWs.chats.length > 0) {
+        selectedChatId = activeWs.chats[0].id;
+      }
     } else {
-      // Если конфига нет (первый запуск), создаем дефолтную структуру
-      initDefaultWorkspace();
+      // 4. Инициализация дефолтного воркспейса при самом первом запуске
+      const defaultWs: Workspace = {
+        id: 'ws-' + Date.now(),
+        name: 'Основной',
+        icon: '🏠',
+        settings: {
+          apiUrl: 'http://localhost:1234/v1',
+          apiKey: '',
+          modelName: 'local-model',
+          systemPrompt: 'You are a helpful assistant.',
+          temperature: 0.7
+        },
+        chats: [{ id: 'c-' + Date.now(), name: 'Новый чат', history: [] }]
+      };
+      
+      workspaces = [defaultWs];
+      selectedWorkspaceId = defaultWs.id;
+      selectedChatId = defaultWs.chats[0].id;
+
+      // Сразу сохраняем раздельно: структуру в конфиг, чаты в базу данных
+      await persistConfig();
+      await persistChats();
     }
   });
 
-  async function saveToLocal() {
-    // 1. Сохраняем настройки в конфиг (без массива чатов!)
-    const workspacesSettings = workspaces.map(({ chats, ...settings }) => settings);
-    await saveConfig({ ...globalConfig, workspaces: workspacesSettings });
+  // --- Работа с хранилищем (Раздельная) ---
+  async function persistConfig() {
+    // Подготавливаем список воркспейсов без данных чатов
+    const workspacesToSave = workspaces.map(({ chats, ...rest }) => rest);
+    
+    // Создаем объект, строго соответствующий интерфейсу AppSettings
+    const configToSave: AppSettings = {
+      theme: 'system', // Добавляем обязательное поле
+      lastSelectedWorkspaceId: selectedWorkspaceId,
+      workspaces: workspacesToSave
+    };
 
-    // 2. Сохраняем чаты отдельно
-    await saveChats(workspaces);
+    await saveConfig(configToSave);
   }
-  
+
+  async function persistChats() {
+    // Сохраняем только ID воркспейсов и их чаты
+    const historyToSave = workspaces.map(ws => ({
+      id: ws.id,
+      chats: ws.chats
+    }));
+
+    // Используем 'as any', чтобы не переписывать типы во внешнем модуле storage
+    // Это допустимо, так как данные будут просто сериализованы в JSON
+    await saveChats(historyToSave as any);
+  }
+
+  // Для обратной совместимости или массового сохранения
+  async function saveToLocal() {
+    await persistConfig();
+    await persistChats();
+  }
+
   // --- Управление структурой ---
   function createWorkspace() {
     const newWs: Workspace = { 
@@ -80,7 +130,7 @@
       chats: [] 
     };
     workspaces = [newWs, ...workspaces];
-    saveToLocal();
+    persistConfig();
   }
 
   function createChat() {
@@ -90,7 +140,7 @@
     // Обновляем ссылку на массив для триггера реактивности Svelte 5
     workspaces = [...workspaces];
     selectedChatId = newChat.id;
-    saveToLocal();
+    persistChats();
   }
 
   function selectChat(chatId: string, wsId: string) {
@@ -98,6 +148,7 @@
     selectedChatId = chatId;
     // Скроллим вниз при переключении на чат
     chatWindowComponent?.scrollToBottom();
+    persistConfig(); // Сохраняем выбор воркспейса
   }
 
   function stopGeneration() {
@@ -120,7 +171,7 @@
     
     currentChat.history = newHistory;
     workspaces = [...workspaces];
-    await saveToLocal();
+    await persistChats();
 
     message = ""; // Очищаем инпут, чтобы sendMessage не дублировала сообщение
     await sendMessage();
@@ -152,7 +203,7 @@
     if (!currentChat) return;
     currentChat.history = currentChat.history.filter((_, i) => i !== index);
     workspaces = [...workspaces];
-    saveToLocal();
+    persistChats();
   }
 
   function handleCopyMessage(text: string) {
@@ -190,6 +241,9 @@
         // Триггерим обновление массива воркспейсов для Svelte 5
         workspaces = [...workspaces];
       }
+      
+      // СОХРАНЯЕМ чаты после добавления сообщения пользователя
+      await persistChats();
     }
     
     if (chatToUpdate.history.length === 0) return;
@@ -253,7 +307,7 @@
                 // Обновляем текст в зафиксированном чате
                 chatToUpdate.history[aiMsgIndex].text += content;
                 
-                // Триггерим обновление дерева состояний
+                // Триггерим обновление дерева состояний (только UI)
                 workspaces = [...workspaces];
                 
                 if (chatToUpdateId === selectedChatId) {
@@ -277,7 +331,8 @@
       abortController = null;
       wasAbortedManually = false;
       workspaces = [...workspaces];
-      await saveToLocal();
+      // СОХРАНЯЕМ чаты только один раз после завершения всей генерации
+      await persistChats();
     }
   }
 </script>
@@ -309,6 +364,7 @@
               selectedWorkspaceId = ws.id;
               if (ws.chats.length > 0) selectedChatId = ws.chats[0].id;
               selectedTab = 'chats';
+              persistConfig();
             }}
           >
             <span class="ws-icon">{ws.icon}</span>
@@ -356,7 +412,10 @@
         onRegenerateMessage={handleRegenerateMessage}
       />
 
-      <Inspector currentWorkspace={currentWorkspace} />
+      <Inspector 
+        currentWorkspace={currentWorkspace} 
+        onSettingsChange={persistConfig} 
+      />
 
     {:else}
       <div class="settings-view">
@@ -391,7 +450,7 @@
   .main-row {
     display: flex;
     flex: 1;
-    overflow: hidden;
+    overflow: hidden; /* Важно, чтобы контент не распирал экран */
   }
 
   /* Кнопки и иконки хедера */
@@ -425,7 +484,7 @@
   .breadcrumb-separator { color: #d1d5db; font-size: 0.8rem; }
   .breadcrumb-chat { font-weight: 600; color: #111827; }
 
-  /* НОВАЯ: Левая панель воркспейсов */
+  /* Левая панель воркспейсов */
   .workspace-nav {
     width: 240px;
     background: #f9fafb;
@@ -516,6 +575,7 @@
     padding: 40px;
     max-width: 800px;
     margin: 0 auto;
+    overflow-y: auto;
   }
 
   .settings-view h2 {

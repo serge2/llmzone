@@ -1,7 +1,14 @@
 <script lang="ts">
   import type { Workspace } from '$lib/types';
   
-  let { currentWorkspace = $bindable() }: { currentWorkspace: Workspace | undefined } = $props();
+  let { 
+    currentWorkspace = $bindable(), 
+    onSettingsChange 
+  }: { 
+    currentWorkspace: Workspace | undefined, 
+    onSettingsChange: () => void 
+  } = $props();
+
   let inspectorTab = $state<'context' | 'model' | 'tools'>('model');
 </script>
 
@@ -18,22 +25,42 @@
         <div class="settings-group">
           <label>
             <span class="label-text">System Prompt</span>
-            <textarea bind:value={currentWorkspace.settings.systemPrompt} rows="10" placeholder="Инструкции для модели..."></textarea>
+            <textarea 
+              bind:value={currentWorkspace.settings.systemPrompt} 
+              onchange={onSettingsChange}
+              rows="10" 
+              placeholder="Инструкции для модели..."
+            ></textarea>
           </label>
         </div>
       {:else if inspectorTab === 'model'}
         <div class="settings-group">
           <label>
             <span class="label-text">API URL</span>
-            <input bind:value={currentWorkspace.settings.apiUrl} placeholder="http://localhost:1234" />
+            <input 
+              bind:value={currentWorkspace.settings.apiUrl} 
+              onchange={onSettingsChange}
+              placeholder="http://localhost:1234" 
+            />
           </label>
           <label>
             <span class="label-text">Model Name</span>
-            <input bind:value={currentWorkspace.settings.modelName} placeholder="gpt-4..." />
+            <input 
+              bind:value={currentWorkspace.settings.modelName} 
+              onchange={onSettingsChange}
+              placeholder="gpt-4..." 
+            />
           </label>
           <label>
             <span class="label-text">Temperature: {currentWorkspace.settings.temperature}</span>
-            <input type="range" min="0" max="2" step="0.1" bind:value={currentWorkspace.settings.temperature} />
+            <input 
+              type="range" 
+              min="0" 
+              max="2" 
+              step="0.1" 
+              bind:value={currentWorkspace.settings.temperature} 
+              onchange={onSettingsChange}
+            />
           </label>
         </div>
       {:else if inspectorTab === 'tools'}

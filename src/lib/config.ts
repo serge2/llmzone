@@ -1,12 +1,7 @@
 // src/lib/config.ts
 import { writeTextFile, readTextFile, mkdir, exists } from '@tauri-apps/plugin-fs';
 import { appConfigDir, join } from '@tauri-apps/api/path';
-
-export interface AppConfig {
-  apiUrl: string;
-  apiKey: string;
-  modelName: string;
-}
+import type { AppSettings } from './types'; // Импортируем актуальный интерфейс
 
 const CONFIG_FILENAME = 'config.json';
 
@@ -15,12 +10,12 @@ async function getFilePath() {
   return await join(configDir, CONFIG_FILENAME);
 }
 
-export async function saveConfig(config: AppConfig) {
+// Теперь функция принимает AppSettings, который включает в себя воркспейсы и тему
+export async function saveConfig(config: AppSettings) {
   try {
     const configDir = await appConfigDir();
     const filePath = await getFilePath();
 
-    // Проверяем наличие папки конфига (например, %APPDATA%/cai-app)
     if (!(await exists(configDir))) {
       await mkdir(configDir, { recursive: true });
     }
@@ -33,7 +28,8 @@ export async function saveConfig(config: AppConfig) {
   }
 }
 
-export async function loadConfig(): Promise<AppConfig | null> {
+// Возвращаем AppSettings, чтобы +page.svelte видел правильную структуру
+export async function loadConfig(): Promise<AppSettings | null> {
   try {
     const filePath = await getFilePath();
     if (await exists(filePath)) {
