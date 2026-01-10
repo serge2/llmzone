@@ -2,83 +2,101 @@
   import { fetch } from '@tauri-apps/plugin-http';
   import { onMount } from 'svelte';
   import { loadConfig, saveConfig } from '$lib/config';
-  import type { Workspace, Message, Chat, Settings } from '$lib/types';
+  import type { Workspace, Message, Chat, WorkspaceSettings } from '$lib/types';
   import { loadChats, saveChats } from '$lib/storage/chatStorage';
+  import Inspector from '$lib/components/Inspector.svelte';
   
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ChatWindow from '$lib/components/ChatWindow.svelte';
 
-  // Состояние приложения
-  let message = "";
-  let isTyping = false;
-  let abortController: AbortController | null = null;
-  let wasAbortedManually = false; // Флаг для корректной обработки прерывания
-
-  let selectedTab: 'chats' | 'settings' = 'chats';
-  let inspectorTab: 'context' | 'model' | 'integrations' = 'model';
-  let sidebarVisible = true;
-  let searchActive = false;
-  let chatSearch = '';
+  // --- Состояние приложения (Svelte 5 Runes) ---
+  let workspaces = $state<Workspace[]>([]);
+  let selectedWorkspaceId = $state<string>('');
+  let selectedChatId = $state<string>('');
   
-  let workspaces: Workspace[] = [{ id: 'ws-1', name: 'Workspace 1', chats: [{ id: 'c-1', name: 'Общий чат', history: [] }] }];
-  let selectedWorkspaceId: string = workspaces[0].id;
-  let selectedChatId: string = workspaces[0].chats[0].id;
-  let collapsedWorkspaces: Record<string, boolean> = {};
+  let message = $state("");
+  let isTyping = $state(false);
+  let abortController: AbortController | null = null;
+  let wasAbortedManually = $state(false); // Флаг для корректной обработки прерывания
 
-  let apiUrl = 'http://localhost:1234';
-  let apiKey = '';
-  let modelName = 'local-model';
+  let selectedTab = $state<'chats' | 'settings'>('chats');
+  let sidebarVisible = $state(true);
+  let searchActive = $state(false);
+  let chatSearch = $state('');
+  
+  let chatWindowComponent = $state<ReturnType<typeof ChatWindow>>();
 
-  let chatWindowComponent: ChatWindow;
-
-  // Реактивные переменные для текущего выбора
-  $: currentWorkspace = workspaces.find(w => w.id === selectedWorkspaceId);
-  $: currentChat = currentWorkspace?.chats.find(c => c.id === selectedChatId);
+  // --- Производные состояния ---
+  const currentWorkspace = $derived(workspaces.find(w => w.id === selectedWorkspaceId));
+  const currentChat = $derived(currentWorkspace?.chats.find(c => c.id === selectedChatId));
+  const collapsedWorkspaces = $state<Record<string, boolean>>({});
 
   onMount(async () => {
-    const savedConfig = await loadConfig();
-    if (savedConfig) {
-      apiUrl = savedConfig.apiUrl;
-      apiKey = savedConfig.apiKey;
-      modelName = savedConfig.modelName;
-    }
-
-    const savedChats = await loadChats();
-    if (savedChats) {
-      workspaces = savedChats;
-      selectedWorkspaceId = savedChats[0]?.id;
-      selectedChatId = savedChats[0]?.chats[0]?.id;
+    // 1. Загружаем настройки воркспейсов (apiUrl, модель и т.д.)
+    const config = await loadConfig(); 
+    // 2. Загружаем сами чаты
+    const savedChatsData = await loadChats();
+    
+    if (config.workspaces && config.workspaces.length > 0) {
+      // Сопоставляем настройки из конфига с чатами из хранилища
+      workspaces = config.workspaces.map(wsConfig => {
+        const chatsForWs = savedChatsData.find(c => c.id === wsConfig.id)?.chats || [];
+        return {
+          ...wsConfig,
+          chats: chatsForWs
+        };
+      });
+      
+      selectedWorkspaceId = workspaces[0].id;
+      selectedChatId = workspaces[0].chats[0]?.id || '';
+    } else {
+      // Если конфига нет (первый запуск), создаем дефолтную структуру
+      initDefaultWorkspace();
     }
   });
 
-  async function handleSaveSettings() {
-    await saveConfig({ apiUrl, apiKey, modelName });
-    alert('Настройки сохранены!');
-  }
-
   async function saveToLocal() {
-    await saveChats(workspaces);
-}
+    // 1. Сохраняем настройки в конфиг (без массива чатов!)
+    const workspacesSettings = workspaces.map(({ chats, ...settings }) => settings);
+    await saveConfig({ ...globalConfig, workspaces: workspacesSettings });
 
+    // 2. Сохраняем чаты отдельно
+    await saveChats(workspaces);
+  }
+  
+  // --- Управление структурой ---
   function createWorkspace() {
-    const newWs = { id: 'ws-' + Date.now(), name: 'Workspace ' + (workspaces.length + 1), chats: [] };
+    const newWs: Workspace = { 
+      id: 'ws-' + Date.now(), 
+      name: 'Workspace ' + (workspaces.length + 1), 
+      icon: 'W',
+      settings: {
+        apiUrl: 'http://localhost:1234',
+        apiKey: '',
+        modelName: 'local-model',
+        systemPrompt: '',
+        temperature: 0.7
+      },
+      chats: [] 
+    };
     workspaces = [newWs, ...workspaces];
     saveToLocal();
   }
 
   function createChat() {
-    const newChat = { id: 'c-' + Date.now(), name: 'Новый чат', history: [] };
-    if (currentWorkspace) {
-      currentWorkspace.chats = [newChat, ...currentWorkspace.chats];
-      workspaces = [...workspaces];
-      selectedChatId = newChat.id;
-      saveToLocal();
-    }
+    if (!currentWorkspace) return;
+    const newChat: Chat = { id: 'c-' + Date.now(), name: 'Новый чат', history: [] };
+    currentWorkspace.chats = [newChat, ...currentWorkspace.chats];
+    // Обновляем ссылку на массив для триггера реактивности Svelte 5
+    workspaces = [...workspaces];
+    selectedChatId = newChat.id;
+    saveToLocal();
   }
 
   function selectChat(chatId: string, wsId: string) {
     selectedWorkspaceId = wsId;
     selectedChatId = chatId;
+    // Скроллим вниз при переключении на чат
     chatWindowComponent?.scrollToBottom();
   }
 
@@ -91,45 +109,21 @@
     }
   }
 
+  // --- Обработчики манипуляций с сообщениями ---
   async function handleEditMessage(index: number, newText: string) {
-    console.log("Saving new text:", newText);
     if (!currentChat) return;
     
-    // Создаем копию истории
+    // Отрезаем историю после редактируемого сообщения (стандартное поведение LLM чатов)
     let newHistory = [...currentChat.history];
-    
-    // Обновляем текст в копии
     newHistory[index] = { ...newHistory[index], text: newText };
-    
-    // Отрезаем хвост
     newHistory = newHistory.slice(0, index + 1);
     
-    // Записываем обратно
     currentChat.history = newHistory;
-    
-    // Триггерим глобальное обновление
     workspaces = [...workspaces];
     await saveToLocal();
 
-    // Важно: если мы просто вызовем sendMessage(), она добавит в историю 
-    // текущее значение из переменной 'message'. 
-    // Поэтому мы вызываем sendMessage(), предварительно убедившись, 
-    // что 'message' пуста, так как пользовательское сообщение уже в истории.
-    
     message = ""; // Очищаем инпут, чтобы sendMessage не дублировала сообщение
-    
     await sendMessage();
-  }
-
-  function handleCopyMessage(text: string) {
-    navigator.clipboard.writeText(text);
-  }
-
-  function handleDeleteMessage(index: number) {
-    if (!currentChat) return;
-    currentChat.history = currentChat.history.filter((_, i) => i !== index);
-    workspaces = [...workspaces];
-    saveToLocal();
   }
 
   async function handleRegenerateMessage() {
@@ -141,8 +135,8 @@
       currentChat.history.splice(lastIndex, 1);
     }
     
-    // Удаляем последнее user сообщение и сохраняем его текст
-    const userIndex = lastIndex - 1;
+    // Удаляем последнее user сообщение и сохраняем его текст для повторной отправки
+    const userIndex = currentChat.history.length - 1;
     let userMessage = '';
     if (userIndex >= 0 && currentChat.history[userIndex].role === 'user') {
       userMessage = currentChat.history[userIndex].text;
@@ -151,12 +145,21 @@
     
     workspaces = [...workspaces];
     message = userMessage;
-    saveToLocal();
-    
-    // Отправляем сообщение заново
     await sendMessage();
   }
 
+  function handleDeleteMessage(index: number) {
+    if (!currentChat) return;
+    currentChat.history = currentChat.history.filter((_, i) => i !== index);
+    workspaces = [...workspaces];
+    saveToLocal();
+  }
+
+  function handleCopyMessage(text: string) {
+    navigator.clipboard.writeText(text);
+  }
+
+// --- Основная логика отправки и стриминга ---
   async function sendMessage() {
     // Если модель уже отвечает, кнопка работает как "Стоп"
     if (isTyping) {
@@ -164,68 +167,70 @@
       return;
     }
 
-    if (!currentChat) return;
+    if (!currentChat || !currentWorkspace) return;
 
-    // ФИКСИРУЕМ целевой чат, чтобы при переключении вкладок текст не улетал в другой чат
+    // ФИКСИРУЕМ целевой чат и настройки воркспейса, чтобы при переключении 
+    // воркспейсов во время генерации ответ не улетел в другое место
+    const chatToUpdate = currentChat;
+    const settings = currentWorkspace.settings;
     const chatToUpdateId = selectedChatId;
-    const chatToUpdate = workspaces
-      .flatMap(ws => ws.chats)
-      .find(c => c.id === chatToUpdateId);
 
-    if (!chatToUpdate) return;
-
-    // Инициализация контроллера отмены
     abortController = new AbortController();
     wasAbortedManually = false;
-    const { signal } = abortController;
 
-    // ИЗМЕНЕНО: Добавляем сообщение из инпута в историю только если оно там есть
+    // Добавляем сообщение из инпута в историю, если оно не пустое (для регенерации оно пустое здесь)
     if (message.trim()) {
-      const userText = message;
-      chatToUpdate.history = [...chatToUpdate.history, { role: "user", text: userText }];
+      chatToUpdate.history = [...chatToUpdate.history, { role: "user", text: message }];
+
+      // Перемещение чата наверх списка (последний активный чат)
+      const chatIndex = currentWorkspace.chats.findIndex(c => c.id === chatToUpdateId);
+      if (chatIndex > 0) {
+        const [movedChat] = currentWorkspace.chats.splice(chatIndex, 1);
+        currentWorkspace.chats.unshift(movedChat);
+        // Триггерим обновление массива воркспейсов для Svelte 5
+        workspaces = [...workspaces];
+      }
     }
     
-    // Если история пуста (инпут был пуст и в истории ничего нет), выходим
     if (chatToUpdate.history.length === 0) return;
 
     // Подготовка "бульбы" для ответа ИИ
     const aiMsgIndex = chatToUpdate.history.length;
     chatToUpdate.history = [...chatToUpdate.history, { role: "assistant", text: "" }];
     
-    workspaces = [...workspaces];
     message = "";
     isTyping = true;
     
-    // Скроллим, только если мы всё еще в том же чате
+    // Скроллим только если мы всё еще в том же чате
     if (chatToUpdateId === selectedChatId) {
         await chatWindowComponent?.scrollToBottom();
     }
 
     try {
-      const base = apiUrl.trim().replace(/\/+$/, '');
+      const base = settings.apiUrl.trim().replace(/\/+$/, '');
       const response = await fetch(`${base}/chat/completions`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": apiKey ? `Bearer ${apiKey}` : ""
+          "Authorization": settings.apiKey ? `Bearer ${settings.apiKey}` : ""
         },
         body: JSON.stringify({
-          model: modelName,
-          messages: chatToUpdate.history.slice(0, -1).map(m => {
-            const msg: any = { role: m.role, content: m.text };
-            if (m.role === 'tool' && m.tool_call_id) msg.tool_call_id = m.tool_call_id;
-            return msg;
-          }),
+          model: settings.modelName,
+          temperature: settings.temperature,
+          messages: [
+            // Подмешиваем системный промпт воркспейса
+            ...(settings.systemPrompt ? [{ role: 'system', content: settings.systemPrompt }] : []),
+            ...chatToUpdate.history.slice(0, -1).map(m => ({ role: m.role, content: m.text }))
+          ],
           stream: true
         }),
-        signal 
+        signal: abortController.signal
       });
 
       if (!response.ok) throw new Error(`Ошибка HTTP: ${response.status}`);
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-
       if (!reader) return;
 
       while (true) {
@@ -245,43 +250,26 @@
               const content = json.choices?.[0]?.delta?.content || "";
               
               if (content) {
-                // 1. Создаем обновленное сообщение с новым текстом (используем chatToUpdate)
-                const updatedMessage = {
-                  ...chatToUpdate.history[aiMsgIndex],
-                  text: chatToUpdate.history[aiMsgIndex].text + content
-                };
-
-                // 2. Создаем новый массив истории с обновленным сообщением
-                const updatedHistory = [...chatToUpdate.history];
-                updatedHistory[aiMsgIndex] = updatedMessage;
-
-                // 3. Записываем обновленную историю обратно в зафиксированный чат
-                chatToUpdate.history = updatedHistory;
-
-                // 4. Триггерим обновление дерева состояний
+                // Обновляем текст в зафиксированном чате
+                chatToUpdate.history[aiMsgIndex].text += content;
+                
+                // Триггерим обновление дерева состояний
                 workspaces = [...workspaces];
                 
-                // Скроллим только если этот чат открыт
                 if (chatToUpdateId === selectedChatId) {
                     chatWindowComponent?.scrollToBottom();
                 }
               }
-            } catch (e) {
-              // Игнорируем ошибки парсинга отдельных чанков
-            }
+            } catch (e) { /* Игнорируем ошибки парсинга чанков */ }
           }
         }
       }
     } catch (err: any) {
-      // ПРОВЕРКА: Было ли прерывание ручным или это ошибка сети
       if (wasAbortedManually) {
-        const currentContent = chatToUpdate.history[aiMsgIndex].text;
-        chatToUpdate.history[aiMsgIndex].text = currentContent + "\n\n**[Генерация прервана пользователем]**";
+        chatToUpdate.history[aiMsgIndex].text += "\n\n**[Генерация прервана пользователем]**";
       } else {
-        // УДАЛЯЕМ заготовку сообщения ассистента, так как ответа нет
+        // Удаляем заготовку ассистента при ошибке сети
         chatToUpdate.history = chatToUpdate.history.filter((_, i) => i !== aiMsgIndex);
-        
-        // ВЫВОДИМ ошибку во всплывающем окне
         alert("Ошибка связи с моделью: " + (err.message || "Unknown error"));
       }
     } finally {
@@ -289,39 +277,70 @@
       abortController = null;
       wasAbortedManually = false;
       workspaces = [...workspaces];
-      await saveChats(workspaces);
+      await saveToLocal();
     }
   }
 </script>
 
 <main class="app-container">
   <header>
-    <button class="sidebar-toggle" on:click={() => sidebarVisible = !sidebarVisible} aria-label="Toggle sidebar">
+    <button class="sidebar-toggle" onclick={() => sidebarVisible = !sidebarVisible} aria-label="Toggle sidebar">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
     </button>
-    <span class="chat-title">{currentChat?.name || 'Выберите чат'}</span>
+    <div class="chat-title">
+      {#if currentWorkspace}
+        <span class="breadcrumb-ws">{currentWorkspace.name}</span>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-chat">{currentChat?.name || 'Выберите чат'}</span>
+      {:else}
+        Загрузка...
+      {/if}
+    </div>
   </header>
 
   <div class="main-row">
-    <nav class="left-nav" class:collapsed={!sidebarVisible}>
-      <button class:active={selectedTab === 'chats'} on:click={() => selectedTab = 'chats'} title="Чаты">
-        <span class="nav-icon">💬</span><span class="nav-text">Чаты</span>
-      </button>
-      <button class:active={selectedTab === 'settings'} on:click={() => selectedTab = 'settings'} title="Настройки">
-        <span class="nav-icon">⚙️</span><span class="nav-text">Настройки</span>
-      </button>
+    <nav class="workspace-nav">
+      <div class="ws-list">
+        {#each workspaces as ws}
+          <button 
+            class="ws-selector-btn" 
+            class:active={selectedWorkspaceId === ws.id}
+            onclick={() => {
+              selectedWorkspaceId = ws.id;
+              if (ws.chats.length > 0) selectedChatId = ws.chats[0].id;
+              selectedTab = 'chats';
+            }}
+          >
+            <span class="ws-icon">{ws.icon}</span>
+            <span class="ws-name">{ws.name}</span>
+          </button>
+        {/each}
+        <button class="ws-add-inline" onclick={createWorkspace}>
+          <span>+</span> Добавить пространство
+        </button>
+      </div>
+
+      <div class="ws-footer">
+        <button 
+          class="ws-selector-btn settings-btn" 
+          class:active={selectedTab === 'settings'}
+          onclick={() => selectedTab = 'settings'}
+        >
+          <span class="ws-icon">⚙️</span>
+          <span class="ws-name">Настройки</span>
+        </button>
+      </div>
     </nav>
 
     {#if selectedTab === 'chats'}
       {#if sidebarVisible}
         <Sidebar 
-          {workspaces} {selectedChatId} {collapsedWorkspaces}
-          bind:chatSearch bind:searchActive
-          onCreateWorkspace={createWorkspace} onCreateChat={createChat}
-          onSelectChat={selectChat} onToggleWorkspace={(id) => {
-            collapsedWorkspaces[id] = !collapsedWorkspaces[id];
-            collapsedWorkspaces = {...collapsedWorkspaces};
-          }}
+          workspaces={workspaces.filter(w => w.id === selectedWorkspaceId)} 
+          {selectedChatId} 
+          bind:chatSearch
+          bind:searchActive
+          onCreateChat={createChat}
+          onSelectChat={selectChat} 
         />
       {/if}
 
@@ -337,58 +356,184 @@
         onRegenerateMessage={handleRegenerateMessage}
       />
 
-      <aside class="inspector">
-        <div class="tabs">
-          <button class:active={inspectorTab === 'context'} on:click={() => inspectorTab = 'context'}>Context</button>
-          <button class:active={inspectorTab === 'model'} on:click={() => inspectorTab = 'model'}>Model</button>
-          <button class:active={inspectorTab === 'integrations'} on:click={() => inspectorTab = 'integrations'}>Integrations</button>
-        </div>
-        <div class="content">
-          {#if inspectorTab === 'context'}
-            <p>Настройки контекста рабочего пространства</p>
-          {:else if inspectorTab === 'model'}
-            <p>Настройки модели</p>
-          {:else if inspectorTab === 'integrations'}
-            <p>Настройки интеграций</p>
-          {/if}
-        </div>
-      </aside>
+      <Inspector currentWorkspace={currentWorkspace} />
+
     {:else}
       <div class="settings-view">
-        <h2>Настройки API</h2>
-        <div class="field"><label for="apiUrl">API URL</label><input id="apiUrl" bind:value={apiUrl} /></div>
-        <div class="field"><label for="apiKey">API Key</label><input id="apiKey" type="password" bind:value={apiKey} /></div>
-        <div class="field"><label for="modelName">Имя модели</label><input id="modelName" bind:value={modelName} /></div>
-        <button class="save-btn" on:click={handleSaveSettings}>Сохранить настройки</button>
+        <h2>Глобальные настройки</h2>
+        <p>Настройки приложения и интерфейса.</p>
       </div>
     {/if}
   </div>
 </main>
 
 <style>
-  /* Стили без изменений */
-  :global(body) { margin: 0; font-family: sans-serif; height: 100vh; overflow: hidden; }
-  .app-container { display: flex; flex-direction: column; height: 100vh; background: #fff; }
-  header { height: 48px; display: flex; align-items: center; padding: 0 15px; border-bottom: 1px solid #eee; gap: 15px; font-weight: 600; }
-  .sidebar-toggle { background: none; border: none; cursor: pointer; color: #666; padding: 4px; border-radius: 4px; }
-  .main-row { display: flex; flex: 1; overflow: hidden; }
-  .left-nav { width: 60px; border-right: 1px solid #eee; display: flex; flex-direction: column; align-items: center; padding-top: 10px; gap: 8px; background: #f9f9f9; transition: width 0.2s ease; }
-  .left-nav button { background: none; border: none; cursor: pointer; opacity: 0.5; display: flex; align-items: center; gap: 12px; padding: 12px; width: 90%; justify-content: center; border-radius: 8px; }
-  .left-nav button.active { opacity: 1; color: #007bff; background: #eef2ff; }
-  .nav-text { display: none; }
-  @media (min-width: 900px) {
-    .left-nav:not(.collapsed) { width: 180px; align-items: flex-start; padding: 10px; }
-    .left-nav:not(.collapsed) .nav-text { display: inline; }
-    .left-nav:not(.collapsed) button { justify-content: flex-start; }
+  /* Общая структура приложения */
+  .app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: #ffffff;
+    color: #1a1a1b;
   }
-  .inspector { width: 260px; border-left: 1px solid #eee; background: #fbfbfb; }
-  .inspector .tabs { display: flex; border-bottom: 1px solid #eee; }
-  .inspector .tabs button { flex: 1; padding: 12px; border: none; background: none; cursor: pointer; font-size: 0.8rem; }
-  .inspector .tabs button.active { border-bottom: 2px solid #007bff; color: #007bff; }
-  .inspector .content { padding: 15px; }
-  .settings-view { padding: 40px; max-width: 500px; margin: 0 auto; width: 100%; }
-  .field { margin-bottom: 20px; }
-  .field label { display: block; margin-bottom: 5px; font-weight: bold; }
-  .field input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; }
-  .save-btn { padding: 12px 24px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; }
+
+  header {
+    height: 48px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 12px;
+    background: #ffffff;
+    flex-shrink: 0;
+  }
+
+  .main-row {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* Кнопки и иконки хедера */
+  .sidebar-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    border-radius: 4px;
+  }
+
+  .sidebar-toggle:hover {
+    background-color: #f3f4f6;
+  }
+
+  /* Хлебные крошки в заголовке */
+  .chat-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .breadcrumb-ws { color: #6b7280; font-weight: normal; }
+  .breadcrumb-separator { color: #d1d5db; font-size: 0.8rem; }
+  .breadcrumb-chat { font-weight: 600; color: #111827; }
+
+  /* НОВАЯ: Левая панель воркспейсов */
+  .workspace-nav {
+    width: 240px;
+    background: #f9fafb;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #e5e7eb;
+    flex-shrink: 0;
+  }
+
+  .ws-list {
+    flex: 1;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+  }
+
+  .ws-footer {
+    padding: 12px;
+    border-top: 1px solid #e5e7eb;
+    background: #f3f4f6;
+  }
+
+  .ws-selector-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    color: #4b5563;
+  }
+
+  .ws-selector-btn:hover {
+    background: #e5e7eb;
+  }
+
+  .ws-selector-btn.active {
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+    color: #5865f2;
+  }
+
+  .ws-icon {
+    font-size: 1.25rem;
+    width: 24px;
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .ws-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ws-add-inline {
+    background: none;
+    border: 1px dashed #d1d5db;
+    margin-top: 8px;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: #6b7280;
+    text-align: center;
+    transition: all 0.2s;
+  }
+
+  .ws-add-inline:hover {
+    border-color: #9ca3af;
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  /* Вид глобальных настроек */
+  .settings-view {
+    flex: 1;
+    padding: 40px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .settings-view h2 {
+    margin-bottom: 20px;
+    font-weight: 700;
+  }
+
+  /* Скроллбары */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: #d1d5db;
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 </style>

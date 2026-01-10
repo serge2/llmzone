@@ -10,14 +10,23 @@ export interface Chat {
   history: Message[];
 }
 
-export interface Workspace {
-  id: string;
-  name: string;
-  chats: Chat[];
-}
-
-export interface Settings {
+export interface WorkspaceSettings {
   apiUrl: string;
   apiKey: string;
   modelName: string;
+  systemPrompt: string;
+  temperature: number;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  icon: string; 
+  settings: WorkspaceSettings;
+  chats: Chat[];
+}
+
+export interface AppSettings {
+  theme: 'light' | 'dark' | 'system';
+  lastSelectedWorkspaceId?: string;
 }
