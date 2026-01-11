@@ -3,6 +3,10 @@
   import MessageBubble from './MessageBubble.svelte';
   import { tick } from 'svelte';
 
+  // Импорт иконок из ассетов
+  import ArrowUpIcon from '$lib/assets/icons/arrow-up.svg?raw';
+  import StopIcon from '$lib/assets/icons/stop.svg?raw';
+
   let { 
     history, 
     isTyping, 
@@ -95,9 +99,9 @@
         disabled={!isTyping && !message.trim()}
       >
         {#if isTyping}
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+          {@html StopIcon}
         {:else}
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+          {@html ArrowUpIcon}
         {/if}
       </button>
     </div>
@@ -162,6 +166,12 @@
   .input-wrapper button { 
     width: 36px; height: 36px; background: #2f2f2f; color: white; border: none; border-radius: 12px; cursor: pointer; 
     display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform 0.1s;
+  }
+
+  /* Стилизация иконок через @html */
+  .input-wrapper button :global(svg) {
+    width: 20px;
+    height: 20px;
   }
 
   .input-wrapper button:hover:not(:disabled) { transform: scale(1.05); background: #000; }

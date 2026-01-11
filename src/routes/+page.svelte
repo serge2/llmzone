@@ -9,6 +9,11 @@
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ChatWindow from '$lib/components/ChatWindow.svelte';
 
+  // Импорт иконок из ассетов
+  import MenuIcon from '$lib/assets/icons/menu.svg?raw';
+  import SettingsIcon from '$lib/assets/icons/settings.svg?raw';
+  import PlusIcon from '$lib/assets/icons/plus.svg?raw';
+
   // --- Состояние приложения (Svelte 5 Runes) ---
   let workspaces = $state<Workspace[]>([]);
   let selectedWorkspaceId = $state<string>('');
@@ -364,7 +369,7 @@
 <main class="app-container">
   <header>
     <button class="sidebar-toggle" onclick={() => sidebarVisible = !sidebarVisible} aria-label="Toggle sidebar">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      {@html MenuIcon}
     </button>
     <div class="chat-title">
       {#if currentWorkspace}
@@ -396,7 +401,7 @@
           </button>
         {/each}
         <button class="ws-add-inline" onclick={createWorkspace}>
-          <span>+</span> Добавить пространство
+          <span class="icon-small">{@html PlusIcon}</span> Добавить пространство
         </button>
       </div>
 
@@ -406,7 +411,7 @@
           class:active={selectedTab === 'settings'}
           onclick={() => selectedTab = 'settings'}
         >
-          <span class="ws-icon">⚙️</span>
+          <span class="ws-icon">{@html SettingsIcon}</span>
           <span class="ws-name">Настройки</span>
         </button>
       </div>
@@ -495,6 +500,11 @@
     background-color: #f3f4f6;
   }
 
+  .sidebar-toggle :global(svg) {
+    width: 20px;
+    height: 20px;
+  }
+
   /* Хлебные крошки в заголовке */
   .chat-title {
     display: flex;
@@ -561,11 +571,17 @@
   }
 
   .ws-icon {
-    font-size: 1.25rem;
     width: 24px;
     display: flex;
     justify-content: center;
+    align-items: center;
     flex-shrink: 0;
+  }
+
+  .ws-icon :global(svg) {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2px;
   }
 
   .ws-name {
@@ -585,7 +601,10 @@
     cursor: pointer;
     font-size: 0.8rem;
     color: #6b7280;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     transition: all 0.2s;
   }
 
@@ -593,6 +612,12 @@
     border-color: #9ca3af;
     background: #f3f4f6;
     color: #374151;
+  }
+
+  .icon-small :global(svg) {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2.5px;
   }
 
   /* Вид глобальных настроек */

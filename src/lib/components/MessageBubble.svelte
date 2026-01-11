@@ -120,7 +120,7 @@
     const pre = btn.closest('.code-block-wrapper')?.querySelector('pre');
     if (pre) {
       navigator.clipboard.writeText(pre.innerText).then(() => {
-        // Меняем иконку на галочку
+        // Меняем иконку на галочку из ассетов
         btn.innerHTML = checkIconRaw;
         btn.classList.add('success');
         
@@ -354,6 +354,8 @@
   /* Для плавности иконок внутри пропса ?raw */
   .prose :global(.copy-code-btn svg) {
     display: block;
+    width: 14px;
+    height: 14px;
   }
 
   .action-btn :global(svg) { 
