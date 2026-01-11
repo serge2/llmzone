@@ -28,7 +28,18 @@
   }>();
 
   let chatContainer: HTMLElement;
+  let inputElement: HTMLTextAreaElement; // Ссылка на textarea для управления фокусом
   let shouldAutoScroll = true;
+
+  // Функция для установки фокуса с гарантированным срабатыванием
+  function focusInput() {
+    if (inputElement) {
+      // Используем setTimeout, чтобы фокус сработал после того, как Svelte обновит DOM
+      setTimeout(() => {
+        inputElement.focus();
+      }, 0);
+    }
+  }
 
   export async function scrollToBottom(force = false) {
     await tick();
@@ -49,6 +60,9 @@
 
   // Следим за изменением высоты контейнера при ресайзе окна
   onMount(() => {
+    // Начальный фокус при загрузке страницы
+    focusInput();
+
     const resizeObserver = new ResizeObserver(() => {
       if (shouldAutoScroll && chatContainer) {
         // Если чат прижат к низу, удерживаем его там при изменении размеров
@@ -58,6 +72,14 @@
 
     if (chatContainer) resizeObserver.observe(chatContainer);
     return () => resizeObserver.disconnect();
+  });
+
+  // Эффект срабатывает при каждом изменении истории (переключении чата)
+  $effect(() => {
+    // Нам нужно "коснуться" history, чтобы Svelte отслеживал этот эффект
+    if (history) {
+      focusInput();
+    }
   });
 
   function handleKeydown(e: KeyboardEvent) {
@@ -99,6 +121,7 @@
   <div class="input-container">
     <div class="input-wrapper">
       <textarea 
+        bind:this={inputElement}
         bind:value={message} 
         onkeydown={handleKeydown} 
         placeholder="Спросите о чем угодно..."
