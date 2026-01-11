@@ -150,6 +150,9 @@
     selectedWorkspaceId = newWsId;
     selectedChatId = newChatId;
     
+    // Сбрасываем поиск при переключении
+    chatSearch = '';
+    
     persistConfig();
     persistChats();
   }
@@ -404,14 +407,16 @@
 
 <main class="app-container">
   {#if selectedTab === 'settings'}
-    <GlobalSettings 
-      {globalConfig} 
-      onSave={persistConfig} 
-      onClose={() => selectedTab = 'chats'} 
-    />
+    <div class="modal-layer">
+      <GlobalSettings 
+        {globalConfig} 
+        onSave={persistConfig} 
+        onClose={() => selectedTab = 'chats'} 
+      />
+    </div>
   {/if}
 
-  <header>
+  <header class="app-header">
     <button class="sidebar-toggle" onclick={() => sidebarVisible = !sidebarVisible} aria-label="Toggle sidebar">
       {@html MenuIcon}
     </button>
@@ -476,16 +481,38 @@
 </main>
 
 <style>
-  /* Общая структура приложения */
+  /* Глобальный сброс для предотвращения внешнего скролла */
+  :global(body), :global(html) {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    overflow: hidden;
+  }
+
   .app-container {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    width: 100vw;
     background-color: #ffffff;
     color: #1a1a1b;
+    overflow: hidden; /* Критично для фиксации */
+    position: fixed;
+    top: 0;
+    left: 0;
   }
 
-  header {
+  .modal-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    background: white;
+  }
+
+  .app-header {
     height: 48px;
     border-bottom: 1px solid #e5e7eb;
     display: flex;
@@ -500,18 +527,19 @@
     display: flex;
     flex: 1;
     overflow: hidden; 
+    min-height: 0; /* Разрешает flex-контейнеру сжиматься */
   }
 
-  /* Контейнер для центрального контента */
   .center-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     position: relative;
+    min-width: 0;
   }
 
-  /* Кнопки и иконки хедера */
+  /* Иконки и хлебные крошки */
   .sidebar-toggle {
     background: none;
     border: none;
@@ -532,7 +560,6 @@
     height: 20px;
   }
 
-  /* Хлебные крошки в заголовке */
   .chat-title {
     display: flex;
     align-items: center;

@@ -179,13 +179,13 @@
   .messages-list {
     max-width: 1000px;
     margin: 0 auto;
-    padding: 40px 0;
+    padding: 20px 0;
     display: flex;
     flex-direction: column;
   }
 
   .input-container { 
-    padding: 10px 10% 60px 10%;
+    padding: 10px 10% 10px 10%;
     background: linear-gradient(transparent, #fdfdfd 20%);
   }
 
