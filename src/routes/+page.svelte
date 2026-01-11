@@ -9,10 +9,7 @@
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ChatWindow from '$lib/components/ChatWindow.svelte';
   import GlobalSettings from '$lib/components/GlobalSettings.svelte';
-
-  // Импорт иконок из ассетов
-  import MenuIcon from '$lib/assets/icons/menu.svg?raw';
-
+  import AppHeader from '$lib/components/AppHeader.svelte';
 
   // --- Состояние приложения (Svelte 5 Runes) ---
   let workspaces = $state<Workspace[]>([]);
@@ -58,6 +55,10 @@
       // 2. Собираем воркспейсы: настройки из конфига + чаты из хранилища
       workspaces = config.workspaces.map(ws => ({
         ...ws,
+        settings: {
+          lastActiveTab: 'model', // Значение по умолчанию для старых конфигов
+          ...ws.settings
+        },
         chats: history.find(h => h.id === ws.id)?.chats.map(c => ({
           ...c,
           isGenerating: false // Инициализируем флаг генерации
@@ -82,7 +83,8 @@
           apiKey: '',
           modelName: '',
           systemPrompt: '',
-          temperature: 0.7
+          temperature: 0.7,
+          lastActiveTab: 'model'
         },
         chats: [{ id: 'c-' + Date.now(), name: 'Новый чат', history: [], isGenerating: false }]
       };
@@ -97,14 +99,20 @@
   });
 
   // --- Работа с хранилищем (Раздельная) ---
-  async function persistConfig() {
-    const workspacesToSave = workspaces.map(({ chats, ...rest }) => rest);
+ async function persistConfig() {
+    // Делаем глубокий "снимок" состояния, чтобы избавиться от прокси
+    const rawWorkspaces = $state.snapshot(workspaces);
+    
+    // Подготавливаем данные для конфига: убираем чаты, оставляем настройки
+    const workspacesToSave = rawWorkspaces.map(({ chats, ...rest }) => rest);
+    
     const configToSave: AppSettings = {
-      theme: 'system',
+      theme: 'system', // Можно позже заменить на динамическую переменную
       lastSelectedWorkspaceId: selectedWorkspaceId,
       workspaces: workspacesToSave,
-      globalConfig: $state.snapshot(globalConfig) // Сохраняем глобальные настройки
+      globalConfig: $state.snapshot(globalConfig)
     };
+    
     await saveConfig(configToSave);
   }
 
@@ -134,7 +142,8 @@
         apiKey: '',
         modelName: '',
         systemPrompt: '',
-        temperature: 0.7
+        temperature: 0.7,
+        lastActiveTab: 'model'
       },
       chats: [{ 
         id: newChatId, 
@@ -187,7 +196,6 @@
     if (!currentWorkspace) return;
     const newChat: Chat = { id: 'c-' + Date.now(), name: 'Новый чат', history: [], isGenerating: false };
     currentWorkspace.chats = [newChat, ...currentWorkspace.chats];
-    workspaces = [...workspaces];
     selectedChatId = newChat.id;
     persistChats();
   }
@@ -416,20 +424,21 @@
     </div>
   {/if}
 
-  <header class="app-header">
-    <button class="sidebar-toggle" onclick={() => sidebarVisible = !sidebarVisible} aria-label="Toggle sidebar">
-      {@html MenuIcon}
-    </button>
-    <div class="chat-title">
-      {#if currentWorkspace}
-        <span class="breadcrumb-ws">{currentWorkspace.name}</span>
-        <span class="breadcrumb-separator">/</span>
-        <span class="breadcrumb-chat">{currentChat?.name || 'Выберите чат'}</span>
-      {:else}
-        Загрузка...
-      {/if}
-    </div>
-  </header>
+  <AppHeader 
+    bind:workspaces={workspaces}
+    {selectedWorkspaceId}
+    currentChatName={currentChat?.name || 'Выберите чат'}
+    bind:sidebarVisible={sidebarVisible}
+    onSelectWorkspace={(id: string) => {
+      selectedWorkspaceId = id;
+      const ws = workspaces.find(w => w.id === id);
+      if (ws?.chats.length) selectedChatId = ws.chats[0].id;
+      persistConfig();
+    }}
+    onCreateWorkspace={createWorkspace}
+    onRenameWorkspace={handleRenameWorkspace}
+    onDeleteWorkspace={handleDeleteWorkspace}
+  />
 
   <div class="main-row">
     {#if sidebarVisible}
@@ -443,15 +452,6 @@
         onSelectChat={selectChat} 
         onRenameChat={handleRenameChat}
         onDeleteChat={handleDeleteChat}
-        onCreateWorkspace={createWorkspace}
-        onRenameWorkspace={handleRenameWorkspace}
-        onDeleteWorkspace={handleDeleteWorkspace}
-        onSelectWorkspace={(id: string) => {
-          selectedWorkspaceId = id;
-          const ws = workspaces.find(w => w.id === id);
-          if (ws?.chats.length) selectedChatId = ws.chats[0].id;
-          persistConfig();
-        }}
         onOpenSettings={() => {
           selectedTab = 'settings';
         }}
@@ -512,17 +512,6 @@
     background: white;
   }
 
-  .app-header {
-    height: 48px;
-    border-bottom: 1px solid #e5e7eb;
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    gap: 12px;
-    background: #ffffff;
-    flex-shrink: 0;
-  }
-
   .main-row {
     display: flex;
     flex: 1;
@@ -538,41 +527,6 @@
     position: relative;
     min-width: 0;
   }
-
-  /* Иконки и хлебные крошки */
-  .sidebar-toggle {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #6b7280;
-    display: flex;
-    align-items: center;
-    padding: 4px;
-    border-radius: 4px;
-  }
-
-  .sidebar-toggle:hover {
-    background-color: #f3f4f6;
-  }
-
-  .sidebar-toggle :global(svg) {
-    width: 20px;
-    height: 20px;
-  }
-
-  .chat-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.9rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .breadcrumb-ws { color: #6b7280; font-weight: normal; }
-  .breadcrumb-separator { color: #d1d5db; font-size: 0.8rem; }
-  .breadcrumb-chat { font-weight: 600; color: #111827; }
 
   /* Скроллбары */
   ::-webkit-scrollbar {

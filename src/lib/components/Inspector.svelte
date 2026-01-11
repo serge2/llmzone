@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Workspace, GlobalConfig } from '$lib/types';
+  import type { Workspace, GlobalConfig, InspectorTab } from '$lib/types';
 
   // Импорт иконок из ассетов
   import MessageIcon from '$lib/assets/icons/message.svg?raw';
@@ -7,7 +7,7 @@
   import ToolsIcon from '$lib/assets/icons/tools.svg?raw';
   
   let { 
-    currentWorkspace, 
+    currentWorkspace = $bindable(), 
     globalConfig,
     onSettingsChange 
   }: { 
@@ -16,22 +16,31 @@
     onSettingsChange: () => void 
   } = $props();
 
-  let inspectorTab = $state<'context' | 'model' | 'tools'>('model');
+  // Производное состояние: берем вкладку из настроек воркспейса или 'model' по умолчанию
+  const inspectorTab = $derived(currentWorkspace?.settings.lastActiveTab || 'model');
+
+  // Функция переключения вкладок с сохранением в конфиг
+  function setTab(tab: InspectorTab) {
+    if (currentWorkspace) {
+      currentWorkspace.settings.lastActiveTab = tab;
+      onSettingsChange();
+    }
+  }
 </script>
 
 <aside class="inspector">
   <div class="tabs">
-    <button class:active={inspectorTab === 'context'} onclick={() => inspectorTab = 'context'}>
-      {@html MessageIcon}
-      Context
-    </button>
-    <button class:active={inspectorTab === 'model'} onclick={() => inspectorTab = 'model'}>
+    <button class:active={inspectorTab === 'model'} onclick={() => setTab('model')}>
       {@html CpuIcon}
-      Model
+      Модель
     </button>
-    <button class:active={inspectorTab === 'tools'} onclick={() => inspectorTab = 'tools'}>
+    <button class:active={inspectorTab === 'context'} onclick={() => setTab('context')}>
+      {@html MessageIcon}
+      Контекст
+    </button>
+    <button class:active={inspectorTab === 'tools'} onclick={() => setTab('tools')}>
       {@html ToolsIcon}
-      Tools
+      Инструменты
     </button>
   </div>
 
@@ -40,7 +49,7 @@
       {#if inspectorTab === 'context'}
         <div class="settings-group">
           <label>
-            <span class="label-text">System Prompt</span>
+            <span class="label-text">Системный промпт</span>
             <textarea 
               bind:value={currentWorkspace.settings.systemPrompt} 
               onchange={onSettingsChange}
@@ -60,7 +69,7 @@
             />
           </label>
           <label>
-            <span class="label-text">Model Name</span>
+            <span class="label-text">Название модели</span>
             <input 
               bind:value={currentWorkspace.settings.modelName} 
               onchange={onSettingsChange}
@@ -77,7 +86,7 @@
             />
           </label>
           <label>
-            <span class="label-text">Temperature: {currentWorkspace.settings.temperature}</span>
+            <span class="label-text">Температура: {currentWorkspace.settings.temperature}</span>
             <input 
               type="range" 
               min="0" 
@@ -102,7 +111,7 @@
 
 <style>
   .inspector {
-    width: 280px;
+    width: 380px;
     border-left: 1px solid #e5e7eb;
     display: flex;
     flex-direction: column;

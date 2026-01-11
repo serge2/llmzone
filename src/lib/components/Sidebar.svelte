@@ -2,7 +2,6 @@
   import { tick } from 'svelte';
   import { slide } from 'svelte/transition';
   import type { Workspace } from '$lib/types';
-  import WorkspaceIconPicker from './WorkspaceIconPicker.svelte';
     
   // Импорт иконок из ассетов
   import TrashIcon from '$lib/assets/icons/trash.svg?raw';
@@ -13,7 +12,6 @@
   import CloseIcon from '$lib/assets/icons/close.svg?raw';
   import EditIcon from '$lib/assets/icons/edit.svg?raw';
   import SettingsIcon from '$lib/assets/icons/settings.svg?raw';
-  import ChevronDownIcon from '$lib/assets/icons/chevron-down.svg?raw';
     
   // Используем деструктуризацию пропсов Svelte 5
   let { 
@@ -26,11 +24,7 @@
     onSelectChat,
     onRenameChat,
     onDeleteChat,
-    onCreateWorkspace,
-    onSelectWorkspace,
-    onOpenSettings,
-    onRenameWorkspace,
-    onDeleteWorkspace
+    onOpenSettings
   }: {
     workspaces: Workspace[],
     selectedWorkspaceId: string,
@@ -41,11 +35,7 @@
     onSelectChat: (chatId: string, wsId: string) => void,
     onRenameChat: (chatId: string, newName: string) => void,
     onDeleteChat: (chatId: string) => void,
-    onCreateWorkspace: () => void,
-    onSelectWorkspace: (id: string) => void,
-    onOpenSettings: () => void,
-    onRenameWorkspace: (id: string, newName: string) => void,
-    onDeleteWorkspace: (id: string) => void
+    onOpenSettings: () => void
   } = $props();
 
   // Состояние для управления контекстным меню и редактированием
@@ -53,26 +43,12 @@
   let editingChatId = $state<string | null>(null);
   let deletingChatId = $state<string | null>(null);
   let editValue = $state("");
-  let isWsOpen = $state(false);
-
-  // Состояние для управления воркспейсами
-  let editingWsId = $state<string | null>(null);
-  let wsEditValue = $state("");
-  let draggedWsIdx = $state<number | null>(null);
 
   const currentWs = $derived(workspaces.find((w: Workspace) => w.id === selectedWorkspaceId));
-
-  function handleWsSelect(id: string) {
-    if (editingWsId) return;
-    onSelectWorkspace(id);
-    isWsOpen = false;
-  }
 
   function closeMenus() {
     activeMenuId = null;
     deletingChatId = null;
-    isWsOpen = false;
-    editingWsId = null;
   }
 
   function startRename(id: string, currentName: string) {
@@ -86,19 +62,6 @@
       onRenameChat(id, editValue.trim());
     }
     editingChatId = null;
-  }
-
-  function startRenameWs(e: MouseEvent, id: string, name: string) {
-    e.stopPropagation();
-    editingWsId = id;
-    wsEditValue = name;
-  }
-
-  function confirmRenameWs(id: string) {
-    if (wsEditValue.trim()) {
-      onRenameWorkspace(id, wsEditValue.trim());
-    }
-    editingWsId = null;
   }
 
   async function requestDelete(id: string) {
@@ -116,40 +79,6 @@
     deletingChatId = null;
   }
 
-  // --- Drag and Drop Logic ---
-  function handleDragStart(e: DragEvent, idx: number) {
-    draggedWsIdx = idx;
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move';
-      // Передаем пустую строку, чтобы браузер понял, что это валидный DND
-      e.dataTransfer.setData('text/plain', idx.toString());
-    }
-  }
-
-  function handleDragOver(e: DragEvent, targetIdx: number) {
-    e.preventDefault();
-    if (e.dataTransfer) {
-      e.dataTransfer.dropEffect = 'move';
-    }
-    
-    if (draggedWsIdx === null || draggedWsIdx === targetIdx) return;
-    
-    const items = [...workspaces];
-    const draggedItem = items.splice(draggedWsIdx, 1)[0];
-    items.splice(targetIdx, 0, draggedItem);
-    workspaces = items;
-    draggedWsIdx = targetIdx;
-  }
-
-  function handleDragEnd() {
-    draggedWsIdx = null;
-    // Вызываем сохранение конфигурации после изменения порядка
-    // Мы можем использовать существующий проп onSelectWorkspace или добавить новый
-    // Но так как нам нужно просто сохранить текущий стейт workspaces, 
-    // проще всего вызвать функцию сохранения из родителя.
-    onSelectWorkspace(selectedWorkspaceId);
-  }
-
   // Action для автоматического фокуса и выделения текста
   function selectOnFocus(node: HTMLInputElement) {
     node.focus();
@@ -160,113 +89,6 @@
 <svelte:window onclick={closeMenus} />
 
 <aside class="chats-sidebar">
-  <div class="workspace-selector-container">
-    <button 
-      class="ws-current" 
-      onclick={(e) => { e.stopPropagation(); isWsOpen = !isWsOpen; }}
-    >
-      <span class="ws-icon-main">{currentWs?.icon || 'W'}</span>
-      <span class="ws-name-main">{currentWs?.name || 'Workspace'}</span>
-      <span class="chevron" class:rotated={isWsOpen}>{@html ChevronDownIcon}</span>
-    </button>
-
-    {#if isWsOpen}
-      <div 
-        class="ws-dropdown" 
-        transition:slide={{ duration: 200 }} 
-        onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => e.key === 'Escape' && (isWsOpen = false)}
-        role="menu"
-        tabindex="0"
-      >
-        <ul class="ws-list-scrollable">
-          {#each workspaces as ws, i (ws.id)}
-            <li 
-              class="ws-item-wrapper" 
-              class:active={ws.id === selectedWorkspaceId}
-              class:dragging={draggedWsIdx === i}
-              class:is-editing={editingWsId === ws.id}
-              draggable={!editingWsId}
-              ondragstart={(e) => handleDragStart(e, i)}
-              ondragover={(e) => handleDragOver(e, i)}
-              ondragend={handleDragEnd}
-              onselectstart={(e) => !editingWsId && e.preventDefault()}
-              onkeydown={(e) => {
-                if (e.key === 'Enter' && !editingWsId) handleWsSelect(ws.id);
-              }}
-              role="option"
-              aria-selected={ws.id === selectedWorkspaceId}
-              tabindex="0"
-            >
-              {#if editingWsId === ws.id}
-                <div class="ws-edit-container">
-                  <div class="ws-edit-top-row">
-                    <div class="picker-shifter">
-                      <WorkspaceIconPicker 
-                        bind:value={ws.icon as string} 
-                        onSelect={(newIcon: string) => {
-                           ws.icon = newIcon;
-                        }} 
-                      />
-                    </div>
-                    
-                    <input 
-                      class="ws-edit-input-field"
-                      use:selectOnFocus
-                      bind:value={wsEditValue}
-                      onkeydown={(e) => {
-                        if (e.key === 'Enter') confirmRenameWs(ws.id);
-                        if (e.key === 'Escape') editingWsId = null;
-                        e.stopPropagation();
-                      }}
-                    />
-                    
-                    <div class="ws-edit-actions">
-                      <button class="confirm-btn-ws" onclick={() => confirmRenameWs(ws.id)}>
-                        {@html CheckIcon}
-                      </button>
-                      <button class="cancel-btn-ws" onclick={() => editingWsId = null}>
-                        {@html CloseIcon}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              {:else}
-                <button 
-                  class="ws-item" 
-                  onclick={() => handleWsSelect(ws.id)}
-                  tabindex="-1"
-                >
-                  <span class="ws-icon">{ws.icon}</span>
-                  <span class="ws-name">{ws.name}</span>
-                </button>
-                <div class="ws-item-actions">
-                  <button class="ws-action-btn" onclick={(e) => startRenameWs(e, ws.id, ws.name)}>
-                    {@html EditIcon}
-                  </button>
-                  {#if workspaces.length > 1}
-                    <button class="ws-action-btn del" onclick={() => onDeleteWorkspace(ws.id)}>
-                      {@html TrashIcon}
-                    </button>
-                  {/if}
-                </div>
-              {/if}
-            </li>
-          {/each}
-        </ul>
-        <div class="ws-divider"></div>
-        <button 
-          class="ws-item add-ws" 
-          onclick={() => { onCreateWorkspace(); isWsOpen = false; }}
-          role="menuitem"
-        >
-          <span class="ws-icon-svg">{@html PlusIcon}</span>
-          <span>Новое пространство</span>
-        </button>
-      </div>
-    {/if}
-  </div>
-
   <div class="chats-list-header">
     <div class="toolbar">
       <button 
@@ -407,264 +229,9 @@
     height: 100%;
   }
 
-  /* Виджет воркспейса */
-  .workspace-selector-container {
-    padding: 12px;
-    position: relative;
-    border-bottom: 1px solid #f3f4f6;
-    /* Позволяем выпадающему списку выходить за пределы сайдбара */
-    z-index: 1000;
-  }
-
-  .ws-current {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    cursor: pointer;
-    font-weight: 600;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    color: #374151;
-    transition: all 0.2s;
-  }
-
-  .ws-current:hover {
-    border-color: #d1d5db;
-    background: #fcfcfc;
-  }
-
-  .ws-icon-main {
-    font-size: 1.1rem;
-    width: 24px;
-    text-align: center;
-  }
-
-  .ws-name-main {
-    font-size: 0.9rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-    text-align: left;
-  }
-
-  .chevron {
-    display: flex;
-    color: #9ca3af;
-    transition: transform 0.2s;
-  }
-
-  .chevron.rotated { transform: rotate(180deg); }
-
-  .chevron :global(svg) {
-    width: 14px;
-    height: 14px;
-  }
-
-  .ws-dropdown {
-    position: absolute;
-    top: calc(100% - 4px);
-    left: 12px;
-    /* Позволяем контенту растягивать дропдаун */
-    width: max-content; 
-    min-width: calc(100% - 24px);
-    max-width: 320px; 
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
-    z-index: 1000;
-    padding: 4px;
-    /* Смена overflow: hidden на visible, чтобы иконки не обрезались */
-    overflow: visible !important; /* Критично, чтобы абсолютный пикер не обрезался */ 
-    width: max-content; /* Дропдаун расширится под иконки */
-    min-width: calc(100% - 24px);
-  }
-
-  .ws-list-scrollable {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .ws-item-wrapper {
-    display: flex;
-    align-items: center;
-    border-radius: 6px;
-    margin: 2px 4px;
-    transition: background 0.2s, opacity 0.2s;
-    cursor: grab;
-    position: relative; 
-  }
-
-  /* Дополнительный фикс для обертки всего элемента при редактировании */
-  .ws-item-wrapper.is-editing {
-    padding: 8px;
-    background: white;
-    /* Убираем лишние ограничения */
-    height: auto; 
-    display: flex;
-    align-items: flex-start;
-  }
-
-  .ws-item-wrapper:active:not(.is-editing) { cursor: grabbing; }
-  .ws-item-wrapper.dragging { opacity: 0.4; background: #f3f4f6; }
-
-  .ws-item-wrapper:not(.is-editing):hover { background: #f3f4f6; }
-  .ws-item-wrapper.active:not(.is-editing) { background: #f0f1ff; }
-
-  .ws-item-wrapper * {
-    pointer-events: none; 
-  }
-
-  /* Это правило ВКЛЮЧАЕТ клики обратно для нужных элементов */
-  .ws-item-wrapper .ws-item-actions,
-  .ws-item-wrapper .ws-edit-container,
-  /* Добавляем селектор пикера, чтобы он реагировал на мышь */
-  .ws-item-wrapper :global(.icon-picker-container), 
-  .ws-item-wrapper button,
-  .ws-item-wrapper input {
-    pointer-events: auto !important;
-  }
-  
-  .ws-item-wrapper[draggable="true"] {
-    -webkit-user-drag: element; 
-    user-select: none;
-  }
-
-  .ws-item {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    font-size: 0.85rem;
-    color: #4b5563;
-    overflow: hidden;
-    white-space: nowrap;
-  }
-
-  .active .ws-item { color: #5865f2; font-weight: 600; }
-
-  .ws-item-actions {
-    display: flex;
-    gap: 2px;
-    padding-right: 8px;
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-
-  .ws-item-wrapper:hover .ws-item-actions { opacity: 1; }
-
-  .ws-action-btn {
-    background: none;
-    border: none;
-    padding: 4px;
-    cursor: pointer;
-    color: #9ca3af;
-    display: flex;
-    border-radius: 4px;
-  }
-
-  .ws-action-btn:hover { background: #e5e7eb; color: #374151; }
-  .ws-action-btn.del:hover { color: #ef4444; }
-  .ws-action-btn :global(svg) { width: 12px; height: 12px; }
-
-  /* Стили для расширенного инлайнового редактирования */
-  .ws-edit-container {
-    display: flex;
-    flex-direction: column; /* Элементы (строка и пикер) будут друг под другом */
-    gap: 4px;
-    width: 100%;
-  }
-
-  /* Верхняя строка: Пикер + Инпут + Кнопки */
-  .ws-edit-top-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    /* Гарантируем, что строка не схлопнется по высоте */
-    min-height: 40px; 
-    position: relative;
-  }
-
-  .picker-shifter {
-    flex-shrink: 0; /* Чтобы кнопка иконки не сжималась */
-  }
-
-  /* Важный фикс для Svelte 5 + slide transition */
-  :global(.picker-inline-content) {
-    overflow: hidden; /* Необходимо для работы анимации slide */
-  }
-
-  .ws-edit-input-field {
-    flex: 1; /* Заставляет инпут забрать всё свободное место */
-    min-width: 0; /* Разрешает flex-элементу сжиматься до реального 0, если нужно, но flex:1 его растянет */
-    height: 34px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    padding: 0 10px;
-    outline: none;
-  }
-
-  .ws-edit-input-field:focus {
-    border-color: #5865f2;
-    background: #fff;
-  }
-
-  .ws-edit-actions {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0; /* Кнопки подтверждения никогда не сжимаются */
-  }
-
-  .confirm-btn-ws, .cancel-btn-ws {
-    background: none;
-    border: none;
-    padding: 4px;
-    cursor: pointer;
-    display: flex;
-    border-radius: 4px;
-  }
-
-  .confirm-btn-ws { color: #10b981; }
-  .cancel-btn-ws { color: #9ca3af; }
-
-  .confirm-btn-ws:hover { background: #ecfdf5; }
-  .cancel-btn-ws:hover { background: #f3f4f6; color: #ef4444; }
-
-  .confirm-btn-ws :global(svg), 
-  .cancel-btn-ws :global(svg) { 
-    width: 16px; 
-    height: 16px; 
-  }
-
-  .ws-divider {
-    height: 1px;
-    background: #f3f4f6;
-    margin: 4px 0;
-  }
-
-  .add-ws { 
-    width: calc(100% - 8px);
-    margin: 4px;
-    color: #6b7280; 
-    white-space: nowrap;
-  }
-  .ws-icon-svg :global(svg) { width: 14px; height: 14px; }
-  
   .chats-list-header { 
     padding: 12px 12px 8px 12px; 
+    border-bottom: 1px solid #f3f4f6;
   }
   
   .toolbar { 
@@ -848,7 +415,7 @@
     display: flex;
     align-items: center;
     width: 100%;
-    padding: 4px; /* Компактные отступы */
+    padding: 4px;
     gap: 4px;
     background: #ffffff;
     border-radius: 6px;
@@ -858,7 +425,7 @@
 
   .edit-input {
     flex: 1;
-    min-width: 0; /* Позволяет инпуту сжиматься, уступая место кнопкам */
+    min-width: 0;
     border: 1px solid #5865f2;
     border-radius: 4px;
     padding: 4px 6px;
@@ -871,14 +438,14 @@
   .edit-actions {
     display: flex;
     align-items: center;
-    gap: 2px; /* Минимальный зазор между кнопками */
+    gap: 2px;
     flex-shrink: 0;
   }
 
   .confirm-btn, .confirm-delete-btn, .cancel-btn {
     background: none;
     border: none;
-    padding: 4px; /* Компактная область клика */
+    padding: 4px;
     cursor: pointer;
     display: flex;
     align-items: center;

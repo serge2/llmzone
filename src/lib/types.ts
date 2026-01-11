@@ -1,3 +1,5 @@
+export type InspectorTab = 'context' | 'model' | 'tools';
+
 export interface GlobalConfig {
   apiUrl: string;
   apiKey: string;
@@ -5,6 +7,7 @@ export interface GlobalConfig {
 }
 
 export interface WorkspaceSettings {
+  lastActiveTab?: InspectorTab;
   apiUrl: string;
   apiKey: string;
   modelName: string;
