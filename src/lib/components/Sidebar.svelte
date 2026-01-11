@@ -2,7 +2,15 @@
   import { tick } from 'svelte';
   import type { Workspace } from '$lib/types';
   // import { ask } from '@tauri-apps/plugin-dialog';
+  
+  // Импорт иконок из ассетов
   import TrashIcon from '$lib/assets/icons/trash.svg?raw';
+  import PlusIcon from '$lib/assets/icons/plus.svg?raw';
+  import SearchIcon from '$lib/assets/icons/search.svg?raw';
+  import MoreIcon from '$lib/assets/icons/more.svg?raw';
+  import CheckIcon from '$lib/assets/icons/check.svg?raw';
+  import CloseIcon from '$lib/assets/icons/close.svg?raw';
+  import EditIcon from '$lib/assets/icons/edit.svg?raw';
     
   // Используем деструктуризацию пропсов Svelte 5
   let { 
@@ -76,14 +84,16 @@
 <aside class="chats-sidebar">
   <div class="chats-list-header">
     <div class="toolbar">
-      <button class="icon" title="Опции" type="button">⋯</button>
+      <button class="icon" title="Опции" type="button">
+        {@html MoreIcon}
+      </button>
       <button 
         class="icon" 
         title="Поиск" 
         type="button" 
         onclick={(e) => { e.stopPropagation(); searchActive = !searchActive; }}
       >
-        🔍
+        {@html SearchIcon}
       </button>
       
       <button 
@@ -92,9 +102,7 @@
         type="button" 
         onclick={onCreateChat}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M12 5v14M5 12h14"/>
-        </svg>
+        {@html PlusIcon}
       </button>
     </div>
     
@@ -131,8 +139,12 @@
                 }}
               />
               <div class="edit-actions">
-                <button class="confirm-btn" onclick={() => confirmRename(chat.id)} title="Сохранить">✓</button>
-                <button class="cancel-btn" onclick={() => editingChatId = null} title="Отмена">✕</button>
+                <button class="confirm-btn" onclick={() => confirmRename(chat.id)} title="Сохранить">
+                  {@html CheckIcon}
+                </button>
+                <button class="cancel-btn" onclick={() => editingChatId = null} title="Отмена">
+                  {@html CloseIcon}
+                </button>
               </div>
             </div>
           {:else if deletingChatId === chat.id}
@@ -146,7 +158,9 @@
                 <button class="confirm-delete-btn" onclick={() => confirmDelete(chat.id)} title="Удалить">
                   {@html TrashIcon}
                 </button>
-                <button class="cancel-btn" onclick={cancelDelete} title="Отмена">✕</button>
+                <button class="cancel-btn" onclick={cancelDelete} title="Отмена">
+                  {@html CloseIcon}
+                </button>
               </div>
             </div>
           {:else}
@@ -163,7 +177,7 @@
                 class="context-btn" 
                 onclick={(e) => { e.stopPropagation(); activeMenuId = activeMenuId === chat.id ? null : chat.id; }}
               >
-                ⋯
+                {@html MoreIcon}
               </button>
               
               {#if activeMenuId === chat.id}
@@ -176,6 +190,7 @@
                 >
                   <button role="menuitem" onclick={() => startRename(chat.id, chat.name)}>
                     <span>Переименовать</span>
+                    {@html EditIcon}
                   </button>
                   <button role="menuitem" class="delete-opt" onclick={(e) => { e.stopPropagation(); requestDelete(chat.id); }}>
                     <span>Удалить</span>
@@ -235,6 +250,12 @@
     margin-left: auto; 
     color: #5865f2; 
     background: rgba(88, 101, 242, 0.05);
+  }
+
+  /* Стилизация вставленных SVG через @html */
+  .icon :global(svg), .context-btn :global(svg) {
+    width: 14px;
+    height: 14px;
   }
 
   .chat-search { 
@@ -322,7 +343,8 @@
     padding: 4px 8px;
     cursor: pointer;
     color: #9ca3af;
-    font-size: 1rem;
+    display: flex;
+    align-items: center;
   }
 
   .chat-item-wrapper:hover .context-btn {
@@ -346,6 +368,7 @@
     width: 100%;
     display: flex;
     align-items: center;
+    justify-content: space-between; /* Чтобы иконка была справа */
     gap: 8px;
     padding: 8px 12px;
     background: none;
@@ -359,6 +382,8 @@
 
   .dropdown-menu button :global(svg) {
     flex-shrink: 0;
+    width: 12px;
+    height: 12px;
     stroke-width: 2px;
     color: currentColor; 
   }
@@ -453,11 +478,9 @@
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 0.9rem;
     border-radius: 4px;
     transition: background 0.2s;
     padding: 0;
-    line-height: 1;
   }
 
   .confirm-btn { color: #10b981; }
