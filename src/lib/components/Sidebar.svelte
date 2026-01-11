@@ -848,18 +848,71 @@
     display: flex;
     align-items: center;
     width: 100%;
-    padding: 4px 6px;
+    padding: 4px; /* Компактные отступы */
     gap: 4px;
     background: #ffffff;
     border-radius: 6px;
+    box-shadow: inset 0 0 0 1px #e5e7eb;
+    box-sizing: border-box;
   }
+
   .edit-input {
     flex: 1;
+    min-width: 0; /* Позволяет инпуту сжиматься, уступая место кнопкам */
     border: 1px solid #5865f2;
     border-radius: 4px;
     padding: 4px 6px;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     outline: none;
     box-sizing: border-box;
+    background: #fff;
+  }
+
+  .edit-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px; /* Минимальный зазор между кнопками */
+    flex-shrink: 0;
+  }
+
+  .confirm-btn, .confirm-delete-btn, .cancel-btn {
+    background: none;
+    border: none;
+    padding: 4px; /* Компактная область клика */
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+
+  .confirm-btn { color: #10b981; }
+  .confirm-btn:hover { background: #ecfdf5; }
+
+  .confirm-delete-btn { color: #ef4444; }
+  .confirm-delete-btn:hover { background: #fef2f2; }
+
+  .cancel-btn { color: #9ca3af; }
+  .cancel-btn:hover { background: #f3f4f6; color: #6b7280; }
+
+  .confirm-btn :global(svg), 
+  .confirm-delete-btn :global(svg), 
+  .cancel-btn :global(svg) { 
+    width: 14px; 
+    height: 14px; 
+  }
+
+  .confirm-label {
+    font-size: 0.8rem;
+    color: #ef4444;
+    font-weight: 500;
+    flex: 1;
+    padding-left: 2px;
+    white-space: nowrap;
+  }
+
+  .danger-zone {
+    background: #fff1f1 !important;
   }
 </style>
