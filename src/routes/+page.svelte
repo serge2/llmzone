@@ -210,7 +210,7 @@
     navigator.clipboard.writeText(text);
   }
 
-// --- Основная логика отправки и стриминга ---
+  // --- Основная логика отправки и стриминга ---
   async function sendMessage() {
     // Если модель уже отвечает, кнопка работает как "Стоп"
     if (isTyping) {
@@ -273,7 +273,7 @@
           temperature: settings.temperature,
           messages: [
             // Подмешиваем системный промпт воркспейса
-            ...(settings.systemPrompt ? [{ role: 'system', content: settings.systemPrompt }] : []),
+            ...(settings.systemPrompt.trim() ? [{ role: 'system', content: settings.systemPrompt }] : []),
             ...chatToUpdate.history.slice(0, -1).map(m => ({ role: m.role, content: m.text }))
           ],
           stream: true
@@ -335,6 +335,30 @@
       await persistChats();
     }
   }
+
+  function handleRenameChat(chatId: string, newName: string) {
+    if (!currentWorkspace) return;
+    const chat = currentWorkspace.chats.find(c => c.id === chatId);
+    if (chat) {
+      chat.name = newName;
+      workspaces = [...workspaces]; // Триггер реактивности
+      persistChats(); // Сохраняем изменения в хранилище
+    }
+  }
+
+  async function handleDeleteChat(chatId: string) {
+    if (!currentWorkspace) return;
+    
+    currentWorkspace.chats = currentWorkspace.chats.filter(c => c.id !== chatId);
+    
+    if (selectedChatId === chatId) {
+      selectedChatId = currentWorkspace.chats[0]?.id || '';
+    }
+    
+    workspaces = [...workspaces]; // Триггер реактивности
+    await persistChats(); // Сохраняем изменения в хранилище
+  }
+
 </script>
 
 <main class="app-container">
@@ -397,6 +421,8 @@
           bind:searchActive
           onCreateChat={createChat}
           onSelectChat={selectChat} 
+          onRenameChat={handleRenameChat}
+          onDeleteChat={handleDeleteChat}
         />
       {/if}
 
