@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Message } from '$lib/types';
   import MessageBubble from './MessageBubble.svelte';
-  import { tick } from 'svelte';
+  import { tick, onMount } from 'svelte';
 
   // Импорт иконок из ассетов
   import ArrowUpIcon from '$lib/assets/icons/arrow-up.svg?raw';
@@ -47,6 +47,19 @@
     shouldAutoScroll = distanceFromBottom < threshold;
   }
 
+  // Следим за изменением высоты контейнера при ресайзе окна
+  onMount(() => {
+    const resizeObserver = new ResizeObserver(() => {
+      if (shouldAutoScroll && chatContainer) {
+        // Если чат прижат к низу, удерживаем его там при изменении размеров
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+    });
+
+    if (chatContainer) resizeObserver.observe(chatContainer);
+    return () => resizeObserver.disconnect();
+  });
+
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -80,7 +93,6 @@
           onRegenerate={() => onRegenerateMessage()}
         />
       {/each}
-      
     </div>
   </div>
 
