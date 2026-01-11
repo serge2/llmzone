@@ -203,7 +203,7 @@
 </script>
 
 <div class="message-wrapper {role}" class:is-generating={isTyping}>
-  <div class="message-content">
+  <div class="message-content" class:editing-mode={isEditing}>
     <div class="message">
       <div class="prose" bind:this={proseEl} onclick={handleProseClick} role="presentation">
         {#if isEditing}
@@ -295,6 +295,21 @@
 
   .user .message { background: #e3f2fd; color: #0d47a1; border-bottom-right-radius: 4px; }
   .assistant .message { background: #ffffff; color: #263238; border: 1px solid #eceff1; border-bottom-left-radius: 4px; }
+
+  /* Когда редактируем, расширяем контейнер до 100% */
+  .message-content.editing-mode {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  /* В режиме редактирования убираем ограничение ширины и меняем стиль пузырька */
+  .editing-mode .message {
+    width: 100%;
+    background: #ffffff !important; /* Белый фон для фокуса на тексте */
+    border: 1px solid #5865f2 !important; /* Акцентная рамка */
+    box-shadow: 0 4px 12px rgba(88, 101, 242, 0.15);
+    color: #1a1a1b !important;
+  }
 
   .prose :global(p) { margin: 0 0 1em 0; }
   .prose :global(p:last-child) { margin-bottom: 0; }
@@ -414,6 +429,8 @@
     overflow: hidden;
     box-sizing: border-box; /* Важно для точного расчета высоты */
     min-height: 1.55em;    /* Высота одной строки */
+    white-space: pre-wrap; /* Улучшаем читаемость при редактировании длинных текстов */
+    word-break: break-word;
   }
 
   .user .edit-textarea {
