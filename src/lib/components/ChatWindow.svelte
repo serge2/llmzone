@@ -31,12 +31,21 @@
   let inputElement: HTMLTextAreaElement; // Ссылка на textarea для управления фокусом
   let shouldAutoScroll = true;
 
+  // Функция для автоматической подстройки высоты
+  function adjustHeight() {
+    if (inputElement) {
+      inputElement.style.height = 'auto'; // Сначала сбрасываем, чтобы получить реальный scrollHeight
+      inputElement.style.height = `${inputElement.scrollHeight}px`;
+    }
+  }
+
   // Функция для установки фокуса с гарантированным срабатыванием
   function focusInput() {
     if (inputElement) {
       // Используем setTimeout, чтобы фокус сработал после того, как Svelte обновит DOM
       setTimeout(() => {
         inputElement.focus();
+        adjustHeight(); // Подстраиваем высоту при фокусе (важно при смене чата)
       }, 0);
     }
   }
@@ -82,6 +91,13 @@
     }
   });
 
+  // Следим за сообщением, чтобы сбрасывать высоту после отправки
+  $effect(() => {
+    if (message === '') {
+      adjustHeight();
+    }
+  });
+
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -124,8 +140,9 @@
         bind:this={inputElement}
         bind:value={message} 
         onkeydown={handleKeydown} 
+        oninput={adjustHeight}
         placeholder="Спросите о чем угодно..."
-        rows="3"
+        rows="1"
       ></textarea>
       
       <button 
@@ -188,7 +205,7 @@
   textarea { 
     flex: 1; 
     max-height: 200px;
-    min-height: 24px;
+    min-height: 40px; /* Установили комфортную начальную высоту */
     border: none;
     padding: 8px;
     resize: none; 
@@ -196,11 +213,14 @@
     font-family: inherit; 
     font-size: 1rem;
     background: transparent;
+    overflow-y: auto;
+    box-sizing: border-box;
   }
   
   .input-wrapper button { 
     width: 36px; height: 36px; background: #2f2f2f; color: white; border: none; border-radius: 12px; cursor: pointer; 
     display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform 0.1s;
+    margin-bottom: 2px; /* Чуть приподнимаем кнопку, чтобы она была по центру первой строки */
   }
 
   /* Стилизация иконок через @html */
