@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { slide } from 'svelte/transition';
   import type { Workspace } from '$lib/types';
   // import { ask } from '@tauri-apps/plugin-dialog';
   
@@ -11,26 +12,36 @@
   import CheckIcon from '$lib/assets/icons/check.svg?raw';
   import CloseIcon from '$lib/assets/icons/close.svg?raw';
   import EditIcon from '$lib/assets/icons/edit.svg?raw';
+  import SettingsIcon from '$lib/assets/icons/settings.svg?raw';
+  import ChevronDownIcon from '$lib/assets/icons/chevron-down.svg?raw';
     
   // Используем деструктуризацию пропсов Svelte 5
   let { 
     workspaces, 
+    selectedWorkspaceId,
     selectedChatId, 
     chatSearch = $bindable(), 
     searchActive = $bindable(),
     onCreateChat,
     onSelectChat,
     onRenameChat,
-    onDeleteChat
+    onDeleteChat,
+    onCreateWorkspace,
+    onSelectWorkspace,
+    onOpenSettings
   }: {
     workspaces: Workspace[],
+    selectedWorkspaceId: string,
     selectedChatId: string,
     chatSearch: string,
     searchActive: boolean,
     onCreateChat: () => void,
     onSelectChat: (chatId: string, wsId: string) => void,
     onRenameChat: (chatId: string, newName: string) => void,
-    onDeleteChat: (chatId: string) => void
+    onDeleteChat: (chatId: string) => void,
+    onCreateWorkspace: () => void,
+    onSelectWorkspace: (id: string) => void,
+    onOpenSettings: () => void
   } = $props();
 
   // Состояние для управления контекстным меню и редактированием
@@ -38,10 +49,19 @@
   let editingChatId = $state<string | null>(null);
   let deletingChatId = $state<string | null>(null);
   let editValue = $state("");
+  let isWsOpen = $state(false);
+
+  const currentWs = $derived(workspaces.find((w: Workspace) => w.id === selectedWorkspaceId));
+
+  function handleWsSelect(id: string) {
+    onSelectWorkspace(id);
+    isWsOpen = false;
+  }
 
   function closeMenus() {
     activeMenuId = null;
     deletingChatId = null;
+    isWsOpen = false;
   }
 
   function startRename(id: string, currentName: string) {
@@ -82,11 +102,51 @@
 <svelte:window onclick={closeMenus} />
 
 <aside class="chats-sidebar">
+  <div class="workspace-selector-container">
+    <button 
+      class="ws-current" 
+      onclick={(e) => { e.stopPropagation(); isWsOpen = !isWsOpen; }}
+    >
+      <span class="ws-icon-main">{currentWs?.icon || 'W'}</span>
+      <span class="ws-name-main">{currentWs?.name || 'Workspace'}</span>
+      <span class="chevron" class:rotated={isWsOpen}>{@html ChevronDownIcon}</span>
+    </button>
+
+    {#if isWsOpen}
+      <div 
+        class="ws-dropdown" 
+        transition:slide={{ duration: 200 }} 
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.key === 'Escape' && (isWsOpen = false)}
+        role="menu"
+        tabindex="0"
+      >
+        {#each workspaces as ws}
+          <button 
+            class="ws-item" 
+            class:active={ws.id === selectedWorkspaceId}
+            onclick={() => handleWsSelect(ws.id)}
+            role="menuitem"
+          >
+            <span class="ws-icon">{ws.icon}</span>
+            <span class="ws-name">{ws.name}</span>
+          </button>
+        {/each}
+        <div class="ws-divider"></div>
+        <button 
+          class="ws-item add-ws" 
+          onclick={() => { onCreateWorkspace(); isWsOpen = false; }}
+          role="menuitem"
+        >
+          <span class="ws-icon-svg">{@html PlusIcon}</span>
+          <span>Новое пространство</span>
+        </button>
+      </div>
+    {/if}
+  </div>
+
   <div class="chats-list-header">
     <div class="toolbar">
-      <button class="icon" title="Опции" type="button">
-        {@html MoreIcon}
-      </button>
       <button 
         class="icon" 
         title="Поиск" 
@@ -118,8 +178,7 @@
   </div>
 
   <div class="tree">
-    {#if workspaces.length > 0}
-      {@const currentWs = workspaces[0]}
+    {#if currentWs && currentWs.chats.length > 0}
       {#each currentWs.chats.filter(c => c.name.toLowerCase().includes(chatSearch.toLowerCase())) as chat (chat.id)}
         <div class="chat-item-wrapper" class:selected={chat.id === selectedChatId} class:danger-zone={deletingChatId === chat.id}>
           {#if editingChatId === chat.id}
@@ -206,27 +265,130 @@
       <div class="empty-state">Нет чатов</div>
     {/if}
   </div>
+
+  <div class="sidebar-footer">
+    <button class="footer-btn" onclick={onOpenSettings}>
+      <span class="footer-icon">{@html SettingsIcon}</span>
+      <span>Настройки</span>
+    </button>
+  </div>
 </aside>
 
 <style>
   .chats-sidebar { 
-    width: 220px; 
+    width: 260px; 
     flex-shrink: 0; 
     border-right: 1px solid #e5e7eb; 
     display: flex; 
     flex-direction: column; 
     background: #f9fafb; 
+    height: 100%;
   }
+
+  /* Виджет воркспейса */
+  .workspace-selector-container {
+    padding: 12px;
+    position: relative;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .ws-current {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    color: #374151;
+    transition: all 0.2s;
+  }
+
+  .ws-current:hover {
+    border-color: #d1d5db;
+    background: #fcfcfc;
+  }
+
+  .ws-icon-main {
+    font-size: 1.1rem;
+    width: 24px;
+    text-align: center;
+  }
+
+  .ws-name-main {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    text-align: left;
+  }
+
+  .chevron {
+    display: flex;
+    color: #9ca3af;
+    transition: transform 0.2s;
+  }
+
+  .chevron.rotated { transform: rotate(180deg); }
+
+  .chevron :global(svg) {
+    width: 14px;
+    height: 14px;
+  }
+
+  .ws-dropdown {
+    position: absolute;
+    top: calc(100% - 4px);
+    left: 12px;
+    right: 12px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    z-index: 1000;
+    overflow: hidden;
+    padding: 4px;
+  }
+
+  .ws-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    color: #4b5563;
+    transition: background 0.2s;
+  }
+
+  .ws-item:hover { background: #f3f4f6; }
+  .ws-item.active { color: #5865f2; background: #f0f1ff; font-weight: 600; }
+
+  .ws-divider {
+    height: 1px;
+    background: #f3f4f6;
+    margin: 4px 0;
+  }
+
+  .add-ws { color: #6b7280; }
+  .ws-icon-svg :global(svg) { width: 14px; height: 14px; }
   
   .chats-list-header { 
-    padding: 12px; 
-    border-bottom: 1px solid #f3f4f6; 
+    padding: 12px 12px 8px 12px; 
   }
   
   .toolbar { 
     display: flex; 
     gap: 4px; 
-    margin-bottom: 8px; 
   }
   
   .icon { 
@@ -252,7 +414,6 @@
     background: rgba(88, 101, 242, 0.05);
   }
 
-  /* Стилизация вставленных SVG через @html */
   .icon :global(svg), .context-btn :global(svg) {
     width: 14px;
     height: 14px;
@@ -266,14 +427,9 @@
     box-sizing: border-box; 
     font-size: 0.85rem;
     outline: none;
+    margin-top: 8px;
   }
   
-  .chat-search:focus {
-    border-color: #5865f2;
-    box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.2); 
-    outline: none;
-  }
-
   .tree { 
     flex: 1; 
     overflow-y: auto; 
@@ -301,11 +457,6 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   }
 
-  .chat-item-wrapper.danger-zone {
-    border-color: #fecaca;
-    background: #fef2f2;
-  }
-  
   .chat-item { 
     background: none; 
     border: none; 
@@ -329,11 +480,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .menu-anchor {
-    display: flex;
-    align-items: center;
   }
 
   .context-btn {
@@ -368,7 +514,7 @@
     width: 100%;
     display: flex;
     align-items: center;
-    justify-content: space-between; /* Чтобы иконка была справа */
+    justify-content: space-between;
     gap: 8px;
     padding: 8px 12px;
     background: none;
@@ -377,71 +523,47 @@
     cursor: pointer;
     border-radius: 4px;
     color: #374151;
-    transition: background 0.2s;
   }
 
-  .dropdown-menu button :global(svg) {
-    flex-shrink: 0;
-    width: 12px;
-    height: 12px;
-    stroke-width: 2px;
-    color: currentColor; 
+  .dropdown-menu button:hover { background: #f3f4f6; }
+
+  .sidebar-footer {
+    padding: 12px;
+    border-top: 1px solid #f3f4f6;
+    background: #f9fafb;
   }
 
-  .dropdown-menu button:hover {
-    background: #f3f4f6;
-  }
-
-  .dropdown-menu button.delete-opt {
-    color: #ef4444;
-  }
-
-  .dropdown-menu button.delete-opt:hover {
-    background: #fef2f2;
-    color: #dc2626;
-  }
-
-  .delete-confirm-mode {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  .footer-btn {
     width: 100%;
-    padding: 4px 8px;
-    gap: 4px;
-  }
-
-  .confirm-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #dc2626;
-    padding-left: 4px;
-  }
-
-  .confirm-delete-btn {
-    width: 24px;
-    height: 24px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    background: #ef4444;
+    gap: 10px;
+    padding: 10px 12px;
+    background: transparent;
     border: none;
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: 8px;
+    color: #4b5563;
+    font-size: 0.9rem;
     transition: background 0.2s;
-    padding: 0;
   }
 
-  .confirm-delete-btn:hover {
-    background: #dc2626;
+  .footer-btn:hover { background: #f3f4f6; color: #111827; }
+
+  .footer-icon :global(svg) {
+    width: 16px;
+    height: 16px;
   }
 
-  .confirm-delete-btn :global(svg) {
-    width: 14px;
-    height: 14px;
-    stroke: white;
+  .empty-state {
+    padding: 20px;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 0.8rem;
   }
 
-  .edit-mode {
+  /* Стили для редактирования и удаления (сохранены из оригинала) */
+  .edit-mode, .delete-confirm-mode {
     display: flex;
     align-items: center;
     width: 100%;
@@ -450,49 +572,13 @@
     background: #ffffff;
     border-radius: 6px;
   }
-
   .edit-input {
     flex: 1;
-    min-width: 0;
     border: 1px solid #5865f2;
     border-radius: 4px;
     padding: 4px 6px;
     font-size: 0.8rem;
     outline: none;
-    height: 24px;
     box-sizing: border-box;
-  }
-
-  .edit-actions {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .confirm-btn, .cancel-btn {
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: none;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: background 0.2s;
-    padding: 0;
-  }
-
-  .confirm-btn { color: #10b981; }
-  .confirm-btn:hover { background: #ecfdf5; }
-
-  .cancel-btn { color: #ef4444; }
-  .cancel-btn:hover { background: #fef2f2; }
-
-  .empty-state {
-    padding: 20px;
-    text-align: center;
-    color: #9ca3af;
-    font-size: 0.8rem;
   }
 </style>

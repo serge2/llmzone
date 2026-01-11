@@ -357,51 +357,28 @@
   </header>
 
   <div class="main-row">
-    <nav class="workspace-nav">
-      <div class="ws-list">
-        {#each workspaces as ws}
-          <button 
-            class="ws-selector-btn" 
-            class:active={selectedWorkspaceId === ws.id}
-            onclick={() => {
-              selectedWorkspaceId = ws.id;
-              if (ws.chats.length > 0) selectedChatId = ws.chats[0].id;
-              selectedTab = 'chats';
-              persistConfig();
-            }}
-          >
-            <span class="ws-icon">{ws.icon}</span>
-            <span class="ws-name">{ws.name}</span>
-          </button>
-        {/each}
-        <button class="ws-add-inline" onclick={createWorkspace}>
-          <span class="icon-small">{@html PlusIcon}</span> Добавить пространство
-        </button>
-      </div>
-
-      <div class="ws-footer">
-        <button 
-          class="ws-selector-btn settings-btn" 
-          class:active={selectedTab === 'settings'}
-          onclick={() => selectedTab = 'settings'}
-        >
-          <span class="ws-icon">{@html SettingsIcon}</span>
-          <span class="ws-name">Настройки</span>
-        </button>
-      </div>
-    </nav>
-
     {#if selectedTab === 'chats'}
       {#if sidebarVisible}
         <Sidebar 
-          workspaces={workspaces.filter(w => w.id === selectedWorkspaceId)} 
+          workspaces={workspaces} 
+          {selectedWorkspaceId}
           {selectedChatId} 
-          bind:chatSearch
-          bind:searchActive
+          bind:chatSearch={chatSearch}
+          bind:searchActive={searchActive}
           onCreateChat={createChat}
           onSelectChat={selectChat} 
           onRenameChat={handleRenameChat}
           onDeleteChat={handleDeleteChat}
+          onCreateWorkspace={createWorkspace}
+          onSelectWorkspace={(id: string) => {
+            selectedWorkspaceId = id;
+            const ws = workspaces.find(w => w.id === id);
+            if (ws?.chats.length) selectedChatId = ws.chats[0].id;
+            persistConfig();
+          }}
+          onOpenSettings={() => {
+            selectedTab = 'settings';
+          }}
         />
       {/if}
 
@@ -424,7 +401,10 @@
 
     {:else}
       <div class="settings-view">
-        <h2>Глобальные настройки</h2>
+        <header class="settings-header">
+           <button class="back-btn" onclick={() => selectedTab = 'chats'}>← Назад к чатам</button>
+           <h2>Глобальные настройки</h2>
+        </header>
         <p>Настройки приложения и интерфейса.</p>
       </div>
     {/if}
@@ -494,106 +474,6 @@
   .breadcrumb-separator { color: #d1d5db; font-size: 0.8rem; }
   .breadcrumb-chat { font-weight: 600; color: #111827; }
 
-  /* Левая панель воркспейсов */
-  .workspace-nav {
-    width: 240px;
-    background: #f9fafb;
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid #e5e7eb;
-    flex-shrink: 0;
-  }
-
-  .ws-list {
-    flex: 1;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    overflow-y: auto;
-  }
-
-  .ws-footer {
-    padding: 12px;
-    border-top: 1px solid #e5e7eb;
-    background: #f3f4f6;
-  }
-
-  .ws-selector-btn {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-align: left;
-    color: #4b5563;
-  }
-
-  .ws-selector-btn:hover {
-    background: #e5e7eb;
-  }
-
-  .ws-selector-btn.active {
-    background: #ffffff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-    color: #5865f2;
-  }
-
-  .ws-icon {
-    width: 24px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-shrink: 0;
-  }
-
-  .ws-icon :global(svg) {
-    width: 18px;
-    height: 18px;
-    stroke-width: 2px;
-  }
-
-  .ws-name {
-    font-size: 0.875rem;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .ws-add-inline {
-    background: none;
-    border: 1px dashed #d1d5db;
-    margin-top: 8px;
-    padding: 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    color: #6b7280;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: all 0.2s;
-  }
-
-  .ws-add-inline:hover {
-    border-color: #9ca3af;
-    background: #f3f4f6;
-    color: #374151;
-  }
-
-  .icon-small :global(svg) {
-    width: 14px;
-    height: 14px;
-    stroke-width: 2.5px;
-  }
-
   /* Вид глобальных настроек */
   .settings-view {
     flex: 1;
@@ -603,8 +483,28 @@
     overflow-y: auto;
   }
 
+  .settings-header {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    border: none;
+    height: auto;
+    padding: 0;
+    margin-bottom: 24px;
+  }
+
+  .back-btn {
+    background: none;
+    border: none;
+    color: #5865f2;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.9rem;
+    text-align: left;
+  }
+
   .settings-view h2 {
-    margin-bottom: 20px;
+    margin-bottom: 0;
     font-weight: 700;
   }
 
