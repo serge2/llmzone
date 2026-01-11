@@ -14,6 +14,7 @@
   import 'prismjs/components/prism-erlang';
   import 'prismjs/components/prism-c';
   import 'prismjs/components/prism-cpp';
+  import 'prismjs/components/prism-markdown';
 
 
   import copyIconRaw from '$lib/assets/icons/copy.svg?raw';
@@ -364,6 +365,39 @@
     display: block; /* Гарантирует правильное центрирование */
   }
 
+  /* Стили для цитат */
+  .prose :global(blockquote) {
+    margin: 16px 0;
+    padding: 8px 16px;
+    border-left: 4px solid #e5e7eb; /* Акцентная линия слева */
+    background-color: #f9fafb;     /* Легкий фон */
+    color: #4b5563;                /* Чуть более приглушенный цвет текста */
+    font-style: italic;
+    border-radius: 4px;
+  }
+
+  /* Стили для списков */
+  .prose :global(ul), 
+  .prose :global(ol) {
+    margin: 12px 0;
+    padding-left: 24px; /* Отступ для маркеров */
+    display: flex;
+    flex-direction: column;
+    gap: 6px; /* Расстояние между пунктами списка */
+  }
+
+  /* Стили для элементов списка */
+  .prose :global(li) {
+    line-height: 1.5;
+  }
+
+  /* Если внутри списка есть еще один список, выделим его */
+  .prose :global(li > ul),
+  .prose :global(li > ol) {
+    margin: 8px 0 8px 12px;
+    padding: 8px 12px;
+  }
+
   .edit-textarea {
     width: 100%;
     display: block;
@@ -414,6 +448,56 @@
     font-style: italic;
     font-size: 0.9rem;
     animation: pulse-opacity 1.5s infinite ease-in-out;
+  }
+
+/* Ограничиваем влияние только на таблицы внутри .prose */
+  .prose :global(table) {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    /* Гарантируем, что таблица не вылезет за пределы пузырька */
+    display: block;
+    overflow-x: auto;
+  }
+
+  /* Стили для ячеек заголовка */
+  .prose :global(th) {
+    background-color: #f8fafc;
+    padding: 12px 16px;
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 2px solid #e2e8f0;
+    color: #475569;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+  }
+
+  /* Стили для обычных ячеек */
+  .prose :global(td) {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
+  /* Убираем нижнюю границу у последней строки, чтобы не дублировать рамку таблицы */
+  .prose :global(tr:last-child td) {
+    border-bottom: none;
+  }
+
+  /* Подсветка четных строк для читаемости (зебра) */
+  .prose :global(tr:nth-child(even)) {
+    background-color: #fbfcfe;
+  }
+
+  /* Эффект наведения на строку */
+  .prose :global(tr:hover) {
+    background-color: #f1f5f9;
   }
 
   @keyframes pulse-opacity {
