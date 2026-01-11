@@ -1,0 +1,133 @@
+<script lang="ts">
+  import type { GlobalConfig } from '$lib/types';
+
+  let { globalConfig, onSave, onClose }: { 
+    globalConfig: GlobalConfig, 
+    onSave: () => void,
+    onClose: () => void 
+  } = $props();
+</script>
+
+<div class="settings-overlay">
+  <div class="settings-container">
+    <header class="settings-header">
+      <button class="back-btn" onclick={onClose}>← Назад к чатам</button>
+      <h2>Глобальные настройки</h2>
+    </header>
+
+    <div class="settings-form">
+      <div class="setting-item">
+        <label for="apiUrl">API URL</label>
+        <input 
+          id="apiUrl"
+          type="text" 
+          bind:value={globalConfig.apiUrl} 
+          onchange={onSave}
+          placeholder="http://localhost:1234"
+        />
+      </div>
+
+      <div class="setting-item">
+        <label for="apiKey">API Key</label>
+        <input 
+          id="apiKey"
+          type="password" 
+          bind:value={globalConfig.apiKey} 
+          onchange={onSave}
+          placeholder="Ключ API (если требуется)"
+        />
+      </div>
+
+      <div class="setting-item">
+        <label for="modelName">Имя модели по умолчанию</label>
+        <input 
+          id="modelName"
+          type="text" 
+          bind:value={globalConfig.modelName} 
+          onchange={onSave}
+          placeholder="local-model"
+        />
+      </div>
+      
+      <div class="footer-info">
+        <p>Эти параметры используются как запасные (fallback), если они не указаны в настройках конкретного воркспейса.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .settings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #ffffff;
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    overflow-y: auto;
+  }
+
+  .settings-container {
+    width: 100%;
+    max-width: 800px;
+    padding: 60px 20px;
+  }
+
+  .settings-header {
+    margin-bottom: 40px;
+  }
+
+  .back-btn {
+    background: none;
+    border: none;
+    color: #5865f2;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0;
+    margin-bottom: 16px;
+  }
+
+  h2 { margin: 0; font-size: 1.8rem; font-weight: 700; }
+
+  .settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    background: #f9fafb;
+    padding: 32px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+  }
+
+  .setting-item { display: flex; flex-direction: column; gap: 8px; }
+  
+  .setting-item label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #4b5563;
+    text-transform: uppercase;
+  }
+
+  input {
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 1rem;
+    outline: none;
+  }
+
+  input:focus {
+    border-color: #5865f2;
+    box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.1);
+  }
+
+  .footer-info {
+    margin-top: 12px;
+    font-size: 0.85rem;
+    color: #6b7280;
+    line-height: 1.5;
+  }
+</style>

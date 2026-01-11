@@ -2,23 +2,30 @@
   import { fetch } from '@tauri-apps/plugin-http';
   import { onMount } from 'svelte';
   import { loadConfig, saveConfig } from '$lib/config';
-  import type { Workspace, Chat, Message, AppSettings } from '$lib/types';
+  import type { Workspace, Chat, Message, AppSettings, GlobalConfig } from '$lib/types';
   import { loadChats, saveChats } from '$lib/storage/chatStorage';
   import Inspector from '$lib/components/Inspector.svelte';
   
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ChatWindow from '$lib/components/ChatWindow.svelte';
+  import GlobalSettings from '$lib/components/GlobalSettings.svelte';
 
   // Импорт иконок из ассетов
   import MenuIcon from '$lib/assets/icons/menu.svg?raw';
-  import SettingsIcon from '$lib/assets/icons/settings.svg?raw';
-  import PlusIcon from '$lib/assets/icons/plus.svg?raw';
+
 
   // --- Состояние приложения (Svelte 5 Runes) ---
   let workspaces = $state<Workspace[]>([]);
   let selectedWorkspaceId = $state<string>('');
   let selectedChatId = $state<string>('');
   
+  // Глобальные настройки
+  let globalConfig = $state<GlobalConfig>({
+    apiUrl: 'http://localhost:1234/v1',
+    apiKey: '',
+    modelName: 'local-model'
+  });
+
   let message = $state("");
   // Словарь для независимых контроллеров отмены: { chatId: AbortController }
   let abortControllers = $state<Record<string, AbortController>>({});
@@ -42,6 +49,11 @@
     const savedChats = await loadChats();
     const history = savedChats || [];
     
+    // Загружаем глобальные настройки если они есть
+    if (config?.globalConfig) {
+      globalConfig = { ...globalConfig, ...config.globalConfig };
+    }
+
     if (config?.workspaces && config.workspaces.length > 0) {
       // 2. Собираем воркспейсы: настройки из конфига + чаты из хранилища
       workspaces = config.workspaces.map(ws => ({
@@ -66,10 +78,10 @@
         name: 'Основной',
         icon: '🏠',
         settings: {
-          apiUrl: 'http://localhost:1234/v1',
+          apiUrl: '', // Пусто, чтобы использовался глобальный
           apiKey: '',
-          modelName: 'local-model',
-          systemPrompt: 'You are a helpful assistant.',
+          modelName: '',
+          systemPrompt: '',
           temperature: 0.7
         },
         chats: [{ id: 'c-' + Date.now(), name: 'Новый чат', history: [], isGenerating: false }]
@@ -90,7 +102,8 @@
     const configToSave: AppSettings = {
       theme: 'system',
       lastSelectedWorkspaceId: selectedWorkspaceId,
-      workspaces: workspacesToSave
+      workspaces: workspacesToSave,
+      globalConfig: $state.snapshot(globalConfig) // Сохраняем глобальные настройки
     };
     await saveConfig(configToSave);
   }
@@ -115,9 +128,9 @@
       name: 'Workspace ' + (workspaces.length + 1), 
       icon: '📁',
       settings: {
-        apiUrl: 'http://localhost:1234',
+        apiUrl: '',
         apiKey: '',
-        modelName: 'local-model',
+        modelName: '',
         systemPrompt: '',
         temperature: 0.7
       },
@@ -241,7 +254,16 @@
     }
 
     const chatToUpdate = currentChat;
-    const settings = currentWorkspace.settings;
+    
+    // ЛОГИКА FALLBACK: если в воркспейсе пусто, берем глобальное значение
+    const effectiveSettings = {
+      apiUrl: currentWorkspace.settings.apiUrl || globalConfig.apiUrl,
+      apiKey: currentWorkspace.settings.apiKey || globalConfig.apiKey,
+      modelName: currentWorkspace.settings.modelName || globalConfig.modelName,
+      systemPrompt: currentWorkspace.settings.systemPrompt,
+      temperature: currentWorkspace.settings.temperature
+    };
+
     const chatToUpdateId = chatToUpdate.id;
 
     const ctrl = new AbortController();
@@ -274,18 +296,18 @@
     }
 
     try {
-      const base = settings.apiUrl.trim().replace(/\/+$/, '');
+      const base = effectiveSettings.apiUrl.trim().replace(/\/+$/, '');
       const response = await fetch(`${base}/chat/completions`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": settings.apiKey ? `Bearer ${settings.apiKey}` : ""
+          "Authorization": effectiveSettings.apiKey ? `Bearer ${effectiveSettings.apiKey}` : ""
         },
         body: JSON.stringify({
-          model: settings.modelName,
-          temperature: settings.temperature,
+          model: effectiveSettings.modelName,
+          temperature: effectiveSettings.temperature,
           messages: [
-            ...(settings.systemPrompt.trim() ? [{ role: 'system', content: settings.systemPrompt }] : []),
+            ...(effectiveSettings.systemPrompt.trim() ? [{ role: 'system', content: effectiveSettings.systemPrompt }] : []),
             ...chatToUpdate.history.slice(0, -1).map(m => ({ role: m.role, content: m.text }))
           ],
           stream: true
@@ -367,6 +389,14 @@
 </script>
 
 <main class="app-container">
+  {#if selectedTab === 'settings'}
+    <GlobalSettings 
+      {globalConfig} 
+      onSave={persistConfig} 
+      onClose={() => selectedTab = 'chats'} 
+    />
+  {/if}
+
   <header>
     <button class="sidebar-toggle" onclick={() => sidebarVisible = !sidebarVisible} aria-label="Toggle sidebar">
       {@html MenuIcon}
@@ -383,33 +413,33 @@
   </header>
 
   <div class="main-row">
-    {#if selectedTab === 'chats'}
-      {#if sidebarVisible}
-        <Sidebar 
-          bind:workspaces={workspaces} 
-          {selectedWorkspaceId}
-          {selectedChatId} 
-          bind:chatSearch={chatSearch}
-          bind:searchActive={searchActive}
-          onCreateChat={createChat}
-          onSelectChat={selectChat} 
-          onRenameChat={handleRenameChat}
-          onDeleteChat={handleDeleteChat}
-          onCreateWorkspace={createWorkspace}
-          onRenameWorkspace={handleRenameWorkspace}
-          onDeleteWorkspace={handleDeleteWorkspace}
-          onSelectWorkspace={(id: string) => {
-            selectedWorkspaceId = id;
-            const ws = workspaces.find(w => w.id === id);
-            if (ws?.chats.length) selectedChatId = ws.chats[0].id;
-            persistConfig();
-          }}
-          onOpenSettings={() => {
-            selectedTab = 'settings';
-          }}
-        />
-      {/if}
+    {#if sidebarVisible}
+      <Sidebar 
+        bind:workspaces={workspaces} 
+        {selectedWorkspaceId}
+        {selectedChatId} 
+        bind:chatSearch={chatSearch}
+        bind:searchActive={searchActive}
+        onCreateChat={createChat}
+        onSelectChat={selectChat} 
+        onRenameChat={handleRenameChat}
+        onDeleteChat={handleDeleteChat}
+        onCreateWorkspace={createWorkspace}
+        onRenameWorkspace={handleRenameWorkspace}
+        onDeleteWorkspace={handleDeleteWorkspace}
+        onSelectWorkspace={(id: string) => {
+          selectedWorkspaceId = id;
+          const ws = workspaces.find(w => w.id === id);
+          if (ws?.chats.length) selectedChatId = ws.chats[0].id;
+          persistConfig();
+        }}
+        onOpenSettings={() => {
+          selectedTab = 'settings';
+        }}
+      />
+    {/if}
 
+    <div class="center-content">
       <ChatWindow 
         bind:this={chatWindowComponent}
         history={currentChat?.history || []}
@@ -421,21 +451,13 @@
         onDeleteMessage={handleDeleteMessage}
         onRegenerateMessage={handleRegenerateMessage}
       />
+    </div>
 
-      <Inspector 
-        currentWorkspace={currentWorkspace} 
-        onSettingsChange={persistConfig} 
-      />
-
-    {:else}
-      <div class="settings-view">
-        <header class="settings-header">
-           <button class="back-btn" onclick={() => selectedTab = 'chats'}>← Назад к чатам</button>
-           <h2>Глобальные настройки</h2>
-        </header>
-        <p>Настройки приложения и интерфейса.</p>
-      </div>
-    {/if}
+    <Inspector 
+      currentWorkspace={currentWorkspace} 
+      {globalConfig} 
+      onSettingsChange={persistConfig} 
+    />
   </div>
 </main>
 
@@ -464,6 +486,15 @@
     display: flex;
     flex: 1;
     overflow: hidden; 
+  }
+
+  /* Контейнер для центрального контента */
+  .center-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
   }
 
   /* Кнопки и иконки хедера */
@@ -501,40 +532,6 @@
   .breadcrumb-ws { color: #6b7280; font-weight: normal; }
   .breadcrumb-separator { color: #d1d5db; font-size: 0.8rem; }
   .breadcrumb-chat { font-weight: 600; color: #111827; }
-
-  /* Вид глобальных настроек */
-  .settings-view {
-    flex: 1;
-    padding: 40px;
-    max-width: 800px;
-    margin: 0 auto;
-    overflow-y: auto;
-  }
-
-  .settings-header {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    border: none;
-    height: auto;
-    padding: 0;
-    margin-bottom: 24px;
-  }
-
-  .back-btn {
-    background: none;
-    border: none;
-    color: #5865f2;
-    cursor: pointer;
-    padding: 0;
-    font-size: 0.9rem;
-    text-align: left;
-  }
-
-  .settings-view h2 {
-    margin-bottom: 0;
-    font-weight: 700;
-  }
 
   /* Скроллбары */
   ::-webkit-scrollbar {

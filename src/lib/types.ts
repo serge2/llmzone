@@ -1,13 +1,7 @@
-export interface Message {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  text: string;
-}
-
-export interface Chat {
-  id: string;
-  name: string;
-  history: Message[];
-  isGenerating?: boolean;
+export interface GlobalConfig {
+  apiUrl: string;
+  apiKey: string;
+  modelName: string;
 }
 
 export interface WorkspaceSettings {
@@ -18,6 +12,13 @@ export interface WorkspaceSettings {
   temperature: number;
 }
 
+export interface Chat {
+  id: string;
+  name: string;
+  history: Message[];
+  isGenerating?: boolean;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -26,14 +27,14 @@ export interface Workspace {
   chats: Chat[];
 }
 
-// Это структура для файла history.json
-export interface WorkspaceHistory {
-  id: string;
-  chats: Chat[];
+export interface Message {
+  role: 'user' | 'assistant' | 'system';
+  text: string;
 }
 
 export interface AppSettings {
-  theme: 'light' | 'dark' | 'system';
-  lastSelectedWorkspaceId?: string;
-  workspaces: Omit<Workspace, 'chats'>[]; // В конфиге храним воркспейсы без чатов
+  theme: 'system' | 'light' | 'dark';
+  lastSelectedWorkspaceId: string;
+  workspaces: Omit<Workspace, 'chats'>[];
+  globalConfig?: GlobalConfig; // Новое поле
 }

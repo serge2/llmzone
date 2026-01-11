@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Workspace } from '$lib/types';
+  import type { Workspace, GlobalConfig } from '$lib/types';
 
   // Импорт иконок из ассетов
   import MessageIcon from '$lib/assets/icons/message.svg?raw';
@@ -7,10 +7,12 @@
   import ToolsIcon from '$lib/assets/icons/tools.svg?raw';
   
   let { 
-    currentWorkspace = $bindable(), 
+    currentWorkspace, 
+    globalConfig,
     onSettingsChange 
   }: { 
     currentWorkspace: Workspace | undefined, 
+    globalConfig: GlobalConfig,
     onSettingsChange: () => void 
   } = $props();
 
@@ -54,7 +56,7 @@
             <input 
               bind:value={currentWorkspace.settings.apiUrl} 
               onchange={onSettingsChange}
-              placeholder="http://localhost:1234" 
+              placeholder={globalConfig.apiUrl} 
             />
           </label>
           <label>
@@ -62,7 +64,16 @@
             <input 
               bind:value={currentWorkspace.settings.modelName} 
               onchange={onSettingsChange}
-              placeholder="gpt-4..." 
+              placeholder={globalConfig.modelName} 
+            />
+          </label>
+          <label>
+            <span class="label-text">API Key</span>
+            <input 
+              type="password"
+              bind:value={currentWorkspace.settings.apiKey} 
+              onchange={onSettingsChange}
+              placeholder={globalConfig.apiKey ? "••••••••" : "Ключ не задан"} 
             />
           </label>
           <label>
