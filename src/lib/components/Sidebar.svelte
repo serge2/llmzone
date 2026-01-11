@@ -2,8 +2,8 @@
   import { tick } from 'svelte';
   import { slide } from 'svelte/transition';
   import type { Workspace } from '$lib/types';
-  // import { ask } from '@tauri-apps/plugin-dialog';
-  
+  import WorkspaceIconPicker from './WorkspaceIconPicker.svelte';
+    
   // Импорт иконок из ассетов
   import TrashIcon from '$lib/assets/icons/trash.svg?raw';
   import PlusIcon from '$lib/assets/icons/plus.svg?raw';
@@ -185,6 +185,7 @@
               class="ws-item-wrapper" 
               class:active={ws.id === selectedWorkspaceId}
               class:dragging={draggedWsIdx === i}
+              class:is-editing={editingWsId === ws.id}
               draggable={!editingWsId}
               ondragstart={(e) => handleDragStart(e, i)}
               ondragover={(e) => handleDragOver(e, i)}
@@ -198,19 +199,37 @@
               tabindex="0"
             >
               {#if editingWsId === ws.id}
-                <div class="ws-edit-inline">
-                  <input 
-                    use:selectOnFocus
-                    bind:value={wsEditValue}
-                    onkeydown={(e) => {
-                      if (e.key === 'Enter') confirmRenameWs(ws.id);
-                      if (e.key === 'Escape') editingWsId = null;
-                      e.stopPropagation();
-                    }}
-                  />
-                  <button class="confirm-btn-ws" onclick={() => confirmRenameWs(ws.id)}>
-                    {@html CheckIcon}
-                  </button>
+                <div class="ws-edit-container">
+                  <div class="ws-edit-top-row">
+                    <div class="picker-shifter">
+                      <WorkspaceIconPicker 
+                        bind:value={ws.icon as string} 
+                        onSelect={(newIcon: string) => {
+                           ws.icon = newIcon;
+                        }} 
+                      />
+                    </div>
+                    
+                    <input 
+                      class="ws-edit-input-field"
+                      use:selectOnFocus
+                      bind:value={wsEditValue}
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter') confirmRenameWs(ws.id);
+                        if (e.key === 'Escape') editingWsId = null;
+                        e.stopPropagation();
+                      }}
+                    />
+                    
+                    <div class="ws-edit-actions">
+                      <button class="confirm-btn-ws" onclick={() => confirmRenameWs(ws.id)}>
+                        {@html CheckIcon}
+                      </button>
+                      <button class="cancel-btn-ws" onclick={() => editingWsId = null}>
+                        {@html CloseIcon}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               {:else}
                 <button 
@@ -393,6 +412,8 @@
     padding: 12px;
     position: relative;
     border-bottom: 1px solid #f3f4f6;
+    /* Позволяем выпадающему списку выходить за пределы сайдбара */
+    z-index: 1000;
   }
 
   .ws-current {
@@ -448,22 +469,28 @@
     position: absolute;
     top: calc(100% - 4px);
     left: 12px;
-    right: 12px;
+    /* Позволяем контенту растягивать дропдаун */
+    width: max-content; 
+    min-width: calc(100% - 24px);
+    max-width: 320px; 
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 10px;
     box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
     z-index: 1000;
-    overflow: hidden;
     padding: 4px;
+    /* Смена overflow: hidden на visible, чтобы иконки не обрезались */
+    overflow: visible !important; /* Критично, чтобы абсолютный пикер не обрезался */ 
+    width: max-content; /* Дропдаун расширится под иконки */
+    min-width: calc(100% - 24px);
   }
 
   .ws-list-scrollable {
-    max-height: 300px;
-    overflow-y: auto;
     list-style: none;
     padding: 0;
     margin: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .ws-item-wrapper {
@@ -473,29 +500,41 @@
     margin: 2px 4px;
     transition: background 0.2s, opacity 0.2s;
     cursor: grab;
+    position: relative; 
   }
 
-  .ws-item-wrapper:active { cursor: grabbing; }
+  /* Дополнительный фикс для обертки всего элемента при редактировании */
+  .ws-item-wrapper.is-editing {
+    padding: 8px;
+    background: white;
+    /* Убираем лишние ограничения */
+    height: auto; 
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .ws-item-wrapper:active:not(.is-editing) { cursor: grabbing; }
   .ws-item-wrapper.dragging { opacity: 0.4; background: #f3f4f6; }
 
-  .ws-item-wrapper:hover { background: #f3f4f6; }
-  .ws-item-wrapper.active { background: #f0f1ff; }
+  .ws-item-wrapper:not(.is-editing):hover { background: #f3f4f6; }
+  .ws-item-wrapper.active:not(.is-editing) { background: #f0f1ff; }
 
   .ws-item-wrapper * {
-    /* Запрещаем вложенным элементам перехватывать события перетаскивания */
     pointer-events: none; 
   }
 
+  /* Это правило ВКЛЮЧАЕТ клики обратно для нужных элементов */
   .ws-item-wrapper .ws-item-actions,
-  .ws-item-wrapper .ws-edit-inline,
+  .ws-item-wrapper .ws-edit-container,
+  /* Добавляем селектор пикера, чтобы он реагировал на мышь */
+  .ws-item-wrapper :global(.icon-picker-container), 
   .ws-item-wrapper button,
   .ws-item-wrapper input {
-    /* Возвращаем кликабельность только кнопкам и инпутам */
-    pointer-events: auto;
+    pointer-events: auto !important;
   }
   
   .ws-item-wrapper[draggable="true"] {
-    -webkit-user-drag: element; /* Специфично для WebKit/Tauri */
+    -webkit-user-drag: element; 
     user-select: none;
   }
 
@@ -511,6 +550,7 @@
     font-size: 0.85rem;
     color: #4b5563;
     overflow: hidden;
+    white-space: nowrap;
   }
 
   .active .ws-item { color: #5865f2; font-weight: 600; }
@@ -539,29 +579,74 @@
   .ws-action-btn.del:hover { color: #ef4444; }
   .ws-action-btn :global(svg) { width: 12px; height: 12px; }
 
-  .ws-edit-inline {
+  /* Стили для расширенного инлайнового редактирования */
+  .ws-edit-container {
     display: flex;
-    align-items: center;
-    width: 100%;
-    padding: 4px 8px;
+    flex-direction: column; /* Элементы (строка и пикер) будут друг под другом */
     gap: 4px;
+    width: 100%;
   }
 
-  .ws-edit-inline input {
-    flex: 1;
-    border: 1px solid #5865f2;
-    border-radius: 4px;
-    padding: 4px 8px;
-    font-size: 0.8rem;
+  /* Верхняя строка: Пикер + Инпут + Кнопки */
+  .ws-edit-top-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    /* Гарантируем, что строка не схлопнется по высоте */
+    min-height: 40px; 
+    position: relative;
+  }
+
+  .picker-shifter {
+    flex-shrink: 0; /* Чтобы кнопка иконки не сжималась */
+  }
+
+  /* Важный фикс для Svelte 5 + slide transition */
+  :global(.picker-inline-content) {
+    overflow: hidden; /* Необходимо для работы анимации slide */
+  }
+
+  .ws-edit-input-field {
+    flex: 1; /* Заставляет инпут забрать всё свободное место */
+    min-width: 0; /* Разрешает flex-элементу сжиматься до реального 0, если нужно, но flex:1 его растянет */
+    height: 34px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0 10px;
     outline: none;
   }
 
-  .confirm-btn-ws {
+  .ws-edit-input-field:focus {
+    border-color: #5865f2;
+    background: #fff;
+  }
+
+  .ws-edit-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0; /* Кнопки подтверждения никогда не сжимаются */
+  }
+
+  .confirm-btn-ws, .cancel-btn-ws {
     background: none;
     border: none;
-    color: #10b981;
+    padding: 4px;
     cursor: pointer;
     display: flex;
+    border-radius: 4px;
+  }
+
+  .confirm-btn-ws { color: #10b981; }
+  .cancel-btn-ws { color: #9ca3af; }
+
+  .confirm-btn-ws:hover { background: #ecfdf5; }
+  .cancel-btn-ws:hover { background: #f3f4f6; color: #ef4444; }
+
+  .confirm-btn-ws :global(svg), 
+  .cancel-btn-ws :global(svg) { 
+    width: 16px; 
+    height: 16px; 
   }
 
   .ws-divider {
@@ -574,6 +659,7 @@
     width: calc(100% - 8px);
     margin: 4px;
     color: #6b7280; 
+    white-space: nowrap;
   }
   .ws-icon-svg :global(svg) { width: 14px; height: 14px; }
   

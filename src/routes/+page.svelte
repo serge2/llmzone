@@ -113,7 +113,7 @@
     const newWs: Workspace = { 
       id: 'ws-' + Date.now(), 
       name: 'Workspace ' + (workspaces.length + 1), 
-      icon: 'W',
+      icon: '📁',
       settings: {
         apiUrl: 'http://localhost:1234',
         apiKey: '',
