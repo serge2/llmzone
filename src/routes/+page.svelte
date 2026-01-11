@@ -123,8 +123,10 @@
 
   // --- Управление структурой ---
   function createWorkspace() {
+    const newWsId = 'ws-' + Date.now();
+    const newChatId = 'c-' + Date.now();
     const newWs: Workspace = { 
-      id: 'ws-' + Date.now(), 
+      id: newWsId, 
       name: 'Workspace ' + (workspaces.length + 1), 
       icon: '📁',
       settings: {
@@ -134,10 +136,22 @@
         systemPrompt: '',
         temperature: 0.7
       },
-      chats: [] 
+      chats: [{ 
+        id: newChatId, 
+        name: 'Новый чат', 
+        history: [], 
+        isGenerating: false 
+      }] 
     };
+    // Добавляем новый воркспейс в начало списка
     workspaces = [newWs, ...workspaces];
+    
+    // Устанавливаем активные ID
+    selectedWorkspaceId = newWsId;
+    selectedChatId = newChatId;
+    
     persistConfig();
+    persistChats();
   }
 
   function handleRenameWorkspace(id: string, newName: string) {
