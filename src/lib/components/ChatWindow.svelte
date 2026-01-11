@@ -9,7 +9,7 @@
 
   let { 
     history, 
-    isTyping, 
+    isGenerating, 
     message = $bindable(), 
     onSendMessage,
     onEditMessage,
@@ -18,7 +18,7 @@
     onRegenerateMessage
   } = $props<{
     history: Message[];
-    isTyping: boolean;
+    isGenerating: boolean;
     message: string;
     onSendMessage: () => void;
     onEditMessage: (index: number, newText: string) => void;
@@ -55,7 +55,7 @@
   }
 
   $effect(() => {
-    if (history.length || isTyping) {
+    if (history.length || isGenerating) {
       scrollToBottom();
     }
   });
@@ -73,7 +73,7 @@
           text={msg.text} 
           role={msg.role}
           isLastMessage={index === history.length - 1}
-          isTyping={isTyping && index === history.length - 1}
+          isTyping={isGenerating && index === history.length - 1}
           onEdit={(newText) => onEditMessage(index, newText)}
           onCopy={() => onCopyMessage(msg.text)}
           onDelete={() => onDeleteMessage(index)}
@@ -95,10 +95,10 @@
       
       <button 
         onclick={onSendMessage} 
-        class:stop-btn={isTyping}
-        disabled={!isTyping && !message.trim()}
+        class:stop-btn={isGenerating}
+        disabled={!isGenerating && !message.trim()}
       >
-        {#if isTyping}
+        {#if isGenerating}
           {@html StopIcon}
         {:else}
           {@html ArrowUpIcon}

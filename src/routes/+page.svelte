@@ -20,9 +20,9 @@
   let selectedChatId = $state<string>('');
   
   let message = $state("");
-  let isTyping = $state(false);
-  let abortController: AbortController | null = null;
-  let wasAbortedManually = $state(false); // Флаг для корректной обработки прерывания
+  // Словарь для независимых контроллеров отмены: { chatId: AbortController }
+  let abortControllers = $state<Record<string, AbortController>>({});
+  let manualAborts = $state<Record<string, boolean>>({}); 
 
   let selectedTab = $state<'chats' | 'settings'>('chats');
   let sidebarVisible = $state(true);
@@ -38,9 +38,7 @@
 
   onMount(async () => {
     // 1. Загружаем данные из обоих источников
-    // config теперь имеет тип AppSettings | null благодаря правкам в loadConfig
     const config = await loadConfig();
-    // Гарантируем, что history — это массив, даже если файл пуст
     const savedChats = await loadChats();
     const history = savedChats || [];
     
@@ -48,20 +46,21 @@
       // 2. Собираем воркспейсы: настройки из конфига + чаты из хранилища
       workspaces = config.workspaces.map(ws => ({
         ...ws,
-        // Ищем чаты в истории по ID воркспейса
-        chats: history.find(h => h.id === ws.id)?.chats || []
+        chats: history.find(h => h.id === ws.id)?.chats.map(c => ({
+          ...c,
+          isGenerating: false // Инициализируем флаг генерации
+        })) || []
       })) as Workspace[];
 
       // 3. Восстанавливаем последнее выбранное состояние
       selectedWorkspaceId = config.lastSelectedWorkspaceId || workspaces[0].id;
       
-      // Находим актуальный воркспейс, чтобы корректно выбрать чат
       const activeWs = workspaces.find(w => w.id === selectedWorkspaceId);
       if (activeWs && activeWs.chats.length > 0) {
         selectedChatId = activeWs.chats[0].id;
       }
     } else {
-      // 4. Инициализация дефолтного воркспейса при самом первом запуске
+      // 4. Инициализация дефолтного воркспейса
       const defaultWs: Workspace = {
         id: 'ws-' + Date.now(),
         name: 'Основной',
@@ -73,14 +72,13 @@
           systemPrompt: 'You are a helpful assistant.',
           temperature: 0.7
         },
-        chats: [{ id: 'c-' + Date.now(), name: 'Новый чат', history: [] }]
+        chats: [{ id: 'c-' + Date.now(), name: 'Новый чат', history: [], isGenerating: false }]
       };
       
       workspaces = [defaultWs];
       selectedWorkspaceId = defaultWs.id;
       selectedChatId = defaultWs.chats[0].id;
 
-      // Сразу сохраняем раздельно: структуру в конфиг, чаты в базу данных
       await persistConfig();
       await persistChats();
     }
@@ -88,32 +86,23 @@
 
   // --- Работа с хранилищем (Раздельная) ---
   async function persistConfig() {
-    // Подготавливаем список воркспейсов без данных чатов
     const workspacesToSave = workspaces.map(({ chats, ...rest }) => rest);
-    
-    // Создаем объект, строго соответствующий интерфейсу AppSettings
     const configToSave: AppSettings = {
-      theme: 'system', // Добавляем обязательное поле
+      theme: 'system',
       lastSelectedWorkspaceId: selectedWorkspaceId,
       workspaces: workspacesToSave
     };
-
     await saveConfig(configToSave);
   }
 
   async function persistChats() {
-    // Сохраняем только ID воркспейсов и их чаты
     const historyToSave = workspaces.map(ws => ({
       id: ws.id,
-      chats: ws.chats
+      chats: ws.chats.map(({ isGenerating, ...c }) => c) // Не сохраняем флаг генерации в БД
     }));
-
-    // Используем 'as any', чтобы не переписывать типы во внешнем модуле storage
-    // Это допустимо, так как данные будут просто сериализованы в JSON
     await saveChats(historyToSave as any);
   }
 
-  // Для обратной совместимости или массового сохранения
   async function saveToLocal() {
     await persistConfig();
     await persistChats();
@@ -140,9 +129,8 @@
 
   function createChat() {
     if (!currentWorkspace) return;
-    const newChat: Chat = { id: 'c-' + Date.now(), name: 'Новый чат', history: [] };
+    const newChat: Chat = { id: 'c-' + Date.now(), name: 'Новый чат', history: [], isGenerating: false };
     currentWorkspace.chats = [newChat, ...currentWorkspace.chats];
-    // Обновляем ссылку на массив для триггера реактивности Svelte 5
     workspaces = [...workspaces];
     selectedChatId = newChat.id;
     persistChats();
@@ -151,17 +139,21 @@
   function selectChat(chatId: string, wsId: string) {
     selectedWorkspaceId = wsId;
     selectedChatId = chatId;
-    // Скроллим вниз при переключении на чат
     chatWindowComponent?.scrollToBottom();
-    persistConfig(); // Сохраняем выбор воркспейса
+    persistConfig();
   }
 
-  function stopGeneration() {
-    if (abortController) {
-      wasAbortedManually = true; // Указываем, что это намеренная остановка
-      abortController.abort();
-      abortController = null;
-      isTyping = false;
+  function stopGeneration(chatId?: string) {
+    const id = chatId || selectedChatId;
+    if (abortControllers[id]) {
+      manualAborts[id] = true;
+      abortControllers[id].abort();
+      delete abortControllers[id];
+      
+      // Сбрасываем флаг в объекте чата
+      const chat = workspaces.flatMap(ws => ws.chats).find(c => c.id === id);
+      if (chat) chat.isGenerating = false;
+      workspaces = [...workspaces];
     }
   }
 
@@ -169,7 +161,6 @@
   async function handleEditMessage(index: number, newText: string) {
     if (!currentChat) return;
     
-    // Отрезаем историю после редактируемого сообщения (стандартное поведение LLM чатов)
     let newHistory = [...currentChat.history];
     newHistory[index] = { ...newHistory[index], text: newText };
     newHistory = newHistory.slice(0, index + 1);
@@ -178,20 +169,18 @@
     workspaces = [...workspaces];
     await persistChats();
 
-    message = ""; // Очищаем инпут, чтобы sendMessage не дублировала сообщение
+    message = "";
     await sendMessage();
   }
 
   async function handleRegenerateMessage() {
-    if (!currentChat || isTyping) return;
+    if (!currentChat || currentChat.isGenerating) return;
     
-    // Удаляем последнее AI сообщение
     const lastIndex = currentChat.history.length - 1;
     if (lastIndex >= 0 && currentChat.history[lastIndex].role === 'assistant') {
       currentChat.history.splice(lastIndex, 1);
     }
     
-    // Удаляем последнее user сообщение и сохраняем его текст для повторной отправки
     const userIndex = currentChat.history.length - 1;
     let userMessage = '';
     if (userIndex >= 0 && currentChat.history[userIndex].role === 'user') {
@@ -217,50 +206,43 @@
 
   // --- Основная логика отправки и стриминга ---
   async function sendMessage() {
-    // Если модель уже отвечает, кнопка работает как "Стоп"
-    if (isTyping) {
-      stopGeneration();
+    if (!currentChat || !currentWorkspace) return;
+
+    // Если чат уже генерирует, работаем как кнопка Стоп
+    if (currentChat.isGenerating) {
+      stopGeneration(currentChat.id);
       return;
     }
 
-    if (!currentChat || !currentWorkspace) return;
-
-    // ФИКСИРУЕМ целевой чат и настройки воркспейса, чтобы при переключении 
-    // воркспейсов во время генерации ответ не улетел в другое место
     const chatToUpdate = currentChat;
     const settings = currentWorkspace.settings;
-    const chatToUpdateId = selectedChatId;
+    const chatToUpdateId = chatToUpdate.id;
 
-    abortController = new AbortController();
-    wasAbortedManually = false;
+    const ctrl = new AbortController();
+    abortControllers[chatToUpdateId] = ctrl;
+    manualAborts[chatToUpdateId] = false;
 
-    // Добавляем сообщение из инпута в историю, если оно не пустое (для регенерации оно пустое здесь)
     if (message.trim()) {
       chatToUpdate.history = [...chatToUpdate.history, { role: "user", text: message }];
-
-      // Перемещение чата наверх списка (последний активный чат)
+      
       const chatIndex = currentWorkspace.chats.findIndex(c => c.id === chatToUpdateId);
       if (chatIndex > 0) {
         const [movedChat] = currentWorkspace.chats.splice(chatIndex, 1);
         currentWorkspace.chats.unshift(movedChat);
-        // Триггерим обновление массива воркспейсов для Svelte 5
-        workspaces = [...workspaces];
       }
-      
-      // СОХРАНЯЕМ чаты после добавления сообщения пользователя
+      workspaces = [...workspaces];
       await persistChats();
     }
     
     if (chatToUpdate.history.length === 0) return;
 
-    // Подготовка "бульбы" для ответа ИИ
     const aiMsgIndex = chatToUpdate.history.length;
     chatToUpdate.history = [...chatToUpdate.history, { role: "assistant", text: "" }];
     
     message = "";
-    isTyping = true;
+    chatToUpdate.isGenerating = true;
+    workspaces = [...workspaces];
     
-    // Скроллим только если мы всё еще в том же чате
     if (chatToUpdateId === selectedChatId) {
         await chatWindowComponent?.scrollToBottom();
     }
@@ -277,13 +259,12 @@
           model: settings.modelName,
           temperature: settings.temperature,
           messages: [
-            // Подмешиваем системный промпт воркспейса
             ...(settings.systemPrompt.trim() ? [{ role: 'system', content: settings.systemPrompt }] : []),
             ...chatToUpdate.history.slice(0, -1).map(m => ({ role: m.role, content: m.text }))
           ],
           stream: true
         }),
-        signal: abortController.signal
+        signal: ctrl.signal
       });
 
       if (!response.ok) throw new Error(`Ошибка HTTP: ${response.status}`);
@@ -309,34 +290,29 @@
               const content = json.choices?.[0]?.delta?.content || "";
               
               if (content) {
-                // Обновляем текст в зафиксированном чате
                 chatToUpdate.history[aiMsgIndex].text += content;
-                
-                // Триггерим обновление дерева состояний (только UI)
                 workspaces = [...workspaces];
                 
                 if (chatToUpdateId === selectedChatId) {
                     chatWindowComponent?.scrollToBottom();
                 }
               }
-            } catch (e) { /* Игнорируем ошибки парсинга чанков */ }
+            } catch (e) {}
           }
         }
       }
     } catch (err: any) {
-      if (wasAbortedManually) {
+      if (manualAborts[chatToUpdateId]) {
         chatToUpdate.history[aiMsgIndex].text += "\n\n**[Генерация прервана пользователем]**";
       } else {
-        // Удаляем заготовку ассистента при ошибке сети
         chatToUpdate.history = chatToUpdate.history.filter((_, i) => i !== aiMsgIndex);
         alert("Ошибка связи с моделью: " + (err.message || "Unknown error"));
       }
     } finally {
-      isTyping = false;
-      abortController = null;
-      wasAbortedManually = false;
+      chatToUpdate.isGenerating = false;
+      delete abortControllers[chatToUpdateId];
+      delete manualAborts[chatToUpdateId];
       workspaces = [...workspaces];
-      // СОХРАНЯЕМ чаты только один раз после завершения всей генерации
       await persistChats();
     }
   }
@@ -346,22 +322,20 @@
     const chat = currentWorkspace.chats.find(c => c.id === chatId);
     if (chat) {
       chat.name = newName;
-      workspaces = [...workspaces]; // Триггер реактивности
-      persistChats(); // Сохраняем изменения в хранилище
+      workspaces = [...workspaces];
+      persistChats();
     }
   }
 
   async function handleDeleteChat(chatId: string) {
     if (!currentWorkspace) return;
-    
+    stopGeneration(chatId);
     currentWorkspace.chats = currentWorkspace.chats.filter(c => c.id !== chatId);
-    
     if (selectedChatId === chatId) {
       selectedChatId = currentWorkspace.chats[0]?.id || '';
     }
-    
-    workspaces = [...workspaces]; // Триггер реактивности
-    await persistChats(); // Сохраняем изменения в хранилище
+    workspaces = [...workspaces];
+    await persistChats();
   }
 
 </script>
@@ -434,8 +408,8 @@
       <ChatWindow 
         bind:this={chatWindowComponent}
         history={currentChat?.history || []}
-        {isTyping} 
-        bind:message 
+        isGenerating={currentChat?.isGenerating || false} 
+        bind:message
         onSendMessage={sendMessage}
         onEditMessage={handleEditMessage}
         onCopyMessage={handleCopyMessage}
@@ -481,7 +455,7 @@
   .main-row {
     display: flex;
     flex: 1;
-    overflow: hidden; /* Важно, чтобы контент не распирал экран */
+    overflow: hidden; 
   }
 
   /* Кнопки и иконки хедера */

@@ -7,6 +7,7 @@ export interface Chat {
   id: string;
   name: string;
   history: Message[];
+  isGenerating?: boolean;
 }
 
 export interface WorkspaceSettings {
