@@ -127,6 +127,32 @@
     persistConfig();
   }
 
+  function handleRenameWorkspace(id: string, newName: string) {
+    const ws = workspaces.find(w => w.id === id);
+    if (ws) {
+      ws.name = newName;
+      workspaces = [...workspaces];
+      persistConfig();
+    }
+  }
+
+  async function handleDeleteWorkspace(id: string) {
+    if (workspaces.length <= 1) return;
+    
+    const ws = workspaces.find(w => w.id === id);
+    if (confirm(`Удалить рабочее пространство "${ws?.name}" и все его чаты?`)) {
+      workspaces = workspaces.filter(w => w.id !== id);
+      
+      if (selectedWorkspaceId === id) {
+        selectedWorkspaceId = workspaces[0].id;
+        selectedChatId = workspaces[0].chats[0]?.id || '';
+      }
+      
+      await persistConfig();
+      await persistChats();
+    }
+  }
+
   function createChat() {
     if (!currentWorkspace) return;
     const newChat: Chat = { id: 'c-' + Date.now(), name: 'Новый чат', history: [], isGenerating: false };
@@ -360,7 +386,7 @@
     {#if selectedTab === 'chats'}
       {#if sidebarVisible}
         <Sidebar 
-          workspaces={workspaces} 
+          bind:workspaces={workspaces} 
           {selectedWorkspaceId}
           {selectedChatId} 
           bind:chatSearch={chatSearch}
@@ -370,6 +396,8 @@
           onRenameChat={handleRenameChat}
           onDeleteChat={handleDeleteChat}
           onCreateWorkspace={createWorkspace}
+          onRenameWorkspace={handleRenameWorkspace}
+          onDeleteWorkspace={handleDeleteWorkspace}
           onSelectWorkspace={(id: string) => {
             selectedWorkspaceId = id;
             const ws = workspaces.find(w => w.id === id);

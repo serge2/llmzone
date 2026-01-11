@@ -17,7 +17,7 @@
     
   // Используем деструктуризацию пропсов Svelte 5
   let { 
-    workspaces, 
+    workspaces = $bindable(), 
     selectedWorkspaceId,
     selectedChatId, 
     chatSearch = $bindable(), 
@@ -28,7 +28,9 @@
     onDeleteChat,
     onCreateWorkspace,
     onSelectWorkspace,
-    onOpenSettings
+    onOpenSettings,
+    onRenameWorkspace,
+    onDeleteWorkspace
   }: {
     workspaces: Workspace[],
     selectedWorkspaceId: string,
@@ -41,7 +43,9 @@
     onDeleteChat: (chatId: string) => void,
     onCreateWorkspace: () => void,
     onSelectWorkspace: (id: string) => void,
-    onOpenSettings: () => void
+    onOpenSettings: () => void,
+    onRenameWorkspace: (id: string, newName: string) => void,
+    onDeleteWorkspace: (id: string) => void
   } = $props();
 
   // Состояние для управления контекстным меню и редактированием
@@ -51,9 +55,15 @@
   let editValue = $state("");
   let isWsOpen = $state(false);
 
+  // Состояние для управления воркспейсами
+  let editingWsId = $state<string | null>(null);
+  let wsEditValue = $state("");
+  let draggedWsIdx = $state<number | null>(null);
+
   const currentWs = $derived(workspaces.find((w: Workspace) => w.id === selectedWorkspaceId));
 
   function handleWsSelect(id: string) {
+    if (editingWsId) return;
     onSelectWorkspace(id);
     isWsOpen = false;
   }
@@ -62,6 +72,7 @@
     activeMenuId = null;
     deletingChatId = null;
     isWsOpen = false;
+    editingWsId = null;
   }
 
   function startRename(id: string, currentName: string) {
@@ -77,6 +88,19 @@
     editingChatId = null;
   }
 
+  function startRenameWs(e: MouseEvent, id: string, name: string) {
+    e.stopPropagation();
+    editingWsId = id;
+    wsEditValue = name;
+  }
+
+  function confirmRenameWs(id: string) {
+    if (wsEditValue.trim()) {
+      onRenameWorkspace(id, wsEditValue.trim());
+    }
+    editingWsId = null;
+  }
+
   async function requestDelete(id: string) {
     activeMenuId = null; // Сначала закрываем меню
     await tick();        // Ждем обновления DOM
@@ -90,6 +114,40 @@
   async function confirmDelete(id: string) {
     onDeleteChat(id);
     deletingChatId = null;
+  }
+
+  // --- Drag and Drop Logic ---
+  function handleDragStart(e: DragEvent, idx: number) {
+    draggedWsIdx = idx;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      // Передаем пустую строку, чтобы браузер понял, что это валидный DND
+      e.dataTransfer.setData('text/plain', idx.toString());
+    }
+  }
+
+  function handleDragOver(e: DragEvent, targetIdx: number) {
+    e.preventDefault();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move';
+    }
+    
+    if (draggedWsIdx === null || draggedWsIdx === targetIdx) return;
+    
+    const items = [...workspaces];
+    const draggedItem = items.splice(draggedWsIdx, 1)[0];
+    items.splice(targetIdx, 0, draggedItem);
+    workspaces = items;
+    draggedWsIdx = targetIdx;
+  }
+
+  function handleDragEnd() {
+    draggedWsIdx = null;
+    // Вызываем сохранение конфигурации после изменения порядка
+    // Мы можем использовать существующий проп onSelectWorkspace или добавить новый
+    // Но так как нам нужно просто сохранить текущий стейт workspaces, 
+    // проще всего вызвать функцию сохранения из родителя.
+    onSelectWorkspace(selectedWorkspaceId);
   }
 
   // Action для автоматического фокуса и выделения текста
@@ -121,17 +179,62 @@
         role="menu"
         tabindex="0"
       >
-        {#each workspaces as ws}
-          <button 
-            class="ws-item" 
-            class:active={ws.id === selectedWorkspaceId}
-            onclick={() => handleWsSelect(ws.id)}
-            role="menuitem"
-          >
-            <span class="ws-icon">{ws.icon}</span>
-            <span class="ws-name">{ws.name}</span>
-          </button>
-        {/each}
+        <ul class="ws-list-scrollable">
+          {#each workspaces as ws, i (ws.id)}
+            <li 
+              class="ws-item-wrapper" 
+              class:active={ws.id === selectedWorkspaceId}
+              class:dragging={draggedWsIdx === i}
+              draggable={!editingWsId}
+              ondragstart={(e) => handleDragStart(e, i)}
+              ondragover={(e) => handleDragOver(e, i)}
+              ondragend={handleDragEnd}
+              onselectstart={(e) => !editingWsId && e.preventDefault()}
+              onkeydown={(e) => {
+                if (e.key === 'Enter' && !editingWsId) handleWsSelect(ws.id);
+              }}
+              role="option"
+              aria-selected={ws.id === selectedWorkspaceId}
+              tabindex="0"
+            >
+              {#if editingWsId === ws.id}
+                <div class="ws-edit-inline">
+                  <input 
+                    use:selectOnFocus
+                    bind:value={wsEditValue}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter') confirmRenameWs(ws.id);
+                      if (e.key === 'Escape') editingWsId = null;
+                      e.stopPropagation();
+                    }}
+                  />
+                  <button class="confirm-btn-ws" onclick={() => confirmRenameWs(ws.id)}>
+                    {@html CheckIcon}
+                  </button>
+                </div>
+              {:else}
+                <button 
+                  class="ws-item" 
+                  onclick={() => handleWsSelect(ws.id)}
+                  tabindex="-1"
+                >
+                  <span class="ws-icon">{ws.icon}</span>
+                  <span class="ws-name">{ws.name}</span>
+                </button>
+                <div class="ws-item-actions">
+                  <button class="ws-action-btn" onclick={(e) => startRenameWs(e, ws.id, ws.name)}>
+                    {@html EditIcon}
+                  </button>
+                  {#if workspaces.length > 1}
+                    <button class="ws-action-btn del" onclick={() => onDeleteWorkspace(ws.id)}>
+                      {@html TrashIcon}
+                    </button>
+                  {/if}
+                </div>
+              {/if}
+            </li>
+          {/each}
+        </ul>
         <div class="ws-divider"></div>
         <button 
           class="ws-item add-ws" 
@@ -355,8 +458,49 @@
     padding: 4px;
   }
 
+  .ws-list-scrollable {
+    max-height: 300px;
+    overflow-y: auto;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .ws-item-wrapper {
+    display: flex;
+    align-items: center;
+    border-radius: 6px;
+    margin: 2px 4px;
+    transition: background 0.2s, opacity 0.2s;
+    cursor: grab;
+  }
+
+  .ws-item-wrapper:active { cursor: grabbing; }
+  .ws-item-wrapper.dragging { opacity: 0.4; background: #f3f4f6; }
+
+  .ws-item-wrapper:hover { background: #f3f4f6; }
+  .ws-item-wrapper.active { background: #f0f1ff; }
+
+  .ws-item-wrapper * {
+    /* Запрещаем вложенным элементам перехватывать события перетаскивания */
+    pointer-events: none; 
+  }
+
+  .ws-item-wrapper .ws-item-actions,
+  .ws-item-wrapper .ws-edit-inline,
+  .ws-item-wrapper button,
+  .ws-item-wrapper input {
+    /* Возвращаем кликабельность только кнопкам и инпутам */
+    pointer-events: auto;
+  }
+  
+  .ws-item-wrapper[draggable="true"] {
+    -webkit-user-drag: element; /* Специфично для WebKit/Tauri */
+    user-select: none;
+  }
+
   .ws-item {
-    width: 100%;
+    flex: 1;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -365,13 +509,60 @@
     background: transparent;
     cursor: pointer;
     font-size: 0.85rem;
-    border-radius: 6px;
     color: #4b5563;
-    transition: background 0.2s;
+    overflow: hidden;
   }
 
-  .ws-item:hover { background: #f3f4f6; }
-  .ws-item.active { color: #5865f2; background: #f0f1ff; font-weight: 600; }
+  .active .ws-item { color: #5865f2; font-weight: 600; }
+
+  .ws-item-actions {
+    display: flex;
+    gap: 2px;
+    padding-right: 8px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .ws-item-wrapper:hover .ws-item-actions { opacity: 1; }
+
+  .ws-action-btn {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: #9ca3af;
+    display: flex;
+    border-radius: 4px;
+  }
+
+  .ws-action-btn:hover { background: #e5e7eb; color: #374151; }
+  .ws-action-btn.del:hover { color: #ef4444; }
+  .ws-action-btn :global(svg) { width: 12px; height: 12px; }
+
+  .ws-edit-inline {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 4px 8px;
+    gap: 4px;
+  }
+
+  .ws-edit-inline input {
+    flex: 1;
+    border: 1px solid #5865f2;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    outline: none;
+  }
+
+  .confirm-btn-ws {
+    background: none;
+    border: none;
+    color: #10b981;
+    cursor: pointer;
+    display: flex;
+  }
 
   .ws-divider {
     height: 1px;
@@ -379,7 +570,11 @@
     margin: 4px 0;
   }
 
-  .add-ws { color: #6b7280; }
+  .add-ws { 
+    width: calc(100% - 8px);
+    margin: 4px;
+    color: #6b7280; 
+  }
   .ws-icon-svg :global(svg) { width: 14px; height: 14px; }
   
   .chats-list-header { 
@@ -562,7 +757,7 @@
     font-size: 0.8rem;
   }
 
-  /* Стили для редактирования и удаления (сохранены из оригинала) */
+  /* Стили для редактирования и удаления */
   .edit-mode, .delete-confirm-mode {
     display: flex;
     align-items: center;
