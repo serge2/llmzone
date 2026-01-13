@@ -14,7 +14,11 @@ export interface MCPToolState {
 export interface MCPServerState {
   enabled: boolean;
   autoApproveAll: boolean;
-  tools: Record<string, MCPToolState>;
+  isExpanded: boolean;
+  tools: Record<string, {
+    enabled: boolean;
+    alwaysAllow: boolean;
+  }>;
 }
 
 export interface WorkspaceSettings {

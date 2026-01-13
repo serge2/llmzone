@@ -102,11 +102,11 @@ export interface MCPToolState {
 export interface MCPServerState {
   enabled: boolean;
   autoApproveAll: boolean;
+  isExpanded: boolean;
   tools: Record<string, MCPToolState>;
 }
 
 export class MCPServerInstance {
-  // Поля должны быть инициализированы сразу значениями из конструктора
   name = $state('');
   url = $state('');
   headers = $state<Record<string, string>>({}); 
@@ -136,7 +136,7 @@ export class MCPServerInstance {
 
     if (initialState) {
       this.autoApproveAll = initialState.autoApproveAll ?? true;
-      // Если в конфиге сервер был включен - инициируем соединение
+      this.isExpanded = initialState.isExpanded ?? false;
       if (initialState.enabled) {
         this.connect();
       }
@@ -155,6 +155,7 @@ export class MCPServerInstance {
     return {
       enabled: this.enabled,
       autoApproveAll: this.autoApproveAll,
+      isExpanded: this.isExpanded,
       tools: toolStates
     };
   }
@@ -183,6 +184,7 @@ export class MCPServerInstance {
         return {
           name: t.name,
           description: t.description,
+          // Используем $state для каждого инструмента для глубокой реактивности
           enabled: savedTool ? savedTool.enabled : true,
           alwaysAllow: savedTool ? savedTool.alwaysAllow : true
         };
@@ -210,5 +212,6 @@ export class MCPServerInstance {
   toggle() {
     if (this.enabled) this.disconnect();
     else this.connect();
+    this.notify();
   }
 }
