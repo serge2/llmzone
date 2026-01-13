@@ -13,6 +13,7 @@ export interface WorkspaceSettings {
   modelName: string;
   systemPrompt: string;
   temperature: number;
+  mcpConfig?: string;
 }
 
 export interface Chat {

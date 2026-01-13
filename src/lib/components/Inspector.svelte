@@ -1,5 +1,8 @@
 <script lang="ts">
   import type { Workspace, GlobalConfig, InspectorTab } from '$lib/types';
+  import TabModel from './inspector/TabModel.svelte';
+  import TabContext from './inspector/TabContext.svelte';
+  import TabTools from './inspector/TabTools.svelte';
 
   // Импорт иконок из ассетов
   import MessageIcon from '$lib/assets/icons/message.svg?raw';
@@ -46,62 +49,12 @@
 
   <div class="content">
     {#if currentWorkspace}
-      {#if inspectorTab === 'context'}
-        <div class="settings-group">
-          <label>
-            <span class="label-text">Системный промпт</span>
-            <textarea 
-              bind:value={currentWorkspace.settings.systemPrompt} 
-              onchange={onSettingsChange}
-              rows="10" 
-              placeholder="Инструкции для модели..."
-            ></textarea>
-          </label>
-        </div>
-      {:else if inspectorTab === 'model'}
-        <div class="settings-group">
-          <label>
-            <span class="label-text">API URL</span>
-            <input 
-              bind:value={currentWorkspace.settings.apiUrl} 
-              onchange={onSettingsChange}
-              placeholder={globalConfig.apiUrl} 
-            />
-          </label>
-          <label>
-            <span class="label-text">Название модели</span>
-            <input 
-              bind:value={currentWorkspace.settings.modelName} 
-              onchange={onSettingsChange}
-              placeholder={globalConfig.modelName} 
-            />
-          </label>
-          <label>
-            <span class="label-text">API Key</span>
-            <input 
-              type="password"
-              bind:value={currentWorkspace.settings.apiKey} 
-              onchange={onSettingsChange}
-              placeholder={globalConfig.apiKey ? "••••••••" : "Ключ не задан"} 
-            />
-          </label>
-          <label>
-            <span class="label-text">Температура: {currentWorkspace.settings.temperature}</span>
-            <input 
-              type="range" 
-              min="0" 
-              max="2" 
-              step="0.1" 
-              bind:value={currentWorkspace.settings.temperature} 
-              onchange={onSettingsChange}
-            />
-          </label>
-        </div>
+      {#if inspectorTab === 'model'}
+        <TabModel bind:currentWorkspace={currentWorkspace} {globalConfig} {onSettingsChange} />
+      {:else if inspectorTab === 'context'}
+        <TabContext bind:currentWorkspace={currentWorkspace} {onSettingsChange} />
       {:else if inspectorTab === 'tools'}
-        <div class="settings-group">
-          <span class="label-text">Интеграции и инструменты</span>
-          <p class="info-text">Здесь скоро появятся настройки функций (Tools/Function Calling).</p>
-        </div>
+        <TabTools bind:currentWorkspace={currentWorkspace} {onSettingsChange} />
       {/if}
     {:else}
       <p class="empty-text">Выберите воркспейс для настройки</p>
@@ -117,6 +70,8 @@
     flex-direction: column;
     background: #ffffff;
     flex-shrink: 0;
+    position: relative;
+    z-index: 10;
   }
   .tabs { display: flex; border-bottom: 1px solid #e5e7eb; background: #f9fafb; }
   .tabs button {
@@ -135,14 +90,5 @@
   }
 
   .content { padding: 16px; overflow-y: auto; flex: 1; }
-  .settings-group { display: flex; flex-direction: column; gap: 16px; }
-  .settings-group label { display: flex; flex-direction: column; gap: 6px; }
-  .label-text { font-size: 0.75rem; font-weight: 700; color: #4b5563; text-transform: uppercase; }
-  .info-text { font-size: 0.85rem; color: #6b7280; }
   .empty-text { color: #9ca3af; text-align: center; margin-top: 20px; font-size: 0.9rem; }
-  input, textarea {
-    width: 100%; padding: 8px 10px; border: 1px solid #d1d5db;
-    border-radius: 6px; font-size: 0.9rem; font-family: inherit;
-  }
-  input:focus, textarea:focus { outline: none; border-color: #5865f2; box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.1); }
 </style>
