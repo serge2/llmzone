@@ -92,6 +92,7 @@ export interface MCPTool {
   description?: string;
   enabled: boolean;
   alwaysAllow: boolean;
+  inputSchema?: any; // Схема параметров для LLM
 }
 
 export interface MCPToolState {
@@ -160,6 +161,40 @@ export class MCPServerInstance {
     };
   }
 
+  /**
+   * Возвращает список инструментов в формате для LLM (интеграция с Chat API)
+   */
+  getToolsForLLM() {
+    if (!this.enabled) return [];
+    
+    return this.tools
+      .filter(t => t.enabled)
+      .map(t => ({
+        name: `${this.name}__${t.name}`, 
+        description: t.description,
+        input_schema: t.inputSchema 
+      }));
+  }
+
+  /**
+   * Вызывает конкретный инструмент на этом сервере
+   */
+  async callTool(toolName: string, arguments_?: any) {
+    if (!this.client || !this.enabled) {
+      throw new Error(`Server ${this.name} is not connected`);
+    }
+
+    try {
+      return await this.client.callTool({
+        name: toolName,
+        arguments: arguments_
+      });
+    } catch (e: any) {
+      console.error(`[MCP CallTool Error] ${this.name}/${toolName}:`, e);
+      throw e;
+    }
+  }
+
   notify() {
     if (this.onStateChange) this.onStateChange();
   }
@@ -184,6 +219,7 @@ export class MCPServerInstance {
         return {
           name: t.name,
           description: t.description,
+          inputSchema: t.inputSchema, // Сохраняем схему параметров от сервера
           // Используем $state для каждого инструмента для глубокой реактивности
           enabled: savedTool ? savedTool.enabled : true,
           alwaysAllow: savedTool ? savedTool.alwaysAllow : true
