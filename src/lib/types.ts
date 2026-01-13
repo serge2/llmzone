@@ -6,6 +6,17 @@ export interface GlobalConfig {
   modelName: string;
 }
 
+export interface MCPToolState {
+  enabled: boolean;
+  alwaysAllow: boolean;
+}
+
+export interface MCPServerState {
+  enabled: boolean;
+  autoApproveAll: boolean;
+  tools: Record<string, MCPToolState>;
+}
+
 export interface WorkspaceSettings {
   lastActiveTab?: InspectorTab;
   apiUrl: string;
@@ -14,6 +25,7 @@ export interface WorkspaceSettings {
   systemPrompt: string;
   temperature: number;
   mcpConfig?: string;
+  mcpStates?: Record<string, MCPServerState>;
 }
 
 export interface Chat {
