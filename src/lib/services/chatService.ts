@@ -30,42 +30,58 @@ export class ChatService {
       while (isLooping && iteration < this.MAX_ITERATIONS) {
         iteration++;
 
-        // 2. Делаем запрос к LM Studio (OpenAI-совместимый формат)
-        const response = await this.fetchLLMResponse(
-          chat.history, 
+        // --- Создаем заглушку ассистента БЕЗ филлера "ИИ думает" ---
+        // Теперь сообщение создается пустым, чтобы не вводить в заблуждение
+        const assistantIdx = chat.history.length;
+        chat.history = [...chat.history, {
+          role: 'assistant',
+          text: '', 
+          tool_calls: []
+        }];
+        onUpdate();
+
+        // 2. Делаем запрос к LM Studio со стримингом
+        const responseData = await this.fetchLLMResponse(
+          chat.history.slice(0, -1), // Не отправляем последнюю пустую заглушку
           settings, 
-          mcpTools
+          mcpTools,
+          (updatedText) => {
+            // Колбэк для живого обновления текста в интерфейсе
+            chat.history[assistantIdx].text = updatedText;
+            chat.history = [...chat.history]; // Триггер реактивности Svelte 5
+            onUpdate();
+          }
         );
         
-        // Добавляем ответ ассистента в историю
-        const assistantMsg: Message = {
-          role: 'assistant',
-          text: response.content || '',
-          tool_calls: response.tool_calls
-        };
-        
-        chat.history.push(assistantMsg);
+        // Финализируем данные сообщения после окончания стрима
+        // Инструменты записываются ПОСЛЕ или вместе с текстом, сохраняя порядок
+        chat.history[assistantIdx].text = responseData.content;
+        chat.history[assistantIdx].tool_calls = responseData.tool_calls || [];
+        chat.history = [...chat.history];
         onUpdate();
+
+        const assistantMsg = chat.history[assistantIdx];
 
         // 3. Проверяем, нужно ли вызывать инструменты
         if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
-          // Выполняем все запрошенные вызовы параллельно или последовательно
+          // Выполняем все запрошенные вызовы
           for (const call of assistantMsg.tool_calls) {
             try {
               // Шаг 5 нашего алгоритма: Диспетчер сам найдет сервер по техническому имени
               const result = await this.dispatcher.callTool(call.name, call.arguments);
               
-              chat.history.push({
+              chat.history = [...chat.history, {
                 role: 'tool',
                 text: JSON.stringify(result),
                 tool_result: {
-                  tool_call_id: call.id,
-                  content: JSON.stringify(result)
+                  tool_call_id: call.id, // Связываем результат с конкретным вызовом для виджета
+                  content: JSON.stringify(result, null, 2), // Форматируем JSON для удобства чтения в UI
+                  isError: false
                 }
-              });
+              }];
             } catch (err: any) {
               // Сообщаем ИИ об ошибке, чтобы он мог её исправить
-              chat.history.push({
+              chat.history = [...chat.history, {
                 role: 'tool',
                 text: `Error: ${err.message}`,
                 tool_result: {
@@ -73,7 +89,7 @@ export class ChatService {
                   content: `Error: ${err.message}`,
                   isError: true
                 }
-              });
+              }];
             }
           }
           onUpdate();
@@ -90,10 +106,10 @@ export class ChatService {
 
     } catch (error: any) {
       console.error("Chat Error:", error);
-      chat.history.push({
+      chat.history = [...chat.history, {
         role: 'system',
         text: `Ошибка связи с моделью: ${error.message}`
-      });
+      }];
     } finally {
       chat.isGenerating = false;
       onUpdate();
@@ -101,12 +117,13 @@ export class ChatService {
   }
 
   /**
-   * Внутренний метод для работы с API LM Studio (OpenAI Compatible)
+   * Внутренний метод для работы с API LM Studio (OpenAI Compatible) со стримингом
    */
   private async fetchLLMResponse(
     history: Message[], 
     settings: WorkspaceSettings, 
-    tools: any[]
+    tools: any[],
+    onUpdateText: (fullText: string) => void
   ) {
     // Формируем сообщения для API
     const apiMessages = [];
@@ -118,6 +135,9 @@ export class ChatService {
 
     // Конвертируем историю в формат OpenAI
     for (const msg of history) {
+      // Игнорируем пустые заглушки ассистента при отправке контекста
+      if (msg.role === 'assistant' && !msg.text && (!msg.tool_calls || msg.tool_calls.length === 0)) continue;
+
       const openAIMsg: any = {
         role: msg.role,
         content: msg.text || null
@@ -144,16 +164,14 @@ export class ChatService {
 
     // Убираем только лишние слеши в конце, чтобы путь склеился корректно
     const baseUrl = settings.apiUrl.replace(/\/+$/, '');
-    
-    // Прямая склейка без условий: ожидаем базовый URL (напр. http://localhost:1234)
-    // Либо, если пользователь сам ввел /v1, он должен понимать, что в коде добавится еще один /v1
     const fullUrl = `${baseUrl}/v1/chat/completions`;
 
-    // Подготовка тела запроса
+    // Подготовка тела запроса со стримингом
     const requestBody: any = {
       model: settings.modelName,
       messages: apiMessages,
       temperature: settings.temperature,
+      stream: true 
     };
 
     if (tools && tools.length > 0) {
@@ -177,23 +195,69 @@ export class ChatService {
       body: JSON.stringify(requestBody)
     });
 
-    const data = await response.json();
-
-    if (!response.ok || !data || data.error || !data.choices || !data.choices[0]) {
-      console.error("Критическая ошибка API:", data);
-      const errorDetail = data?.error?.message || data?.error || JSON.stringify(data);
-      throw new Error(errorDetail || `Status ${response.status}`);
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`API Error (${response.status}): ${errorData}`);
     }
 
-    const message = data.choices[0].message;
+    // Обработка стрима данных
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    
+    let fullContent = "";
+    let toolCallsRaw: any[] = [];
+
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              const delta = data.choices[0]?.delta;
+              if (!delta) continue;
+
+              // 1. Обработка текста
+              if (delta.content) {
+                fullContent += delta.content;
+                onUpdateText(fullContent); // Обновляем UI накопленным текстом
+              }
+
+              // 2. Обработка инструментов (накапливаем чанки)
+              if (delta.tool_calls) {
+                for (const tc of delta.tool_calls) {
+                  const idx = tc.index;
+                  if (!toolCallsRaw[idx]) {
+                    toolCallsRaw[idx] = { id: tc.id, name: '', arguments: '' };
+                  }
+                  if (tc.id) toolCallsRaw[idx].id = tc.id;
+                  if (tc.function?.name) toolCallsRaw[idx].name += tc.function.name;
+                  if (tc.function?.arguments) toolCallsRaw[idx].arguments += tc.function.arguments;
+                }
+              }
+            } catch (e) {
+              // Игнорируем неполные JSON чанки
+            }
+          }
+        }
+      }
+    }
 
     return {
-      content: message.content,
-      tool_calls: message.tool_calls?.map((tc: any) => ({
+      content: fullContent,
+      tool_calls: toolCallsRaw.length > 0 ? toolCallsRaw.map(tc => ({
         id: tc.id,
-        name: tc.function.name,
-        arguments: JSON.parse(tc.function.arguments)
-      }))
+        name: tc.name,
+        arguments: JSON.parse(tc.arguments || '{}')
+      })) : undefined
     };
   }
 }
