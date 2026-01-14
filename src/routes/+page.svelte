@@ -300,6 +300,10 @@
 
     const chatToUpdateId = chatToUpdate.id;
 
+    // Создаем новый контроллер для этого конкретного чата
+    const controller = new AbortController();
+    abortControllers[chatToUpdateId] = controller;
+
     // Добавляем сообщение пользователя если оно не пустое
     if (message.trim()) {
       chatToUpdate.history = [...chatToUpdate.history, { role: "user", text: message }];
@@ -334,11 +338,13 @@
           if (chatToUpdateId === selectedChatId) {
               chatWindowComponent?.scrollToBottom();
           }
-        }
+        },
+        controller.signal
       );
     } catch (err: any) {
       console.error("SendMessage Error:", err);
     } finally {
+      delete abortControllers[chatToUpdateId];
       workspaces = [...workspaces];
       await persistChats();
     }

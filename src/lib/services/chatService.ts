@@ -15,7 +15,8 @@ export class ChatService {
     chat: Chat, 
     settings: WorkspaceSettings,
     serverInstances: MCPServerInstance[], 
-    onUpdate: () => void
+    onUpdate: () => void,
+    abortSignal: AbortSignal
   ) {
     if (chat.isGenerating) return;
     chat.isGenerating = true;
@@ -47,7 +48,8 @@ export class ChatService {
             chat.history[assistantIdx].text = updatedText;
             chat.history = [...chat.history]; 
             onUpdate();
-          }
+          },
+          abortSignal
         );
         
         // Финализируем данные после окончания стрима
@@ -95,6 +97,10 @@ export class ChatService {
       }
 
     } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log("Генерация прервана пользователем");
+        return; // Просто выходим, не пишем "ошибку связи" в чат
+      }
       console.error("Chat Error:", error);
       chat.history = [...chat.history, {
         role: 'system',
@@ -113,7 +119,8 @@ export class ChatService {
     history: Message[], 
     settings: WorkspaceSettings, 
     tools: any[],
-    onUpdateText: (fullText: string) => void
+    onUpdateText: (fullText: string) => void,
+    abortSignal: AbortSignal
   ) {
     const apiMessages = [];
     if (settings.systemPrompt) {
@@ -166,6 +173,7 @@ export class ChatService {
 
     const response = await fetch(fullUrl, {
       method: 'POST',
+      signal: abortSignal, // <-- ВАЖНО: Привязываем сигнал к Tauri Fetch
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream',
@@ -187,6 +195,11 @@ export class ChatService {
 
     if (reader) {
       while (true) {
+        if (abortSignal.aborted) {
+          await reader.cancel(); // Сообщаем потоку, что мы больше не читаем
+          break;
+        }
+
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -194,6 +207,9 @@ export class ChatService {
         const lines = chunk.split('\n');
 
         for (const line of lines) {
+          // Дополнительная проверка внутри цикла обработки строк
+          if (abortSignal.aborted) break;
+
           const trimmed = line.trim();
           if (!trimmed || trimmed === 'data: [DONE]') continue;
           
