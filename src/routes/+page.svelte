@@ -11,6 +11,10 @@
   import GlobalSettings from '$lib/components/GlobalSettings.svelte';
   import AppHeader from '$lib/components/AppHeader.svelte';
 
+  // --- Импорт новых сервисов для MCP ---
+  import { ChatService } from '$lib/services/chatService';
+  import type { MCPServerInstance } from '$lib/mcp/manager.svelte';
+
   // --- Состояние приложения (Svelte 5 Runes) ---
   let workspaces = $state<Workspace[]>([]);
   let selectedWorkspaceId = $state<string>('');
@@ -34,6 +38,11 @@
   let chatSearch = $state('');
   
   let chatWindowComponent = $state<ReturnType<typeof ChatWindow>>();
+
+  // Инстанс сервиса чата
+  const chatService = new ChatService();
+  // Список активных MCP серверов (синхронизируется через Inspector)
+  let mcpServers = $state<MCPServerInstance[]>([]);
 
   // --- Производные состояния ---
   const currentWorkspace = $derived(workspaces.find(w => w.id === selectedWorkspaceId));
@@ -268,11 +277,10 @@
     navigator.clipboard.writeText(text);
   }
 
-  // --- Основная логика отправки и стриминга ---
+  // --- Основная логика отправки (теперь через ChatService с поддержкой MCP) ---
   async function sendMessage() {
     if (!currentChat || !currentWorkspace) return;
 
-    // Если чат уже генерирует, работаем как кнопка Стоп
     if (currentChat.isGenerating) {
       stopGeneration(currentChat.id);
       return;
@@ -280,21 +288,19 @@
 
     const chatToUpdate = currentChat;
     
-    // ЛОГИКА FALLBACK: если в воркспейсе пусто, берем глобальное значение
+    // Подготовка эффективных настроек
     const effectiveSettings = {
       apiUrl: currentWorkspace.settings.apiUrl || globalConfig.apiUrl,
       apiKey: currentWorkspace.settings.apiKey || globalConfig.apiKey,
       modelName: currentWorkspace.settings.modelName || globalConfig.modelName,
       systemPrompt: currentWorkspace.settings.systemPrompt,
-      temperature: currentWorkspace.settings.temperature
+      temperature: currentWorkspace.settings.temperature,
+      mcpStates: currentWorkspace.settings.mcpStates
     };
 
     const chatToUpdateId = chatToUpdate.id;
 
-    const ctrl = new AbortController();
-    abortControllers[chatToUpdateId] = ctrl;
-    manualAborts[chatToUpdateId] = false;
-
+    // Добавляем сообщение пользователя если оно не пустое
     if (message.trim()) {
       chatToUpdate.history = [...chatToUpdate.history, { role: "user", text: message }];
       
@@ -303,88 +309,36 @@
         const [movedChat] = currentWorkspace.chats.splice(chatIndex, 1);
         currentWorkspace.chats.unshift(movedChat);
       }
+      
+      message = "";
       workspaces = [...workspaces];
       await persistChats();
     }
     
     if (chatToUpdate.history.length === 0) return;
 
-    const aiMsgIndex = chatToUpdate.history.length;
-    chatToUpdate.history = [...chatToUpdate.history, { role: "assistant", text: "" }];
-    
-    message = "";
-    chatToUpdate.isGenerating = true;
-    workspaces = [...workspaces];
-    
+    // Скролл при начале
     if (chatToUpdateId === selectedChatId) {
         await chatWindowComponent?.scrollToBottom();
     }
 
     try {
-      const base = effectiveSettings.apiUrl.trim().replace(/\/+$/, '');
-      const response = await fetch(`${base}/chat/completions`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": effectiveSettings.apiKey ? `Bearer ${effectiveSettings.apiKey}` : ""
-        },
-        body: JSON.stringify({
-          model: effectiveSettings.modelName,
-          temperature: effectiveSettings.temperature,
-          messages: [
-            ...(effectiveSettings.systemPrompt.trim() ? [{ role: 'system', content: effectiveSettings.systemPrompt }] : []),
-            ...chatToUpdate.history.slice(0, -1).map(m => ({ role: m.role, content: m.text }))
-          ],
-          stream: true
-        }),
-        signal: ctrl.signal
-      });
-
-      if (!response.ok) throw new Error(`Ошибка HTTP: ${response.status}`);
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) return;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
-        
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === "data: [DONE]") continue;
-          
-          if (trimmed.startsWith("data: ")) {
-            try {
-              const json = JSON.parse(trimmed.slice(6));
-              const content = json.choices?.[0]?.delta?.content || "";
-              
-              if (content) {
-                chatToUpdate.history[aiMsgIndex].text += content;
-                workspaces = [...workspaces];
-                
-                if (chatToUpdateId === selectedChatId) {
-                    chatWindowComponent?.scrollToBottom();
-                }
-              }
-            } catch (e) {}
+      // Вызываем универсальный сервис чата, который обработает цепочку MCP инструментов
+      await chatService.send(
+        chatToUpdate,
+        effectiveSettings,
+        mcpServers, // Передаем активные инстансы серверов
+        () => {
+          // Коллбэк для реактивного обновления UI при каждом шаге (tool_call, ответ и т.д.)
+          workspaces = [...workspaces];
+          if (chatToUpdateId === selectedChatId) {
+              chatWindowComponent?.scrollToBottom();
           }
         }
-      }
+      );
     } catch (err: any) {
-      if (manualAborts[chatToUpdateId]) {
-        chatToUpdate.history[aiMsgIndex].text += "\n\n**[Генерация прервана пользователем]**";
-      } else {
-        chatToUpdate.history = chatToUpdate.history.filter((_, i) => i !== aiMsgIndex);
-        alert("Ошибка связи с моделью: " + (err.message || "Unknown error"));
-      }
+      console.error("SendMessage Error:", err);
     } finally {
-      chatToUpdate.isGenerating = false;
-      delete abortControllers[chatToUpdateId];
-      delete manualAborts[chatToUpdateId];
       workspaces = [...workspaces];
       await persistChats();
     }
@@ -473,8 +427,9 @@
     </div>
 
     <Inspector 
-      currentWorkspace={currentWorkspace} 
+      bind:currentWorkspace={workspaces[workspaces.findIndex(w => w.id === selectedWorkspaceId)]} 
       {globalConfig} 
+      bind:serverInstances={mcpServers}
       onSettingsChange={persistConfig} 
     />
   </div>

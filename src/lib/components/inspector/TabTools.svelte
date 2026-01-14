@@ -14,9 +14,11 @@
 
   let { 
     currentWorkspace = $bindable(), 
+    serverInstances = $bindable([]), // Делаем список инстансов биндабельным пропом
     onSettingsChange 
   }: { 
     currentWorkspace: Workspace, 
+    serverInstances: MCPServerInstance[],
     onSettingsChange: () => void 
   } = $props();
 
@@ -28,7 +30,7 @@
   let lastWorkspaceId = $state(currentWorkspace.id);
 
   // --- ЛОГИКА ВИДЖЕТОВ ---
-  let serverInstances = $state<MCPServerInstance[]>([]);
+  // (serverInstances теперь берется из $props и синхронизируется автоматически)
 
   // Функция для сохранения состояний всех серверов в Workspace
   function syncAllStates() {

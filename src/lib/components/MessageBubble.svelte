@@ -2,6 +2,7 @@
   import { marked } from 'marked';
   import Prism from 'prismjs';
   import { tick } from 'svelte';
+  import type { ToolCall } from '$lib/types'; // Добавлен импорт типа
   
   // Темы и языки Prism
   import 'prismjs/themes/prism.css'; 
@@ -30,6 +31,7 @@
     role, 
     isLastMessage = false,
     isTyping = false,
+    tool_calls,
     onEdit,
     onCopy,
     onDelete,
@@ -39,6 +41,7 @@
     role: string,
     isLastMessage?: boolean,
     isTyping?: boolean,
+    tool_calls?: ToolCall[];
     onEdit?: (newText: string) => void,
     onCopy?: () => void,
     onDelete?: () => void,
@@ -174,7 +177,7 @@
     }
   }
 
-  // Функция отмены
+  // Функция отмена
   function cancelEdit() {
     isEditing = false;
     editText = text;
@@ -205,6 +208,17 @@
 <div class="message-wrapper {role}" class:is-generating={isTyping}>
   <div class="message-content" class:editing-mode={isEditing}>
     <div class="message">
+      {#if tool_calls && tool_calls.length > 0}
+        <div class="tool-calls-container">
+          {#each tool_calls as call}
+            <div class="tool-badge" title="Аргументы: {JSON.stringify(call.arguments)}">
+              <span class="icon">🛠</span>
+              <span class="name">{call.name}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+
       <div class="prose" bind:this={proseEl} onclick={handleProseClick} role="presentation">
         {#if isEditing}
           <textarea
@@ -515,6 +529,37 @@
   /* Эффект наведения на строку */
   .prose :global(tr:hover) {
     background-color: #f1f5f9;
+  }
+
+  /* Стили для инструментов MCP */
+  .tool-calls-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .tool-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    color: #475569;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    cursor: help;
+  }
+
+  .tool-badge .icon {
+    font-size: 0.9rem;
+  }
+
+  .assistant .tool-badge {
+    background: #f8fafc;
+    border-color: #e2e8f0;
   }
 
   @keyframes pulse-opacity {

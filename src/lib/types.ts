@@ -47,14 +47,32 @@ export interface Workspace {
   chats: Chat[];
 }
 
-export interface Message {
-  role: 'user' | 'assistant' | 'system';
-  text: string;
+// --- ОБНОВЛЕННАЯ СТРУКТУРА СООБЩЕНИЙ ---
+
+export interface ToolCall {
+  id: string;            // Уникальный ID вызова от LLM
+  name: string;          // Имя вида "server__tool"
+  arguments: any;        // Распаршенные аргументы (объект)
 }
+
+export interface ToolResult {
+  tool_call_id: string;  // Ссылка на ID вызова
+  content: string;       // Результат работы MCP сервера (JSON строка)
+  isError?: boolean;     // Флаг ошибки выполнения
+}
+
+export interface Message {
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  text: string;
+  tool_calls?: ToolCall[];   // Если ассистент хочет вызвать инструменты
+  tool_result?: ToolResult; // Если это сообщение-ответ от инструмента
+}
+
+// ---------------------------------------
 
 export interface AppSettings {
   theme: 'system' | 'light' | 'dark';
   lastSelectedWorkspaceId: string;
   workspaces: Omit<Workspace, 'chats'>[];
-  globalConfig?: GlobalConfig; // Новое поле
+  globalConfig?: GlobalConfig;
 }

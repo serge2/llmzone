@@ -120,16 +120,18 @@
   >
     <div class="messages-list">
       {#each history as msg, index (index)}
-        <MessageBubble 
-          text={msg.text} 
-          role={msg.role}
-          isLastMessage={index === history.length - 1}
-          isTyping={isGenerating && index === history.length - 1}
-          onEdit={(newText) => onEditMessage(index, newText)}
-          onCopy={() => onCopyMessage(msg.text)}
-          onDelete={() => onDeleteMessage(index)}
-          onRegenerate={() => onRegenerateMessage()}
-        />
+        {#if msg.role !== 'tool'} 
+          <MessageBubble 
+            text={msg.text} 
+            role={msg.role}
+            tool_calls={msg.tool_calls} isLastMessage={index === history.length - 1}
+            isTyping={isGenerating && index === history.length - 1}
+            onEdit={(newText) => onEditMessage(index, newText)}
+            onCopy={() => onCopyMessage(msg.text)}
+            onDelete={() => onDeleteMessage(index)}
+            onRegenerate={() => onRegenerateMessage()}
+          />
+        {/if}
       {/each}
     </div>
   </div>

@@ -3,6 +3,7 @@
   import TabModel from './inspector/TabModel.svelte';
   import TabContext from './inspector/TabContext.svelte';
   import TabTools from './inspector/TabTools.svelte';
+  import type { MCPServerInstance } from '$lib/mcp/manager.svelte'; // Импорт типа инстанса
 
   // Импорт иконок из ассетов
   import MessageIcon from '$lib/assets/icons/message.svg?raw';
@@ -12,10 +13,12 @@
   let { 
     currentWorkspace = $bindable(), 
     globalConfig,
+    serverInstances = $bindable(), // Добавляем bindable проп для серверов
     onSettingsChange 
   }: { 
     currentWorkspace: Workspace | undefined, 
     globalConfig: GlobalConfig,
+    serverInstances: MCPServerInstance[], // Типизация массива инстансов
     onSettingsChange: () => void 
   } = $props();
 
@@ -54,7 +57,11 @@
       {:else if inspectorTab === 'context'}
         <TabContext bind:currentWorkspace={currentWorkspace} {onSettingsChange} />
       {:else if inspectorTab === 'tools'}
-        <TabTools bind:currentWorkspace={currentWorkspace} {onSettingsChange} />
+        <TabTools 
+          bind:currentWorkspace={currentWorkspace} 
+          bind:serverInstances={serverInstances} 
+          {onSettingsChange} 
+        />
       {/if}
     {:else}
       <p class="empty-text">Выберите воркспейс для настройки</p>
