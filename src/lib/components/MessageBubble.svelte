@@ -99,13 +99,23 @@
 
   // Обновленный эффект для подсветки синтаксиса (включая JSON внутри виджетов)
   $effect(() => {
-    if ((htmlContent || tool_calls) && proseEl) {
+    // Триггерим эффект при изменении контента или появлении результатов инструментов
+    if ((htmlContent || tool_calls || fullHistory) && proseEl) {
       tick().then(() => {
         if (!proseEl) return;
-        // Подсвечиваем код в основном тексте и во всех открытых/появившихся пре-блоках
-        const container = proseEl.closest('.message');
-        container?.querySelectorAll('pre code').forEach((block) => {
-          if (!block.classList.contains('prism-highlighted') || isLastMessage) {
+        
+        // Находим все блоки кода в сообщении, включая виджеты инструментов
+        const messageContainer = proseEl.closest('.message-content');
+        if (!messageContainer) return;
+
+        const codeBlocks = messageContainer.querySelectorAll('pre code');
+        
+        codeBlocks.forEach((block) => {
+          // Если это последнее сообщение (стриминг) — переподсвечиваем всегда
+          // Если старое — только если еще не подсвечено
+          const isHighlighted = block.classList.contains('prism-highlighted');
+          
+          if (!isHighlighted || isLastMessage) {
             Prism.highlightElement(block);
             block.classList.add('prism-highlighted');
           }
