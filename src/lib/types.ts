@@ -66,6 +66,7 @@ export interface Message {
   text: string;
   tool_calls?: ToolCall[];   // Если ассистент хочет вызвать инструменты
   tool_result?: ToolResult; // Если это сообщение-ответ от инструмента
+  error?: string;
 }
 
 // ---------------------------------------

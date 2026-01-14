@@ -1,6 +1,7 @@
 // src/lib/services/chatService.ts
 import { fetch } from '@tauri-apps/plugin-http'; // ВАЖНО: Используем нативный fetch Tauri для обхода CORS
 import { MCPDispatcher } from '$lib/mcp/dispatcher';
+import { toastService } from '$lib/services/toastService.svelte';
 import type { Message, Chat, WorkspaceSettings } from '$lib/types';
 import type { MCPServerInstance } from '$lib/mcp/manager.svelte';
 
@@ -97,15 +98,46 @@ export class ChatService {
       }
 
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      // Проверяем, была ли это отмена пользователем
+      const isAbort = error.name === 'AbortError' || abortSignal.aborted;
+
+      // Находим индекс нашего текущего сообщения-ассистента
+      const assistantIdx = chat.history.findLastIndex(m => m.role === 'assistant');
+      
+      if (isAbort) {
         console.log("Генерация прервана пользователем");
-        return; // Просто выходим, не пишем "ошибку связи" в чат
+        // Если прервали и ассистент пуст — удаляем его из истории
+        if (assistantIdx !== -1) {
+          const assistantMsg = chat.history[assistantIdx];
+          if (!assistantMsg.text && (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0)) {
+            chat.history.splice(assistantIdx, 1);
+          } else {
+            // Если текст был — помечаем как прерванное для Bubble
+            assistantMsg.error = "Генерация прервана пользователем";
+          }
+        }
+        toastService.show("Генерация прервана", "info");
+      } else {
+        console.error("Chat Error:", error);
+        
+        if (assistantIdx !== -1) {
+          const assistantMsg = chat.history[assistantIdx];
+          
+          if (!assistantMsg.text && (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0)) {
+            // Если сервер выдал ошибку СРАЗУ (пустой ответ), удаляем сообщение из истории
+            chat.history.splice(assistantIdx, 1);
+          } else {
+            // Если текст уже успел накопиться — оставляем его, но добавляем баннер ошибки
+            assistantMsg.error = error.message;
+          }
+        }
+        
+        // Показываем современное всплывающее уведомление вместо вставки текста в чат
+        toastService.show(`Ошибка связи: ${error.message}`, "error");
       }
-      console.error("Chat Error:", error);
-      chat.history = [...chat.history, {
-        role: 'system',
-        text: `Ошибка связи с моделью: ${error.message}`
-      }];
+      
+      // Синхронизируем массив истории
+      chat.history = [...chat.history];
     } finally {
       chat.isGenerating = false;
       onUpdate();

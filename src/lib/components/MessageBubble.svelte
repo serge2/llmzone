@@ -30,6 +30,7 @@
   let { 
     text = "", 
     role, 
+    error, // Добавили проп ошибки
     isLastMessage = false,
     isTyping = false,
     tool_calls,
@@ -41,6 +42,7 @@
   }: {
     text: string, 
     role: string,
+    error?: string, // Типизация ошибки
     isLastMessage?: boolean,
     isTyping?: boolean,
     tool_calls?: ToolCall[];
@@ -218,7 +220,7 @@
 
 <div class="message-wrapper {role}" class:is-generating={isTyping}>
   <div class="message-content" class:editing-mode={isEditing}>
-    <div class="message">
+    <div class="message" class:has-error={!!error}>
       <div class="prose" bind:this={proseEl} onclick={handleProseClick} role="presentation">
         {#if isEditing}
           <textarea
@@ -273,6 +275,16 @@
               </details>
             </div>
           {/each}
+        </div>
+      {/if}
+
+      {#if error}
+        <div class="error-banner">
+          <div class="error-header">
+            <span class="error-icon">⚠️</span>
+            <strong>Ошибка взаимодействия</strong>
+          </div>
+          <div class="error-text">{error}</div>
         </div>
       {/if}
     </div>
@@ -348,6 +360,12 @@
 
   .user .message { background: #e3f2fd; color: #0d47a1; border-bottom-right-radius: 4px; }
   .assistant .message { background: #ffffff; color: #263238; border: 1px solid #eceff1; border-bottom-left-radius: 4px; }
+  
+  /* Стиль при наличии ошибки */
+  .assistant .message.has-error {
+    border-color: #fecaca;
+    background: #fffcfc;
+  }
 
   /* Когда редактируем, расширяем контейнер до 100% */
   .message-content.editing-mode {
@@ -681,6 +699,35 @@
   .tool-summary :global(svg), .sub-summary :global(svg) { 
     width: 100%; 
     height: 100%; 
+  }
+
+  /* Стили для баннера ошибки */
+  .error-banner {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    background: #fff5f5;
+    border: 1px solid #feb2b2;
+    color: #c53030;
+  }
+
+  .error-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+  }
+
+  .error-icon {
+    font-size: 1rem;
+  }
+
+  .error-text {
+    font-size: 0.8rem;
+    line-height: 1.4;
+    opacity: 0.9;
+    word-break: break-word;
   }
 
   @keyframes pulse-opacity {
