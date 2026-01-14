@@ -21,17 +21,14 @@ export class ChatService {
     chat.isGenerating = true;
 
     try {
-      // 1. Подготавливаем "Витрину" инструментов через диспетчер
       const mcpTools = this.dispatcher.generateToolList(serverInstances);
-
       let iteration = 0;
       let isLooping = true;
 
       while (isLooping && iteration < this.MAX_ITERATIONS) {
         iteration++;
 
-        // --- Создаем заглушку ассистента БЕЗ филлера "ИИ думает" ---
-        // Теперь сообщение создается пустым, чтобы не вводить в заблуждение
+        // 1. Создаем заглушку ассистента с реактивным обновлением
         const assistantIdx = chat.history.length;
         chat.history = [...chat.history, {
           role: 'assistant',
@@ -46,15 +43,14 @@ export class ChatService {
           settings, 
           mcpTools,
           (updatedText) => {
-            // Колбэк для живого обновления текста в интерфейсе
+            // ВАЖНО: Обновляем массив целиком для триггера реактивности Svelte 5
             chat.history[assistantIdx].text = updatedText;
-            chat.history = [...chat.history]; // Триггер реактивности Svelte 5
+            chat.history = [...chat.history]; 
             onUpdate();
           }
         );
         
-        // Финализируем данные сообщения после окончания стрима
-        // Инструменты записываются ПОСЛЕ или вместе с текстом, сохраняя порядок
+        // Финализируем данные после окончания стрима
         chat.history[assistantIdx].text = responseData.content;
         chat.history[assistantIdx].tool_calls = responseData.tool_calls || [];
         chat.history = [...chat.history];
@@ -62,25 +58,21 @@ export class ChatService {
 
         const assistantMsg = chat.history[assistantIdx];
 
-        // 3. Проверяем, нужно ли вызывать инструменты
+        // 3. Проверка инструментов
         if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
-          // Выполняем все запрошенные вызовы
           for (const call of assistantMsg.tool_calls) {
             try {
-              // Шаг 5 нашего алгоритма: Диспетчер сам найдет сервер по техническому имени
               const result = await this.dispatcher.callTool(call.name, call.arguments);
-              
               chat.history = [...chat.history, {
                 role: 'tool',
                 text: JSON.stringify(result),
                 tool_result: {
-                  tool_call_id: call.id, // Связываем результат с конкретным вызовом для виджета
-                  content: JSON.stringify(result, null, 2), // Форматируем JSON для удобства чтения в UI
+                  tool_call_id: call.id,
+                  content: JSON.stringify(result, null, 2), // Форматируем JSON для виджета
                   isError: false
                 }
               }];
             } catch (err: any) {
-              // Сообщаем ИИ об ошибке, чтобы он мог её исправить
               chat.history = [...chat.history, {
                 role: 'tool',
                 text: `Error: ${err.message}`,
@@ -93,9 +85,7 @@ export class ChatService {
             }
           }
           onUpdate();
-          // Цикл продолжается: на следующей итерации ИИ увидит результаты инструментов
         } else {
-          // Инструментов нет или ИИ закончил работу
           isLooping = false;
         }
       }
@@ -125,48 +115,36 @@ export class ChatService {
     tools: any[],
     onUpdateText: (fullText: string) => void
   ) {
-    // Формируем сообщения для API
     const apiMessages = [];
-
-    // Добавляем системный промпт, если он есть
     if (settings.systemPrompt) {
       apiMessages.push({ role: 'system', content: settings.systemPrompt });
     }
 
-    // Конвертируем историю в формат OpenAI
     for (const msg of history) {
-      // Игнорируем пустые заглушки ассистента при отправке контекста
+      // Пропускаем пустые сообщения, которые могли остаться от прошлых итераций
       if (msg.role === 'assistant' && !msg.text && (!msg.tool_calls || msg.tool_calls.length === 0)) continue;
 
       const openAIMsg: any = {
         role: msg.role,
         content: msg.text || null
       };
-
       if (msg.tool_calls && msg.tool_calls.length > 0) {
         openAIMsg.tool_calls = msg.tool_calls.map(tc => ({
           id: tc.id,
           type: 'function',
-          function: {
-            name: tc.name,
-            arguments: JSON.stringify(tc.arguments)
-          }
+          function: { name: tc.name, arguments: JSON.stringify(tc.arguments) }
         }));
       }
-
       if (msg.role === 'tool' && msg.tool_result) {
         openAIMsg.tool_call_id = msg.tool_result.tool_call_id;
         openAIMsg.content = msg.tool_result.content;
       }
-
       apiMessages.push(openAIMsg);
     }
 
-    // Убираем только лишние слеши в конце, чтобы путь склеился корректно
     const baseUrl = settings.apiUrl.replace(/\/+$/, '');
     const fullUrl = `${baseUrl}/v1/chat/completions`;
 
-    // Подготовка тела запроса со стримингом
     const requestBody: any = {
       model: settings.modelName,
       messages: apiMessages,
@@ -180,7 +158,7 @@ export class ChatService {
         function: {
           name: t.name,
           description: t.description || '',
-          parameters: t.input_schema
+          parameters: t.input_schema 
         }
       }));
       requestBody.tool_choice = 'auto';
@@ -190,6 +168,7 @@ export class ChatService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
         'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`
       },
       body: JSON.stringify(requestBody)
@@ -200,7 +179,6 @@ export class ChatService {
       throw new Error(`API Error (${response.status}): ${errorData}`);
     }
 
-    // Обработка стрима данных
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
     
@@ -225,18 +203,16 @@ export class ChatService {
               const delta = data.choices[0]?.delta;
               if (!delta) continue;
 
-              // 1. Обработка текста
               if (delta.content) {
                 fullContent += delta.content;
-                onUpdateText(fullContent); // Обновляем UI накопленным текстом
+                onUpdateText(fullContent); 
               }
 
-              // 2. Обработка инструментов (накапливаем чанки)
               if (delta.tool_calls) {
                 for (const tc of delta.tool_calls) {
                   const idx = tc.index;
                   if (!toolCallsRaw[idx]) {
-                    toolCallsRaw[idx] = { id: tc.id, name: '', arguments: '' };
+                    toolCallsRaw[idx] = { id: '', name: '', arguments: '' };
                   }
                   if (tc.id) toolCallsRaw[idx].id = tc.id;
                   if (tc.function?.name) toolCallsRaw[idx].name += tc.function.name;
@@ -244,7 +220,7 @@ export class ChatService {
                 }
               }
             } catch (e) {
-              // Игнорируем неполные JSON чанки
+              // Игнорируем неполные чанки
             }
           }
         }

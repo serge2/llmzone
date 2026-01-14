@@ -2,7 +2,7 @@
   import { marked } from 'marked';
   import Prism from 'prismjs';
   import { tick } from 'svelte';
-  import type { ToolCall } from '$lib/types'; // Добавлен импорт типа
+  import type { ToolCall, Message } from '$lib/types'; // Добавлен импорт Message
   
   // Темы и языки Prism
   import 'prismjs/themes/prism.css'; 
@@ -24,6 +24,7 @@
   import trashIconRaw from '$lib/assets/icons/trash.svg?raw';
   import refreshIconRaw from '$lib/assets/icons/refresh.svg?raw';
   import closeIconRaw from '$lib/assets/icons/close.svg?raw';
+  import chevronDownIconRaw from '$lib/assets/icons/chevron-down.svg?raw'; // Предполагается наличие иконки
 
   // В Svelte 5 самый надежный способ передачи типов в $props — деструктуризация с типами
   let { 
@@ -32,6 +33,7 @@
     isLastMessage = false,
     isTyping = false,
     tool_calls,
+    fullHistory = [], // Добавили доступ ко всей истории для поиска ответов инструментов
     onEdit,
     onCopy,
     onDelete,
@@ -42,6 +44,7 @@
     isLastMessage?: boolean,
     isTyping?: boolean,
     tool_calls?: ToolCall[];
+    fullHistory?: Message[];
     onEdit?: (newText: string) => void,
     onCopy?: () => void,
     onDelete?: () => void,
@@ -84,6 +87,11 @@
       return text;
     }
   });
+
+  // Функция для поиска результата конкретного вызова в истории
+  function getToolResult(callId: string) {
+    return fullHistory.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === callId);
+  }
 
   let proseEl: HTMLDivElement | undefined = $state();
 
@@ -208,17 +216,6 @@
 <div class="message-wrapper {role}" class:is-generating={isTyping}>
   <div class="message-content" class:editing-mode={isEditing}>
     <div class="message">
-      {#if tool_calls && tool_calls.length > 0}
-        <div class="tool-calls-container">
-          {#each tool_calls as call}
-            <div class="tool-badge" title="Аргументы: {JSON.stringify(call.arguments)}">
-              <span class="icon">🛠</span>
-              <span class="name">{call.name}</span>
-            </div>
-          {/each}
-        </div>
-      {/if}
-
       <div class="prose" bind:this={proseEl} onclick={handleProseClick} role="presentation">
         {#if isEditing}
           <textarea
@@ -232,10 +229,43 @@
           ></textarea>
         {:else if text}
           {@html htmlContent}
-        {:else if role === 'assistant'}
+        {:else if role === 'assistant' && (!tool_calls || tool_calls.length === 0)}
           <span class="thinking-text">ИИ думает...</span>
         {/if}
       </div>
+
+      {#if tool_calls && tool_calls.length > 0}
+        <div class="tool-calls-container">
+          {#each tool_calls as call}
+            {@const result = getToolResult(call.id)}
+            <div class="tool-widget">
+              <details class="main-details">
+                <summary class="tool-summary">
+                  <span class="icon">🛠</span>
+                  <span class="name">Инструмент: <strong>{call.name}</strong></span>
+                  <span class="status-icon">{@html chevronDownIconRaw}</span>
+                </summary>
+                
+                <div class="tool-details-content">
+                  <details class="sub-details">
+                    <summary>Аргументы</summary>
+                    <pre class="json-content"><code>{JSON.stringify(call.arguments, null, 2)}</code></pre>
+                  </details>
+
+                  {#if result}
+                    <details class="sub-details">
+                      <summary>Ответ</summary>
+                      <pre class="json-content"><code>{result.tool_result?.content || result.text}</code></pre>
+                    </details>
+                  {:else}
+                    <div class="tool-loading">Выполнение запроса...</div>
+                  {/if}
+                </div>
+              </details>
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
     
     <div class="message-actions" class:hidden={isTyping}>
@@ -534,33 +564,93 @@
   /* Стили для инструментов MCP */
   .tool-calls-container {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 8px;
-    margin-bottom: 12px;
+    margin-top: 12px;
+    width: 100%;
   }
 
-  .tool-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: #f1f5f9;
+  .tool-widget {
     border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 4px 10px;
-    font-size: 0.8rem;
-    color: #475569;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    cursor: help;
-  }
-
-  .tool-badge .icon {
-    font-size: 0.9rem;
-  }
-
-  .assistant .tool-badge {
+    border-radius: 10px;
     background: #f8fafc;
-    border-color: #e2e8f0;
+    overflow: hidden;
   }
+
+  .tool-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 0.85rem;
+    color: #475569;
+    user-select: none;
+  }
+  
+  .tool-summary::-webkit-details-marker { display: none; }
+
+  .tool-summary .status-icon {
+    margin-left: auto;
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+  }
+
+  .main-details[open] .status-icon {
+    transform: rotate(180deg);
+  }
+
+  .tool-details-content {
+    padding: 0 12px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid #edf2f7;
+    background: #fff;
+  }
+
+  .sub-details {
+    margin-top: 8px;
+    border: 1px solid #f1f5f9;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .sub-details summary {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    background: #fbfcfe;
+    list-style: none;
+  }
+  .sub-details summary::-webkit-details-marker { display: none; }
+
+  .json-content {
+    margin: 0 !important;
+    padding: 10px !important;
+    font-size: 0.8rem !important;
+    background: #1e1e1e !important;
+    color: #d4d4d4 !important;
+    border-radius: 0;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .tool-loading {
+    padding: 8px;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-style: italic;
+  }
+
+  .tool-summary :global(svg) { width: 14px; height: 14px; }
 
   @keyframes pulse-opacity {
     0% { opacity: 0.3; }

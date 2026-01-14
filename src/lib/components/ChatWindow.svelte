@@ -124,8 +124,10 @@
           <MessageBubble 
             text={msg.text} 
             role={msg.role}
-            tool_calls={msg.tool_calls} isLastMessage={index === history.length - 1}
+            tool_calls={msg.tool_calls} 
+            isLastMessage={index === history.length - 1}
             isTyping={isGenerating && index === history.length - 1}
+            fullHistory={history} 
             onEdit={(newText) => onEditMessage(index, newText)}
             onCopy={() => onCopyMessage(msg.text)}
             onDelete={() => onDeleteMessage(index)}
