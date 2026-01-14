@@ -95,11 +95,14 @@
 
   let proseEl: HTMLDivElement | undefined = $state();
 
+  // Обновленный эффект для подсветки синтаксиса (включая JSON внутри виджетов)
   $effect(() => {
-    if (htmlContent && proseEl) {
+    if ((htmlContent || tool_calls) && proseEl) {
       tick().then(() => {
         if (!proseEl) return;
-        proseEl.querySelectorAll('pre code').forEach((block) => {
+        // Подсвечиваем код в основном тексте и во всех открытых/появившихся пре-блоках
+        const container = proseEl.closest('.message');
+        container?.querySelectorAll('pre code').forEach((block) => {
           if (!block.classList.contains('prism-highlighted') || isLastMessage) {
             Prism.highlightElement(block);
             block.classList.add('prism-highlighted');
@@ -248,14 +251,20 @@
                 
                 <div class="tool-details-content">
                   <details class="sub-details">
-                    <summary>Аргументы</summary>
-                    <pre class="json-content"><code>{JSON.stringify(call.arguments, null, 2)}</code></pre>
+                    <summary class="sub-summary">
+                      <span>Аргументы</span>
+                      <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
+                    </summary>
+                    <pre class="language-json"><code>{JSON.stringify(call.arguments, null, 2)}</code></pre>
                   </details>
 
                   {#if result}
                     <details class="sub-details">
-                      <summary>Ответ</summary>
-                      <pre class="json-content"><code>{result.tool_result?.content || result.text}</code></pre>
+                      <summary class="sub-summary">
+                        <span>Ответ</span>
+                        <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
+                      </summary>
+                      <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
                     </details>
                   {:else}
                     <div class="tool-loading">Выполнение запроса...</div>
@@ -573,7 +582,7 @@
   .tool-widget {
     border: 1px solid #e2e8f0;
     border-radius: 10px;
-    background: #f8fafc;
+    background: #f8fafc; /* Светлый фон заголовка */
     overflow: hidden;
   }
 
@@ -606,51 +615,73 @@
   }
 
   .tool-details-content {
-    padding: 0 12px 12px 12px;
+    padding: 0 10px 10px 10px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    border-top: 1px solid #edf2f7;
-    background: #fff;
+    gap: 6px;
+    border-top: 1px solid #f1f5f9;
+    background: #ffffff; /* Белый фон внутри контента */
   }
 
   .sub-details {
-    margin-top: 8px;
     border: 1px solid #f1f5f9;
-    border-radius: 6px;
+    border-radius: 8px;
     overflow: hidden;
+    background: #ffffff;
   }
 
-  .sub-details summary {
-    padding: 6px 10px;
+  .sub-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
     font-size: 0.75rem;
     font-weight: 600;
     color: #64748b;
     cursor: pointer;
-    background: #fbfcfe;
+    background: #fcfdfe;
     list-style: none;
   }
-  .sub-details summary::-webkit-details-marker { display: none; }
+  .sub-summary::-webkit-details-marker { display: none; }
 
-  .json-content {
+  .sub-status-icon {
+    width: 12px;
+    height: 12px;
+    transition: transform 0.2s;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+  }
+
+  .sub-details[open] .sub-status-icon {
+    transform: rotate(180deg);
+  }
+
+  /* Светлая тема для JSON-контента */
+  .tool-details-content :global(pre) {
     margin: 0 !important;
-    padding: 10px !important;
+    padding: 12px !important;
     font-size: 0.8rem !important;
-    background: #1e1e1e !important;
-    color: #d4d4d4 !important;
+    background: #fafafa !important;
+    color: #334155 !important;
     border-radius: 0;
-    max-height: 300px;
+    max-height: 400px;
     overflow-y: auto;
+    border-top: 1px solid #f1f5f9;
   }
 
   .tool-loading {
-    padding: 8px;
+    padding: 10px;
     font-size: 0.75rem;
     color: #94a3b8;
     font-style: italic;
+    text-align: center;
   }
 
-  .tool-summary :global(svg) { width: 14px; height: 14px; }
+  .tool-summary :global(svg), .sub-summary :global(svg) { 
+    width: 100%; 
+    height: 100%; 
+  }
 
   @keyframes pulse-opacity {
     0% { opacity: 0.3; }
