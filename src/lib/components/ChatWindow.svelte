@@ -99,9 +99,18 @@
   });
 
   function handleKeydown(e: KeyboardEvent) {
+    // Проверяем:
+    // 1. Нажат Enter без Shift
+    // 2. Мы НЕ в процессе генерации (чтобы не спамить)
+    // 3. Сообщение НЕ пустое (trim убирает пробелы и переносы)
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      onSendMessage();
+      if (!isGenerating && message.trim()) {
+        e.preventDefault();
+        onSendMessage();
+      } else if (!isGenerating) {
+        // Если генерации нет, но сообщение пустое — просто запрещаем перенос строки
+        e.preventDefault(); 
+      }
     }
   }
 
