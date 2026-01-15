@@ -249,20 +249,24 @@
   async function handleRegenerateMessage() {
     if (!currentChat || currentChat.isGenerating) return;
     
-    const lastIndex = currentChat.history.length - 1;
-    if (lastIndex >= 0 && currentChat.history[lastIndex].role === 'assistant') {
-      currentChat.history.splice(lastIndex, 1);
+    let history = currentChat.history;
+    if (history.length === 0) return;
+
+    // 1. Идем с конца и удаляем все сообщения до последнего сообщения пользователя
+    let lastIndex = history.length - 1;
+    while (lastIndex >= 0 && history[lastIndex].role !== 'user') {
+      history.pop();
+      lastIndex--;
     }
-    
-    const userIndex = currentChat.history.length - 1;
-    let userMessage = '';
-    if (userIndex >= 0 && currentChat.history[userIndex].role === 'user') {
-      userMessage = currentChat.history[userIndex].text;
-      currentChat.history.splice(userIndex, 1);
+
+    // 2. Теперь последнее сообщение — это 'user'. 
+    // Забираем его текст, удаляем само сообщение и отправляем заново.
+    if (lastIndex >= 0 && history[lastIndex].role === 'user') {
+      message = history[lastIndex].text;
+      history.pop();
     }
     
     workspaces = [...workspaces];
-    message = userMessage;
     await sendMessage();
   }
 
