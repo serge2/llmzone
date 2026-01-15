@@ -23,7 +23,7 @@ export class MCPDispatcher {
         if (!tool.enabled) continue;
 
         // Генерация "красивого" имени для LLM
-        let displayName = `${server.name}_${tool.name}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+        let displayName = `${server.name}___${tool.name}`.replace(/[^a-zA-Z0-9_-]/g, '_');
         
         // Шаг 4: Разрешение коллизий
         let counter = 1;
