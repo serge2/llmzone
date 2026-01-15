@@ -174,10 +174,53 @@ export class ChatService {
           function: { name: tc.name, arguments: JSON.stringify(tc.arguments) }
         }));
       }
+      // if (msg.role === 'tool' && msg.tool_result) {
+      //   openAIMsg.tool_call_id = msg.tool_result.tool_call_id;
+      //   openAIMsg.content = msg.tool_result.content;
+      // }
+
+      // ЛОГИКА ДЛЯ ИНСТРУМЕНТА И КАРТИНКИ
       if (msg.role === 'tool' && msg.tool_result) {
         openAIMsg.tool_call_id = msg.tool_result.tool_call_id;
+        
+        try {
+          // 1. Парсим строку из content, которая содержит { "content": [...] }
+          const outerData = JSON.parse(msg.tool_result.content);
+          
+          // 2. Ищем объект с типом 'image' внутри массива content
+          const imageItem = Array.isArray(outerData.content) 
+            ? outerData.content.find((item: any) => item.type === 'image')
+            : null;
+
+          if (imageItem && imageItem.data) {
+            // Отправляем текстовое подтверждение в роль tool
+            openAIMsg.content = "Изображение получено.";
+            apiMessages.push(openAIMsg);
+
+            // 3. Формируем Data URI, используя mimeType из ответа инструмента
+            const mimeType = imageItem.mimeType || 'image/png';
+            const imageUri = `data:${mimeType};base64,${imageItem.data}`;
+
+            // 4. Добавляем сообщение от пользователя с картинкой для ЛЛМ
+            apiMessages.push({
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Вот изображение, которое вернул инструмент:' },
+                { 
+                  type: 'image_url', 
+                  image_url: { url: imageUri } 
+                }
+              ]
+            });
+            continue; 
+          }
+        } catch (e) {
+          // Если это не JSON или структура не совпала — идем по обычному пути
+        }
+
         openAIMsg.content = msg.tool_result.content;
       }
+
       apiMessages.push(openAIMsg);
     }
 
@@ -209,7 +252,7 @@ export class ChatService {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream',
-        'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`
+        'Authorization': `Bearer ${settings.apiKey || 'noauth'}`
       },
       body: JSON.stringify(requestBody)
     });
