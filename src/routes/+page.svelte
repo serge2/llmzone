@@ -268,7 +268,29 @@
 
   function handleDeleteMessage(index: number) {
     if (!currentChat) return;
-    currentChat.history = currentChat.history.filter((_, i) => i !== index);
+
+    const history = currentChat.history;
+    const messageToDelete = history[index];
+    
+    // Определяем количество сообщений для удаления
+    let deleteCount = 1;
+
+    // Если удаляем сообщение ассистента, нужно проверить, нет ли за ним ответов инструментов
+    if (messageToDelete.role === 'assistant') {
+      for (let i = index + 1; i < history.length; i++) {
+        if (history[i].role === 'tool') {
+          deleteCount++;
+        } else {
+          // Как только встретили не 'tool', цепочка инструментов закончилась
+          break;
+        }
+      }
+    }
+
+    // Удаляем пачку сообщений
+    history.splice(index, deleteCount);
+    
+    // Обновляем состояние воркспейсов для срабатывания реактивности
     workspaces = [...workspaces];
     persistChats();
   }
