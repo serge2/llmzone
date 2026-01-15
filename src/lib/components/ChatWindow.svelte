@@ -177,7 +177,7 @@
   .messages-container { 
     flex: 1; 
     overflow-y: auto; 
-    padding: 0 10%; /* Отступы для центрирования контента как в ChatGPT */
+    padding: 0 5%; /* Отступы для центрирования контента как в ChatGPT */
   }
 
   .messages-list {

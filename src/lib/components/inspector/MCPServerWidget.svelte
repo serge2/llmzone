@@ -195,11 +195,11 @@
   .toggle-track { position: absolute; left: 2px; top: 2px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: transform 0.2s; }
   .policy-toggle.is-active { background: #6366f1; }
   .policy-toggle.is-active .toggle-track { transform: translateX(14px); }
-  .tools-list { display: flex; flex-direction: column; gap: 6px; }
-  .tool-item { display: flex; align-items: center; justify-content: space-between; background: white; padding: 6px 10px; border-radius: 6px; border: 1px solid #f1f5f9; }
+  .tools-list { display: flex; flex-direction: column; gap: 2px; }
+  .tool-item { display: flex; align-items: center; justify-content: space-between; background: white; padding: 0px 0px; border-radius: 4px; border: 1px solid #f1f5f9; }
   .tool-control-group { display: flex; align-items: center; gap: 8px; flex: 1; }
   .tool-checkbox { cursor: pointer; width: 14px; height: 14px; margin: 0; }
-  .tool-name { font-size: 0.85rem; color: #374151; font-family: monospace; cursor: pointer; user-select: none; }
+  .tool-name { font-size: 0.75rem; color: #374151; font-family: monospace; cursor: pointer; user-select: none; }
   .tool-actions { display: flex; align-items: center; gap: 8px; }
   .auth-badge { font-size: 0.65rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; border: 1px solid #e2e8f0; cursor: pointer; transition: all 0.2s; background: #f8fafc; color: #64748b; white-space: nowrap; }
   .auth-badge.is-trusted { background: #ecfdf5; color: #059669; border-color: #a7f3d0; }

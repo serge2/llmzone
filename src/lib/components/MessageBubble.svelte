@@ -364,7 +364,7 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
   .message-wrapper.user { justify-content: flex-end; }
-  .message-content { display: flex; flex-direction: column; gap: 6px; max-width: 80%; }
+  .message-content { display: flex; flex-direction: column; gap: 6px; max-width: 90%; }
   
   .message { padding: 14px 18px; border-radius: 16px; line-height: 1.55; font-size: 0.95rem; }
 
