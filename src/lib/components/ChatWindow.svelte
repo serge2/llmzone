@@ -27,6 +27,36 @@
     onRegenerateMessage: () => void;
   }>();
 
+  // НОВОЕ: Группировка сообщений для отображения в виде единых блоков
+  let displayGroups = $derived.by(() => {
+    const groups: { main: Message; chain: Message[]; startIndex: number }[] = [];
+    
+    for (let i = 0; i < history.length; i++) {
+      const msg = history[i];
+      
+      if (msg.role === 'user') {
+        // Сообщение пользователя всегда начинает новую группу
+        groups.push({ main: msg, chain: [], startIndex: i });
+      } else if (msg.role === 'assistant') {
+        const lastGroup = groups[groups.length - 1];
+        // Если предыдущая группа уже была от ассистента, значит это продолжение (после инструментов)
+        if (lastGroup && lastGroup.main.role === 'assistant') {
+          lastGroup.chain.push(msg);
+        } else {
+          // Иначе это первый ответ ассистента в этой итерации
+          groups.push({ main: msg, chain: [], startIndex: i });
+        }
+      } else if (msg.role === 'tool') {
+        // Инструменты всегда прикрепляем к последней группе ассистента
+        const lastGroup = groups[groups.length - 1];
+        if (lastGroup) {
+          lastGroup.chain.push(msg);
+        }
+      }
+    }
+    return groups;
+  });
+
   let chatContainer: HTMLElement;
   let inputElement: HTMLTextAreaElement; // Ссылка на textarea для управления фокусом
   let shouldAutoScroll = true;
@@ -140,22 +170,21 @@
     onscroll={handleScroll}
   >
     <div class="messages-list">
-      {#each history as msg, index (index)}
-        {#if msg.role !== 'tool'} 
-          <MessageBubble 
-            text={msg.text} 
-            role={msg.role}
-            tool_calls={msg.tool_calls} 
-            isLastMessage={index === history.length - 1}
-            isTyping={isGenerating && index === history.length - 1}
-            fullHistory={history} 
-            onEdit={(newText) => onEditMessage(index, newText)}
-            onCopy={() => onCopyMessage(msg.text)}
-            onDelete={() => onDeleteMessage(index)}
-            onRegenerate={() => onRegenerateMessage()}
-          />
-        {/if}
-      {/each}
+      {#each displayGroups as group (group.startIndex)}
+        <MessageBubble 
+          text={group.main.text} 
+          role={group.main.role}
+          tool_calls={group.main.tool_calls} 
+          chain={group.chain}
+          isLastMessage={(group.startIndex + group.chain.length) >= history.length - 1}
+          isTyping={isGenerating && (group.startIndex + group.chain.length) >= history.length - 1}
+          fullHistory={history} 
+          onEdit={(newText) => onEditMessage(group.startIndex, newText)}
+          onCopy={() => onCopyMessage(group.main.text)}
+          onDelete={() => onDeleteMessage(group.startIndex)}
+          onRegenerate={() => onRegenerateMessage()}
+        />
+      {/each} 
     </div>
   </div>
 

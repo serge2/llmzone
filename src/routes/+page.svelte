@@ -249,55 +249,61 @@
   async function handleRegenerateMessage() {
     if (!currentChat || currentChat.isGenerating) return;
     
-    let history = currentChat.history;
+    const history = currentChat.history;
     if (history.length === 0) return;
 
-    // 1. Идем с конца и удаляем все сообщения до последнего сообщения пользователя
-    let lastIndex = history.length - 1;
-    while (lastIndex >= 0 && history[lastIndex].role !== 'user') {
-      history.pop();
-      lastIndex--;
+    let userMsgIndex = -1;
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === 'user') {
+        userMsgIndex = i;
+        break;
+      }
     }
 
-    // 2. Теперь последнее сообщение — это 'user'. 
-    // Забираем его текст, удаляем само сообщение и отправляем заново.
-    if (lastIndex >= 0 && history[lastIndex].role === 'user') {
-      message = history[lastIndex].text;
-      history.pop();
+    if (userMsgIndex !== -1) {
+      // Сохраняем текст последнего вопроса
+      const lastUserText = history[userMsgIndex].text;
+      
+      // Удаляем всё, начиная с этого вопроса и до конца
+      history.splice(userMsgIndex); 
+      
+      // Помещаем текст обратно в поле ввода и вызываем отправку
+      message = lastUserText;
+      workspaces = [...workspaces];
+      await sendMessage();
     }
-    
-    workspaces = [...workspaces];
-    await sendMessage();
   }
 
   function handleDeleteMessage(index: number) {
     if (!currentChat) return;
 
+    // Ссылка на историю текущего чата
     const history = currentChat.history;
     const messageToDelete = history[index];
     
-    // Определяем количество сообщений для удаления
+    if (!messageToDelete) return;
+
     let deleteCount = 1;
 
-    // Если удаляем сообщение ассистента, нужно проверить, нет ли за ним ответов инструментов
+    // Если удаляем ассистента — ищем все связанные инструменты
     if (messageToDelete.role === 'assistant') {
       for (let i = index + 1; i < history.length; i++) {
-        if (history[i].role === 'tool') {
+        if (history[i].role === 'tool' || history[i].role === 'assistant') {
           deleteCount++;
         } else {
-          // Как только встретили не 'tool', цепочка инструментов закончилась
           break;
         }
       }
     }
 
-    // Удаляем пачку сообщений
+    // Удаляем из массива
     history.splice(index, deleteCount);
     
-    // Обновляем состояние воркспейсов для срабатывания реактивности
+    // Триггерим реактивность Svelte 5
     workspaces = [...workspaces];
     persistChats();
   }
+
 
   function handleCopyMessage(text: string) {
     navigator.clipboard.writeText(text);

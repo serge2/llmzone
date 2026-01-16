@@ -34,7 +34,8 @@
     isLastMessage = false,
     isTyping = false,
     tool_calls,
-    fullHistory = [], // Добавили доступ ко всей истории для поиска ответов инструментов
+    fullHistory = [], // Оставили для совместимости, но теперь приоритет у chain
+    chain = [], // НОВОЕ: Список связанных сообщений (tool и assistant)
     onEdit,
     onCopy,
     onDelete,
@@ -47,6 +48,7 @@
     isTyping?: boolean,
     tool_calls?: ToolCall[];
     fullHistory?: Message[];
+    chain?: Message[]; // Добавлено для группировки
     onEdit?: (newText: string) => void,
     onCopy?: () => void,
     onDelete?: () => void,
@@ -90,8 +92,20 @@
     }
   });
 
-  // Функция для поиска результата конкретного вызова в истории
+  // Вспомогательная функция для парсинга Markdown в цепочке
+  function parseMarkdown(content: string) {
+    try {
+      return marked.parse(content);
+    } catch (e) {
+      return content;
+    }
+  }
+
+  // Функция для поиска результата конкретного вызова
   function getToolResult(callId: string) {
+    // Сначала ищем в переданной цепочке, потом в fullHistory
+    const inChain = chain.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === callId);
+    if (inChain) return inChain;
     return fullHistory.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === callId);
   }
 
@@ -100,7 +114,7 @@
   // Обновленный эффект для подсветки синтаксиса (включая JSON внутри виджетов)
   $effect(() => {
     // Триггерим эффект при изменении контента или появлении результатов инструментов
-    if ((htmlContent || tool_calls || fullHistory) && proseEl) {
+    if ((htmlContent || tool_calls || fullHistory || chain.length > 0) && proseEl) {
       tick().then(() => {
         if (!proseEl) return;
         
@@ -161,7 +175,13 @@
 
   async function handleCopyClick() {
     try {
-      await navigator.clipboard.writeText(text);
+      // Собираем текст из основного сообщения и всех текстовых ответов в цепочке
+      let fullText = text;
+      chain.forEach(m => {
+        if (m.text) fullText += "\n\n" + m.text;
+      });
+
+      await navigator.clipboard.writeText(fullText);
       copied = true;
       // Вызываем внешний onCopy, если он нужен (например, для логов)
       if (onCopy) onCopy(); 
@@ -244,7 +264,7 @@
           ></textarea>
         {:else if text}
           {@html htmlContent}
-        {:else if role === 'assistant' && (!tool_calls || tool_calls.length === 0)}
+        {:else if role === 'assistant' && (!tool_calls || tool_calls.length === 0) && chain.length === 0}
           <span class="thinking-text">ИИ думает...</span>
         {/if}
       </div>
@@ -286,6 +306,39 @@
             </div>
           {/each}
         </div>
+      {/if}
+
+      {#if chain.length > 0}
+        {#each chain as msg}
+          {#if msg.role === 'assistant' && msg.text}
+            <div class="prose" style="margin-top: 12px; border-top: 1px solid #f1f5f9; padding-top: 12px;">
+              {@html parseMarkdown(msg.text)}
+            </div>
+          {/if}
+
+          {#if msg.tool_calls && msg.tool_calls.length > 0}
+            <div class="tool-calls-container">
+              {#each msg.tool_calls as call}
+                {@const result = chain.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === call.id)}
+                <div class="tool-widget">
+                  <details class="main-details">
+                    <summary class="tool-summary">
+                      <span class="icon">🛠</span>
+                      <span class="name">Инструмент: <strong>{call.name}</strong></span>
+                      <span class="status-icon">{@html chevronDownIconRaw}</span>
+                    </summary>
+                    <div class="tool-details-content">
+                      <pre class="language-json"><code>{JSON.stringify(call.arguments, null, 2)}</code></pre>
+                      {#if result}
+                        <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
+                      {/if}
+                    </div>
+                  </details>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        {/each}
       {/if}
 
       {#if error}
@@ -337,7 +390,7 @@
           class="action-btn" 
           class:success={copied} 
           onclick={handleCopyClick}
-          title="Копировать сообщение"
+          title="Копировать всё сообщение"
         >
           {#if copied}
             {@html checkIconRaw}
@@ -357,11 +410,12 @@
       {/if}
     </div>
 
-    {#if isTyping && text}
-      <div class="status-note">ИИ печатает...</div>
+    {#if isTyping && (text || chain.length > 0)}
+      <div class="status-note">ИИ работает...</div>
     {/if}
   </div>
 </div>
+
 
 <style>
   .message-wrapper { display: flex; width: 100%; margin-bottom: 16px; animation: fadeIn 0.3s ease; }
