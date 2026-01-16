@@ -273,9 +273,10 @@
         <div class="tool-calls-container">
           {#each tool_calls as call}
             {@const result = getToolResult(call.id)}
+            {@const isError = result?.tool_result?.isError}
             <div class="tool-widget">
               <details class="main-details">
-                <summary class="tool-summary">
+                <summary class="tool-summary" class:success={!!result && !isError} class:error={isError}>
                   <span class="icon">🛠</span>
                   <span class="name">Инструмент: <strong>{call.name}</strong></span>
                   <span class="status-icon">{@html chevronDownIconRaw}</span>
@@ -311,7 +312,7 @@
       {#if chain.length > 0}
         {#each chain as msg}
           {#if msg.role === 'assistant' && msg.text}
-            <div class="prose" style="margin-top: 12px; border-top: 1px solid #f1f5f9; padding-top: 12px;">
+            <div class="prose chain-item-text">
               {@html parseMarkdown(msg.text)}
             </div>
           {/if}
@@ -320,9 +321,10 @@
             <div class="tool-calls-container">
               {#each msg.tool_calls as call}
                 {@const result = chain.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === call.id)}
+                {@const isError = result?.tool_result?.isError}
                 <div class="tool-widget">
                   <details class="main-details">
-                    <summary class="tool-summary">
+                    <summary class="tool-summary" class:success={!!result && !isError} class:error={isError}>
                       <span class="icon">🛠</span>
                       <span class="name">Инструмент: <strong>{call.name}</strong></span>
                       <span class="status-icon">{@html chevronDownIconRaw}</span>
@@ -717,6 +719,20 @@
     font-size: 0.85rem;
     color: #475569;
     user-select: none;
+    transition: background-color 0.2s, color 0.2s;
+  }
+
+  /* Состояния успеха и ошибки для шапки виджета */
+  .tool-summary.success {
+    background-color: #f0fdf4;
+    color: #166534;
+    border-bottom: 1px solid #dcfce7;
+  }
+
+  .tool-summary.error {
+    background-color: #fef2f2;
+    color: #991b1b;
+    border-bottom: 1px solid #fee2e2;
   }
   
   .tool-summary::-webkit-details-marker { display: none; }
@@ -726,7 +742,8 @@
     width: 14px;
     height: 14px;
     transition: transform 0.2s;
-    color: #94a3b8;
+    color: currentColor;
+    opacity: 0.5;
     display: flex;
     align-items: center;
   }
@@ -742,6 +759,13 @@
     gap: 6px;
     border-top: 1px solid #f1f5f9;
     background: #ffffff; /* Белый фон внутри контента */
+  }
+
+  /* Стили для текстовых ответов в цепочке (замена инлайновых стилей) */
+  .chain-item-text {
+    margin-top: 12px;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 12px;
   }
 
   .sub-details {
