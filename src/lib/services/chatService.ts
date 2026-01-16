@@ -1,12 +1,10 @@
 // src/lib/services/chatService.ts
 import { fetch } from '@tauri-apps/plugin-http'; // ВАЖНО: Используем нативный fetch Tauri для обхода CORS
-import { MCPDispatcher } from '$lib/mcp/dispatcher';
 import { toastService } from '$lib/services/toastService.svelte';
 import type { Message, Chat, WorkspaceSettings } from '$lib/types';
 import type { MCPServerInstance } from '$lib/mcp/manager.svelte';
 
 export class ChatService {
-  private dispatcher = new MCPDispatcher();
   private MAX_ITERATIONS = 10; // Защита от бесконечных циклов
 
   /**
@@ -26,7 +24,40 @@ export class ChatService {
     let currentAssistantMsgIdx: number | null = null;
 
     try {
-      const mcpTools = this.dispatcher.generateToolList(serverInstances);
+      // КАРТА ДЛЯ ОБРАТНОГО ПОИСКА: "уникальное_имя" => { инстанс_сервера, оригинальное_имя_функции }
+      const toolLookupMap = new Map<string, { server: MCPServerInstance; originalName: string }>();
+      
+      // Формируем список инструментов для API с дедупликацией имен
+      const mcpTools = serverInstances
+        .filter(s => s.enabled)
+        .flatMap(server => {
+          return server.tools
+            .filter(t => t.enabled)
+            .map(tool => {
+              let baseName = `${server.name}___${tool.name}`;
+              let uniqueName = baseName;
+              let counter = 1;
+
+              // ЛОГИКА ДЕДУПЛИКАЦИИ: проверяем наличие ключа и добавляем цифровой суффикс
+              while (toolLookupMap.has(uniqueName)) {
+                uniqueName = `${baseName}${counter}`;
+                counter++;
+              }
+
+              // Сохраняем связь в мапу для последующего вызова
+              toolLookupMap.set(uniqueName, { 
+                server: server, 
+                originalName: tool.name 
+              });
+
+              return {
+                name: uniqueName,
+                description: tool.description,
+                input_schema: tool.inputSchema
+              };
+            });
+        });
+
       let iteration = 0;
       let isLooping = true;
 
@@ -75,7 +106,16 @@ export class ChatService {
           if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
             for (const call of assistantMsg.tool_calls) {
               try {
-                const result = await this.dispatcher.callTool(call.name, call.arguments);
+                // ПОИСК ОРИГИНАЛЬНОГО ИНСТРУМЕНТА ПО УНИКАЛЬНОМУ ИМЕНИ
+                const toolBinding = toolLookupMap.get(call.name);
+
+                if (!toolBinding) {
+                  throw new Error(`Инструмент "${call.name}" не найден в карте вызовов`);
+                }
+
+                // Вызов через оригинальный сервер и оригинальное имя функции
+                const result = await toolBinding.server.callTool(toolBinding.originalName, call.arguments);
+                
                 // Снова используем push вместо пересоздания всего массива
                 chat.history.push({
                   role: 'tool',

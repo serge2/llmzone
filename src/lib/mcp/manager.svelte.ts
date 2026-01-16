@@ -138,9 +138,10 @@ export class MCPServerInstance {
     if (initialState) {
       this.autoApproveAll = initialState.autoApproveAll ?? true;
       this.isExpanded = initialState.isExpanded ?? false;
-      if (initialState.enabled) {
-        this.connect();
-      }
+      this.enabled = initialState.enabled ?? false;
+      // Мы не вызываем connect() прямо в конструкторе, 
+      // чтобы избежать гонок при инициализации приложения.
+      // Вызов connect() теперь делает +page.svelte после сборки списка.
     }
   }
 
@@ -200,6 +201,8 @@ export class MCPServerInstance {
   }
 
   async connect() {
+    if (this.isLoading) return; // Предотвращаем двойной коннект
+    
     this.isLoading = true;
     this.error = null;
     try {
@@ -214,19 +217,19 @@ export class MCPServerInstance {
       
       const response = await this.client.listTools();
       
+      // Мапим инструменты, сохраняя пользовательские настройки из _initialState если они есть
       this.tools = response.tools.map(t => {
         const savedTool = this._initialState?.tools?.[t.name];
         return {
           name: t.name,
           description: t.description,
-          inputSchema: t.inputSchema, // Сохраняем схему параметров от сервера
-          // Используем $state для каждого инструмента для глубокой реактивности
+          inputSchema: t.inputSchema, 
           enabled: savedTool ? savedTool.enabled : true,
           alwaysAllow: savedTool ? savedTool.alwaysAllow : true
         };
       });
       
-      this.enabled = true;
+      this.enabled = true; // Устанавливаем статус ДО уведомления
       this.notify(); 
     } catch (e: any) {
       console.error(`[MCP Connect Error] ${this.name}:`, e);
@@ -239,6 +242,13 @@ export class MCPServerInstance {
   }
 
   async disconnect() {
+    if (this.client) {
+      try {
+        await this.client.close();
+      } catch (e) {
+        console.warn(`[MCP Disconnect Warning] ${this.name}:`, e);
+      }
+    }
     this.enabled = false;
     this.tools = [];
     this.client = null;
@@ -246,8 +256,12 @@ export class MCPServerInstance {
   }
 
   toggle() {
-    if (this.enabled) this.disconnect();
-    else this.connect();
-    this.notify();
+    // Важно: меняем состояние enabled здесь и запускаем процесс,
+    // либо полагаемся на connect/disconnect, которые сами вызовут notify
+    if (this.enabled) {
+      this.disconnect();
+    } else {
+      this.connect();
+    }
   }
 }

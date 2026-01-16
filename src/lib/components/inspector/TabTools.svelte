@@ -30,92 +30,17 @@
   let lastWorkspaceId = $state(currentWorkspace.id);
 
   // --- ЛОГИКА ВИДЖЕТОВ ---
-  // (serverInstances теперь берется из $props и синхронизируется автоматически)
+  // (serverInstances теперь управляется в +page.svelte. Здесь мы только отображаем и триггерим обновление)
 
-  // Функция для сохранения состояний всех серверов в Workspace
-  function syncAllStates() {
-    const states: Record<string, any> = {};
-    for (const instance of serverInstances) {
-      states[instance.name] = instance.serialize();
-    }
-    currentWorkspace.settings.mcpStates = states;
-    onSettingsChange();
-  }
-
-  // Функция обновления списка серверов на основе JSON
-  function refreshServerInstances(forceReset = false) {
-    try {
-      if (forceReset) {
-        serverInstances = [];
-      }
-
-      const rawConfig = currentWorkspace.settings.mcpConfig || '{}';
-      const config = JSON.parse(rawConfig);
-      const servers = config.mcpServers || {};
-      const serverNames = Object.keys(servers);
-
-      // Если серверов нет, просто очищаем список и выходим
-      if (serverNames.length === 0) {
-        serverInstances = [];
-        return;
-      }
-
-      const nextInstances: MCPServerInstance[] = [];
-
-      for (const [name, info] of Object.entries(servers)) {
-        const serverData = info as any;
-        if (!serverData.url) continue;
-
-        let existing = !forceReset 
-          ? untrack(() => serverInstances.find(s => s.name === name && s.url === serverData.url))
-          : null;
-        
-        if (existing) {
-          existing.headers = serverData.headers || {};
-          nextInstances.push(existing);
-        } else {
-          const savedState = currentWorkspace.settings.mcpStates?.[name];
-          nextInstances.push(new MCPServerInstance(
-            name, 
-            serverData.url, 
-            serverData.headers || {}, 
-            savedState, 
-            syncAllStates
-          ));
-        }
-      }
-      serverInstances = nextInstances;
-    } catch (e) {
-      console.error("MCP Refresh Error:", e);
-      serverInstances = [];
-    }
-  }
-
-  // Следим за сменой воркспейса или изменением конфига
+  // Следим за сменой воркспейса для обновления буфера текста
   $effect(() => {
     const currentId = currentWorkspace.id;
     const currentConfig = currentWorkspace.settings.mcpConfig || '';
 
-    // 1. Если воркспейс СМЕНИЛСЯ
     if (currentId !== lastWorkspaceId) {
       untrack(() => {
         lastWorkspaceId = currentId;
         configBuffer = currentConfig;
-        refreshServerInstances(true);
-      });
-      return;
-    }
-
-    // 2. Логика для отрисовки при пустом массиве или внешнем изменении
-    // Добавляем проверку, что в конфиге действительно что-то есть (не просто пустые скобки)
-    const hasConfigData = currentConfig.includes('mcpServers');
-    const isEmpty = serverInstances.length === 0;
-    const configChangedExternally = currentConfig !== configBuffer && !isExpanded;
-
-    if ((isEmpty && hasConfigData) || configChangedExternally) {
-      untrack(() => {
-        configBuffer = currentConfig;
-        refreshServerInstances(false);
       });
     }
   });
@@ -135,10 +60,12 @@
   const canSave = $derived(isDirty && !jsonError);
 
   function validateAndSave() {
+    // 1. Обновляем данные в объекте воркспейса
     currentWorkspace.settings.mcpConfig = configBuffer;
     isSaved = true;
     
-    refreshServerInstances(false);
+    // 2. Вызываем корневой обработчик. 
+    // В +page.svelte функция onSettingsChange теперь должна вызывать syncMCPServers()
     onSettingsChange();
     
     setTimeout(() => { 
@@ -169,6 +96,10 @@
       {#each serverInstances as server (server.name + server.url)}
         <MCPServerWidget {server} />
       {/each}
+    </div>
+  {:else}
+    <div class="empty-placeholder">
+       Нет активных MCP серверов. Добавьте их в конфигурацию.
     </div>
   {/if}
 
@@ -243,7 +174,7 @@
 </div>
 
 <style>
-  /* Стили без изменений для сохранения scannability и оформления */
+  /* Стили сохранены без изменений */
   .tab-tools { display: flex; flex-direction: column; gap: 12px; }
   .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
   .label-text { font-size: 0.75rem; font-weight: 700; color: #4b5563; text-transform: uppercase; }
@@ -252,6 +183,16 @@
   .config-btn:hover { background: #f3f4f6; border-color: #d1d5db; color: #111827; }
   .config-btn :global(svg) { width: 12px; height: 12px; }
   .servers-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  
+  .empty-placeholder {
+    padding: 20px;
+    text-align: center;
+    border: 1px dashed #e5e7eb;
+    border-radius: 8px;
+    color: #9ca3af;
+    font-size: 0.85rem;
+  }
+
   .overlay-backdrop { position: absolute; top: 0; left: 0; right: 100%; width: 200vw; height: 100%; background: rgba(15, 23, 42, 0.15); backdrop-filter: blur(2px); z-index: 800; }
   .expanded-editor-panel { position: absolute; top: 0; right: 100%; width: calc(100vw - 380px - 40px); height: 100%; background: #ffffff; z-index: 850; display: flex; flex-direction: column; box-shadow: -15px 0 30px rgba(0, 0, 0, 0.05); border-left: 1px solid #e5e7eb; }
   .panel-header { padding: 20px 32px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; }

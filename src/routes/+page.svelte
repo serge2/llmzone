@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fetch } from '@tauri-apps/plugin-http';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { loadConfig, saveConfig } from '$lib/config';
   import type { Workspace, Chat, Message, AppSettings, GlobalConfig } from '$lib/types';
   import { loadChats, saveChats } from '$lib/storage/chatStorage';
@@ -13,7 +13,7 @@
 
   // --- Импорт новых сервисов для MCP ---
   import { ChatService } from '$lib/services/chatService';
-  import type { MCPServerInstance } from '$lib/mcp/manager.svelte';
+  import { MCPServerInstance } from '$lib/mcp/manager.svelte'; // Убрал type так как создаем инстансы
 
   // --- Импорты для Tauri 2 ---
   import { openUrl } from '@tauri-apps/plugin-opener';
@@ -44,7 +44,7 @@
 
   // Инстанс сервиса чата
   const chatService = new ChatService();
-  // Список активных MCP серверов (синхронизируется через Inspector)
+  // Список активных MCP серверов (теперь инициализируется здесь)
   let mcpServers = $state<MCPServerInstance[]>([]);
 
   // --- Состояние кастомного контекстного меню ---
@@ -59,6 +59,74 @@
   const currentWorkspace = $derived(workspaces.find(w => w.id === selectedWorkspaceId));
   const currentChat = $derived(currentWorkspace?.chats.find(c => c.id === selectedChatId));
   const collapsedWorkspaces = $state<Record<string, boolean>>({});
+
+  // --- ЛОГИКА ИНИЦИАЛИЗАЦИИ MCP СЕРВЕРОВ ---
+  function syncMCPServers() {
+    if (!currentWorkspace) return;
+
+    try {
+      const rawConfig = currentWorkspace.settings.mcpConfig || '{}';
+      const config = JSON.parse(rawConfig);
+      const serversDict = config.mcpServers || {};
+
+      // 1. Отключаем и удаляем те, которых больше нет в конфиге
+      mcpServers = mcpServers.filter(instance => {
+        if (!serversDict[instance.name]) {
+          instance.disconnect();
+          return false;
+        }
+        return true;
+      });
+
+      // 2. Добавляем новые или обновляем существующие
+      for (const [name, info] of Object.entries(serversDict)) {
+        const serverData = info as any;
+        if (!serverData.url) continue;
+
+        let existing = mcpServers.find(s => s.name === name);
+        if (existing) {
+          // Обновляем параметры если изменились, не прерывая коннект без нужды
+          existing.headers = serverData.headers || {};
+          if (existing.url !== serverData.url) {
+            existing.url = serverData.url;
+            if (existing.enabled) existing.connect(); 
+          }
+        } else {
+          // Создаем новый инстанс
+          const savedState = currentWorkspace.settings.mcpStates?.[name];
+          const newInstance = new MCPServerInstance(
+            name,
+            serverData.url,
+            serverData.headers || {},
+            savedState,
+            () => { persistConfig(); } // Коллбэк на изменение состояния (enabled, tools и т.д.)
+          );
+          
+          // ВАЖНО: Если в сохраненном состоянии сервер был включен — коннектимся сразу при старте
+          if (savedState?.enabled) {
+            newInstance.connect();
+          }
+          
+          mcpServers.push(newInstance);
+        }
+      }
+    } catch (e) {
+      console.error("MCP Sync Error:", e);
+    }
+  }
+
+  // Следим за сменой воркспейса для мгновенной переинициализации серверов
+  $effect(() => {
+    const wsId = selectedWorkspaceId;
+    if (wsId) {
+      untrack(() => {
+        // При смене воркспейса полностью пересобираем список серверов
+        mcpServers.forEach(s => s.disconnect());
+        mcpServers = [];
+        syncMCPServers();
+      });
+    }
+  });
 
   // --- Логика перехвата внешних ссылок и контекстного меню ---
   $effect(() => {
@@ -144,6 +212,10 @@
       if (activeWs && activeWs.chats.length > 0) {
         selectedChatId = activeWs.chats[0].id;
       }
+
+      // --- Инициализируем MCP серверы сразу после загрузки воркспейсов ---
+      syncMCPServers();
+
     } else {
       // 4. Инициализация дефолтного воркспейса
       const defaultWs: Workspace = {
@@ -167,11 +239,22 @@
 
       await persistConfig();
       await persistChats();
+      
+      syncMCPServers();
     }
   });
 
   // --- Работа с хранилищем (Раздельная) ---
- async function persistConfig() {
+  async function persistConfig() {
+    if (currentWorkspace) {
+      // СИНХРОНИЗАЦИЯ: Перед сохранением обновляем mcpStates данными из живых инстансов
+      const states: Record<string, any> = {};
+      mcpServers.forEach(server => {
+        states[server.name] = server.serialize(); // Предполагается, что serialize() возвращает объект с enabled и tools
+      });
+      currentWorkspace.settings.mcpStates = states;
+    }
+
     // Делаем глубокий "снимок" состояния, чтобы избавиться от прокси
     const rawWorkspaces = $state.snapshot(workspaces);
     
@@ -426,7 +509,7 @@
       await chatService.send(
         chatToUpdate,
         effectiveSettings,
-        mcpServers, // Передаем активные инстансы серверов
+        mcpServers, // Передаем активные инстансы серверов, инициализированных при старте
         () => {
           // Коллбэк для реактивного обновления UI при каждом шаге (tool_call, ответ и т.д.)
           workspaces = [...workspaces];
@@ -531,7 +614,11 @@
       bind:currentWorkspace={workspaces[workspaces.findIndex(w => w.id === selectedWorkspaceId)]} 
       {globalConfig} 
       bind:serverInstances={mcpServers}
-      onSettingsChange={persistConfig} 
+      onSettingsChange={() => {
+        // При изменении настроек в инспекторе (например, JSON конфига) синхронизируем серверы
+        syncMCPServers();
+        persistConfig();
+      }} 
     />
   </div>
 
@@ -558,7 +645,7 @@
 </main>
 
 <style>
-  /* Глобальный сброс для предотвращения внешнего скролла */
+  /* Стили оставлены без изменений */
   :global(body), :global(html) {
     margin: 0;
     padding: 0;
@@ -573,7 +660,7 @@
     width: 100vw;
     background-color: #ffffff;
     color: #1a1a1b;
-    overflow: hidden; /* Критично для фиксации */
+    overflow: hidden;
     position: fixed;
     top: 0;
     left: 0;
@@ -593,7 +680,7 @@
     display: flex;
     flex: 1;
     overflow: hidden; 
-    min-height: 0; /* Разрешает flex-контейнеру сжиматься */
+    min-height: 0;
   }
 
   .center-content {
@@ -605,7 +692,6 @@
     min-width: 0;
   }
 
-  /* Стили контекстного меню */
   .custom-menu {
     position: fixed;
     z-index: 10000;
@@ -636,7 +722,6 @@
     color: #111827;
   }
 
-  /* Скроллбары */
   ::-webkit-scrollbar {
     width: 6px;
   }
