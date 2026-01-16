@@ -22,6 +22,9 @@ export class ChatService {
     if (chat.isGenerating) return;
     chat.isGenerating = true;
 
+    // Храним индекс сообщения текущей итерации, чтобы точно знать, что удалять при ошибке
+    let currentAssistantMsgIdx: number | null = null;
+
     try {
       const mcpTools = this.dispatcher.generateToolList(serverInstances);
       let iteration = 0;
@@ -31,7 +34,7 @@ export class ChatService {
         iteration++;
 
         // 1. Создаем заглушку ассистента с реактивным обновлением
-        const assistantIdx = chat.history.length;
+        currentAssistantMsgIdx = chat.history.length;
         chat.history = [...chat.history, {
           role: 'assistant',
           text: '', 
@@ -46,50 +49,62 @@ export class ChatService {
           mcpTools,
           (updatedText) => {
             // ВАЖНО: Обновляем массив целиком для триггера реактивности Svelte 5
-            chat.history[assistantIdx].text = updatedText;
-            chat.history = [...chat.history]; 
-            onUpdate();
+            if (currentAssistantMsgIdx !== null) {
+              chat.history[currentAssistantMsgIdx].text = updatedText;
+              chat.history = [...chat.history]; 
+              onUpdate();
+            }
           },
           abortSignal
         );
+
+        // ПРОВЕРКА: Если ответ пустой (модель ничего не вернула и не было исключения)
+        // Это заставит код прыгнуть в catch и почистить интерфейс
+        if (!responseData || (!responseData.content && (!responseData.tool_calls || responseData.tool_calls.length === 0))) {
+          throw new Error("Модель вернула пустой ответ или не поддерживает данный формат сообщений");
+        }
         
         // Финализируем данные после окончания стрима
-        chat.history[assistantIdx].text = responseData.content;
-        chat.history[assistantIdx].tool_calls = responseData.tool_calls || [];
-        chat.history = [...chat.history];
-        onUpdate();
-
-        const assistantMsg = chat.history[assistantIdx];
-
-        // 3. Проверка инструментов
-        if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
-          for (const call of assistantMsg.tool_calls) {
-            try {
-              const result = await this.dispatcher.callTool(call.name, call.arguments);
-              chat.history = [...chat.history, {
-                role: 'tool',
-                text: JSON.stringify(result),
-                tool_result: {
-                  tool_call_id: call.id,
-                  content: JSON.stringify(result, null, 2), // Форматируем JSON для виджета
-                  isError: false
-                }
-              }];
-            } catch (err: any) {
-              chat.history = [...chat.history, {
-                role: 'tool',
-                text: `Error: ${err.message}`,
-                tool_result: {
-                  tool_call_id: call.id,
-                  content: `Error: ${err.message}`,
-                  isError: true
-                }
-              }];
-            }
-          }
+        if (currentAssistantMsgIdx !== null) {
+          chat.history[currentAssistantMsgIdx].text = responseData.content;
+          chat.history[currentAssistantMsgIdx].tool_calls = responseData.tool_calls || [];
+          chat.history = [...chat.history];
           onUpdate();
-        } else {
-          isLooping = false;
+
+          const assistantMsg = chat.history[currentAssistantMsgIdx];
+
+          // 3. Проверка инструментов
+          if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
+            for (const call of assistantMsg.tool_calls) {
+              try {
+                const result = await this.dispatcher.callTool(call.name, call.arguments);
+                chat.history = [...chat.history, {
+                  role: 'tool',
+                  text: JSON.stringify(result),
+                  tool_result: {
+                    tool_call_id: call.id,
+                    content: JSON.stringify(result, null, 2), // Форматируем JSON для виджета
+                    isError: false
+                  }
+                }];
+              } catch (err: any) {
+                chat.history = [...chat.history, {
+                  role: 'tool',
+                  text: `Error: ${err.message}`,
+                  tool_result: {
+                    tool_call_id: call.id,
+                    content: `Error: ${err.message}`,
+                    isError: true
+                  }
+                }];
+              }
+            }
+            onUpdate();
+            // Сбрасываем индекс перед следующей итерацией (будет создан новый ассистент)
+            currentAssistantMsgIdx = null; 
+          } else {
+            isLooping = false;
+          }
         }
       }
 
@@ -100,43 +115,34 @@ export class ChatService {
     } catch (error: any) {
       // Проверяем, была ли это отмена пользователем
       const isAbort = error.name === 'AbortError' || abortSignal.aborted;
-
-      // Находим индекс нашего текущего сообщения-ассистента
-      const assistantIdx = chat.history.findLastIndex(m => m.role === 'assistant');
       
       if (isAbort) {
         console.log("Генерация прервана пользователем");
-        // Если прервали и ассистент пуст — удаляем его из истории
-        if (assistantIdx !== -1) {
-          const assistantMsg = chat.history[assistantIdx];
-          if (!assistantMsg.text && (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0)) {
-            chat.history.splice(assistantIdx, 1);
-          } else {
-            // Если текст был — помечаем как прерванное для Bubble
-            assistantMsg.error = "Генерация прервана пользователем";
-          }
-        }
         toastService.show("Генерация прервана", "info");
       } else {
         console.error("Chat Error:", error);
-        
-        if (assistantIdx !== -1) {
-          const assistantMsg = chat.history[assistantIdx];
-          
-          if (!assistantMsg.text && (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0)) {
-            // Если сервер выдал ошибку СРАЗУ (пустой ответ), удаляем сообщение из истории
-            chat.history.splice(assistantIdx, 1);
-          } else {
-            // Если текст уже успел накопиться — оставляем его, но добавляем баннер ошибки
-            assistantMsg.error = error.message;
-          }
-        }
-        
-        // Показываем современное всплывающее уведомление вместо вставки текста в чат
+        // Теперь тостер гарантированно сработает, так как мы прокидываем ошибку из fetchLLMResponse
         toastService.show(`Ошибка связи: ${error.message}`, "error");
       }
+
+      // ЛОГИКА ОЧИСТКИ ИНТЕРФЕЙСА:
+      if (currentAssistantMsgIdx !== null) {
+        const assistantMsg = chat.history[currentAssistantMsgIdx];
+        
+        // Если сообщение пустое (ошибка случилась до получения текста) — удаляем его
+        const hasNoText = !assistantMsg.text || assistantMsg.text.trim() === '';
+        const hasNoTools = !assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0;
+
+        if (hasNoText && hasNoTools) {
+          // Удаляем пустую бульку, чтобы она не висела в чате
+          chat.history.splice(currentAssistantMsgIdx, 1);
+        } else if (!isAbort) {
+          // Если текст уже начал приходить, но произошла ошибка сервера в процессе — помечаем ошибку в самом сообщении
+          assistantMsg.error = error.message;
+        }
+      }
       
-      // Синхронизируем массив истории
+      // Синхронизируем массив истории для обновления UI
       chat.history = [...chat.history];
     } finally {
       chat.isGenerating = false;
@@ -174,10 +180,6 @@ export class ChatService {
           function: { name: tc.name, arguments: JSON.stringify(tc.arguments) }
         }));
       }
-      // if (msg.role === 'tool' && msg.tool_result) {
-      //   openAIMsg.tool_call_id = msg.tool_result.tool_call_id;
-      //   openAIMsg.content = msg.tool_result.content;
-      // }
 
       // ЛОГИКА ДЛЯ ИНСТРУМЕНТА И КАРТИНКИ
       if (msg.role === 'tool' && msg.tool_result) {
@@ -191,7 +193,7 @@ export class ChatService {
           const imageItem = Array.isArray(outerData.content) 
             ? outerData.content.find((item: any) => item.type === 'image')
             : null;
-
+          
           if (imageItem && imageItem.data) {
             // Отправляем текстовое подтверждение в роль tool
             openAIMsg.content = "Изображение получено.";
@@ -202,14 +204,20 @@ export class ChatService {
             const imageUri = `data:${mimeType};base64,${imageItem.data}`;
 
             // 4. Добавляем сообщение от пользователя с картинкой для ЛЛМ
+            let imagesRecords : any = [];
+            for (const record of outerData.content) {
+              if (record.type === 'image') {
+                imagesRecords = [...imagesRecords, {
+                  type: 'image_url', image_url: { url: `data:${record.mimeType};base64,${record.data}`}
+                }]
+              }
+            };
+
             apiMessages.push({
               role: 'user',
               content: [
-                { type: 'text', text: 'Вот изображение, которое вернул инструмент:' },
-                { 
-                  type: 'image_url', 
-                  image_url: { url: imageUri } 
-                }
+                { type: 'text', text: 'Вот изображение(я), которое вернул инструмент:' },
+                ...imagesRecords
               ]
             });
             continue; 
