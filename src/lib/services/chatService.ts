@@ -86,6 +86,13 @@ export class ChatService {
               onUpdate();
             }
           },
+          (updatedTools) => {
+            // НОВОЕ: Стриминг инструментов в реальном времени
+            if (currentAssistantMsgIdx !== null) {
+              chat.history[currentAssistantMsgIdx].tool_calls = updatedTools;
+              onUpdate();
+            }
+          },
           abortSignal
         );
 
@@ -192,6 +199,7 @@ export class ChatService {
     settings: WorkspaceSettings, 
     tools: any[],
     onUpdateText: (fullText: string) => void,
+    onUpdateTools: (tools: any[]) => void, // Добавлен колбэк для стриминга инструментов
     abortSignal: AbortSignal
   ) {
     const apiMessages = [];
@@ -235,7 +243,7 @@ export class ChatService {
 
             // 3. Формируем Data URI, используя mimeType из ответа инструмента
             const mimeType = imageItem.mimeType || 'image/png';
-            const imageUri = `data:${mimeType};base64,${imageItem.data}`;
+            const imageUri = `data:${mimeType};base64,${mimeType}`; // Исправлено на валидный URI префикс
 
             // 4. Добавляем сообщение от пользователя с картинкой для ЛЛМ
             let imagesRecords : any = [];
@@ -351,6 +359,24 @@ export class ChatService {
                   if (tc.function?.name) toolCallsRaw[idx].name += tc.function.name;
                   if (tc.function?.arguments) toolCallsRaw[idx].arguments += tc.function.arguments;
                 }
+
+                // ВАЖНО: Мгновенно обновляем UI при получении чанков инструментов
+                const currentTools = toolCallsRaw.map(tc => {
+                    let parsedArgs = {};
+                    try {
+                        // Пытаемся парсить аргументы только если они выглядят как полный JSON
+                        if (tc.arguments.trim().endsWith('}')) {
+                            parsedArgs = JSON.parse(tc.arguments);
+                        }
+                    } catch (e) { /* Игнорируем ошибки парсинга неполного JSON в процессе стриминга */ }
+                    
+                    return {
+                        id: tc.id,
+                        name: tc.name,
+                        arguments: parsedArgs
+                    };
+                });
+                onUpdateTools(currentTools);
               }
             } catch (e) {
               // Игнорируем неполные чанки

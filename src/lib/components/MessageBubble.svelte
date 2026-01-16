@@ -290,17 +290,17 @@
                     <pre class="language-json"><code>{JSON.stringify(call.arguments, null, 2)}</code></pre>
                   </details>
 
-                  {#if result}
-                    <details class="sub-details">
-                      <summary class="sub-summary">
-                        <span>Ответ</span>
-                        <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
-                      </summary>
+                  <details class="sub-details">
+                    <summary class="sub-summary">
+                      <span>Ответ</span>
+                      <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
+                    </summary>
+                    {#if result}
                       <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
-                    </details>
-                  {:else}
-                    <div class="tool-loading">Выполнение запроса...</div>
-                  {/if}
+                    {:else}
+                      <div class="tool-loading">Выполнение запроса...</div>
+                    {/if}
+                  </details>
                 </div>
               </details>
             </div>
@@ -336,17 +336,17 @@
                         <pre class="language-json"><code>{JSON.stringify(call.arguments, null, 2)}</code></pre>
                       </details>
 
-                      {#if result}
-                        <details class="sub-details">
-                          <summary class="sub-summary">
-                            <span>Ответ</span>
-                            <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
-                          </summary>
+                      <details class="sub-details">
+                        <summary class="sub-summary">
+                          <span>Ответ</span>
+                          <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
+                        </summary>
+                        {#if result}
                           <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
-                        </details>
-                      {:else}
-                        <div class="tool-loading">Выполнение запроса...</div>
-                      {/if}
+                        {:else}
+                          <div class="tool-loading">Выполнение запроса...</div>
+                        {/if}
+                      </details>
                     </div>
                   </details>
                 </div>
