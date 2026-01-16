@@ -328,9 +328,24 @@
                       <span class="status-icon">{@html chevronDownIconRaw}</span>
                     </summary>
                     <div class="tool-details-content">
-                      <pre class="language-json"><code>{JSON.stringify(call.arguments, null, 2)}</code></pre>
+                      <details class="sub-details">
+                        <summary class="sub-summary">
+                          <span>Аргументы</span>
+                          <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
+                        </summary>
+                        <pre class="language-json"><code>{JSON.stringify(call.arguments, null, 2)}</code></pre>
+                      </details>
+
                       {#if result}
-                        <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
+                        <details class="sub-details">
+                          <summary class="sub-summary">
+                            <span>Ответ</span>
+                            <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
+                          </summary>
+                          <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
+                        </details>
+                      {:else}
+                        <div class="tool-loading">Выполнение запроса...</div>
                       {/if}
                     </div>
                   </details>
