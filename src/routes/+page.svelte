@@ -15,6 +15,9 @@
   import { ChatService } from '$lib/services/chatService';
   import type { MCPServerInstance } from '$lib/mcp/manager.svelte';
 
+  // --- Импорты для Tauri 2 ---
+  import { openUrl } from '@tauri-apps/plugin-opener';
+
   // --- Состояние приложения (Svelte 5 Runes) ---
   let workspaces = $state<Workspace[]>([]);
   let selectedWorkspaceId = $state<string>('');
@@ -44,10 +47,70 @@
   // Список активных MCP серверов (синхронизируется через Inspector)
   let mcpServers = $state<MCPServerInstance[]>([]);
 
+  // --- Состояние кастомного контекстного меню ---
+  let menuState = $state({
+    visible: false,
+    x: 0,
+    y: 0,
+    href: ''
+  });
+
   // --- Производные состояния ---
   const currentWorkspace = $derived(workspaces.find(w => w.id === selectedWorkspaceId));
   const currentChat = $derived(currentWorkspace?.chats.find(c => c.id === selectedChatId));
   const collapsedWorkspaces = $state<Record<string, boolean>>({});
+
+  // --- Логика перехвата внешних ссылок и контекстного меню ---
+  $effect(() => {
+    const handleAnchorClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const anchor = target.closest('a');
+
+      if (anchor) {
+        const href = anchor.getAttribute('href');
+        // Проверяем, что ссылка внешняя (начинается с http/https)
+        if (href && /^https?:\/\//.test(href)) {
+          event.preventDefault();
+          openUrl(href).catch((err: unknown) => {
+            console.error('Failed to open external link:', err);
+          });
+        }
+      }
+      // Закрываем наше меню при обычном клике в любом месте
+      menuState.visible = false;
+    };
+
+    const handleContextMenu = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const anchor = target.closest('a');
+
+      if (anchor) {
+        // Если кликнули по ссылке — показываем кастомное меню
+        event.preventDefault();
+        menuState = {
+          visible: true,
+          x: event.clientX,
+          y: event.clientY,
+          href: anchor.href
+        };
+      } else if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && !target.isContentEditable) {
+        // Блокируем стандартное меню везде, кроме полей ввода
+        event.preventDefault();
+        menuState.visible = false;
+      } else {
+        // В полях ввода скрываем наше меню, позволяя работать нативному
+        menuState.visible = false;
+      }
+    };
+
+    document.addEventListener('click', handleAnchorClick);
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      document.removeEventListener('click', handleAnchorClick);
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  });
 
   onMount(async () => {
     // 1. Загружаем данные из обоих источников
@@ -471,6 +534,27 @@
       onSettingsChange={persistConfig} 
     />
   </div>
+
+  {#if menuState.visible}
+    <div 
+      class="custom-menu" 
+      style:left="{menuState.x}px" 
+      style:top="{menuState.y}px"
+    >
+      <button onclick={() => {
+        openUrl(menuState.href);
+        menuState.visible = false;
+      }}>
+        🌐 Открыть в браузере
+      </button>
+      <button onclick={() => {
+        navigator.clipboard.writeText(menuState.href);
+        menuState.visible = false;
+      }}>
+        📋 Копировать ссылку
+      </button>
+    </div>
+  {/if}
 </main>
 
 <style>
@@ -519,6 +603,37 @@
     overflow: hidden;
     position: relative;
     min-width: 0;
+  }
+
+  /* Стили контекстного меню */
+  .custom-menu {
+    position: fixed;
+    z-index: 10000;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+  }
+
+  .custom-menu button {
+    background: none;
+    border: none;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 4px;
+    color: #374151;
+    transition: background 0.1s;
+  }
+
+  .custom-menu button:hover {
+    background: #f3f4f6;
+    color: #111827;
   }
 
   /* Скроллбары */
