@@ -299,7 +299,11 @@
       {/if}
     </div>
     
-    <div class="message-actions" class:hidden={isTyping}>
+    <div 
+      class="message-actions" 
+      class:hidden={isTyping} 
+      class:force-visible={isEditing || isConfirmingDelete}
+    >
       {#if isEditing}
         <button class="action-btn success" title="Сохранить" onclick={saveEdit}>
           {@html checkIconRaw}
@@ -426,9 +430,29 @@
     display: flex;
   }
 
-  .message-actions { display: flex; gap: 10px; opacity: 0; transition: opacity 0.2s; margin-top: 4px; padding: 0 6px; }
+  .message-actions { 
+    display: flex; 
+    gap: 10px; 
+    opacity: 0; 
+    transition: opacity 0.2s; 
+    margin-top: 4px; 
+    padding: 0 6px;
+    pointer-events: none; /* Отключаем клики, когда панель невидима */
+  }
   .message-actions.hidden { display: none !important; }
-  .message-wrapper:hover:not(.is-generating) .message-actions { opacity: 1; }
+  
+  /* Показываем при наведении на сообщение */
+  .message-wrapper:hover:not(.is-generating) .message-actions { 
+    opacity: 1; 
+    pointer-events: auto;
+  }
+
+  /* ПРИНУДИТЕЛЬНАЯ ВИДИМОСТЬ: Показываем всегда, если редактируем или подтверждаем удаление */
+  .message-actions.force-visible {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
   .action-btn {transition: all 0.2s ease; background: none; border: none; cursor: pointer; color: #b0bec5; }
   
   /* Стили для кнопки удаления */
