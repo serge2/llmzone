@@ -12,7 +12,7 @@ export class ChatService {
   /**
    * Основной метод отправки сообщения с поддержкой цикла инструментов
    */
-  async send(
+ async send(
     chat: Chat, 
     settings: WorkspaceSettings,
     serverInstances: MCPServerInstance[], 
@@ -22,7 +22,7 @@ export class ChatService {
     if (chat.isGenerating) return;
     chat.isGenerating = true;
 
-    // Храним индекс сообщения текущей итерации, чтобы точно знать, что удалять при ошибке
+    // Храним индекс сообщения текущей итерации
     let currentAssistantMsgIdx: number | null = null;
 
     try {
@@ -33,42 +33,40 @@ export class ChatService {
       while (isLooping && iteration < this.MAX_ITERATIONS) {
         iteration++;
 
-        // 1. Создаем заглушку ассистента с реактивным обновлением
+        // 1. Добавляем сообщение напрямую через push. 
+        // В Svelte 5 это триггерит реактивность автоматически.
         currentAssistantMsgIdx = chat.history.length;
-        chat.history = [...chat.history, {
+        chat.history.push({
           role: 'assistant',
           text: '', 
           tool_calls: []
-        }];
+        });
         onUpdate();
 
         // 2. Делаем запрос к LM Studio со стримингом
         const responseData = await this.fetchLLMResponse(
-          chat.history.slice(0, -1), // Не отправляем последнюю пустую заглушку
+          chat.history.slice(0, -1), // Для слайса копия допустима, так как это данные для API
           settings, 
           mcpTools,
           (updatedText) => {
-            // ВАЖНО: Обновляем массив целиком для триггера реактивности Svelte 5
             if (currentAssistantMsgIdx !== null) {
+              // Прямая мутация свойства. Svelte 5 обновит только текстовый узел в UI.
               chat.history[currentAssistantMsgIdx].text = updatedText;
-              chat.history = [...chat.history]; 
               onUpdate();
             }
           },
           abortSignal
         );
 
-        // ПРОВЕРКА: Если ответ пустой (модель ничего не вернула и не было исключения)
-        // Это заставит код прыгнуть в catch и почистить интерфейс
+        // ПРОВЕРКА: Если ответ пустой
         if (!responseData || (!responseData.content && (!responseData.tool_calls || responseData.tool_calls.length === 0))) {
           throw new Error("Модель вернула пустой ответ или не поддерживает данный формат сообщений");
         }
         
-        // Финализируем данные после окончания стрима
+        // Финализируем данные после окончания стрима через прямые мутации
         if (currentAssistantMsgIdx !== null) {
           chat.history[currentAssistantMsgIdx].text = responseData.content;
           chat.history[currentAssistantMsgIdx].tool_calls = responseData.tool_calls || [];
-          chat.history = [...chat.history];
           onUpdate();
 
           const assistantMsg = chat.history[currentAssistantMsgIdx];
@@ -78,17 +76,18 @@ export class ChatService {
             for (const call of assistantMsg.tool_calls) {
               try {
                 const result = await this.dispatcher.callTool(call.name, call.arguments);
-                chat.history = [...chat.history, {
+                // Снова используем push вместо пересоздания всего массива
+                chat.history.push({
                   role: 'tool',
                   text: JSON.stringify(result),
                   tool_result: {
                     tool_call_id: call.id,
-                    content: JSON.stringify(result, null, 2), // Форматируем JSON для виджета
+                    content: JSON.stringify(result, null, 2),
                     isError: false
                   }
-                }];
+                });
               } catch (err: any) {
-                chat.history = [...chat.history, {
+                chat.history.push({
                   role: 'tool',
                   text: `Error: ${err.message}`,
                   tool_result: {
@@ -96,7 +95,7 @@ export class ChatService {
                     content: `Error: ${err.message}`,
                     isError: true
                   }
-                }];
+                });
               }
             }
             onUpdate();
@@ -113,7 +112,6 @@ export class ChatService {
       }
 
     } catch (error: any) {
-      // Проверяем, была ли это отмена пользователем
       const isAbort = error.name === 'AbortError' || abortSignal.aborted;
       
       if (isAbort) {
@@ -121,7 +119,6 @@ export class ChatService {
         toastService.show("Генерация прервана", "info");
       } else {
         console.error("Chat Error:", error);
-        // Теперь тостер гарантированно сработает, так как мы прокидываем ошибку из fetchLLMResponse
         toastService.show(`Ошибка связи: ${error.message}`, "error");
       }
 
@@ -134,21 +131,18 @@ export class ChatService {
         const hasNoTools = !assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0;
 
         if (hasNoText && hasNoTools) {
-          // Удаляем пустую бульку, чтобы она не висела в чате
+          // Используем splice для удаления элемента — Svelte 5 это увидит
           chat.history.splice(currentAssistantMsgIdx, 1);
         } else if (!isAbort) {
-          // Если текст уже начал приходить, но произошла ошибка сервера в процессе — помечаем ошибку в самом сообщении
           assistantMsg.error = error.message;
         }
       }
-      
-      // Синхронизируем массив истории для обновления UI
-      chat.history = [...chat.history];
     } finally {
       chat.isGenerating = false;
       onUpdate();
     }
   }
+
 
   /**
    * Внутренний метод для работы с API LM Studio (OpenAI Compatible) со стримингом

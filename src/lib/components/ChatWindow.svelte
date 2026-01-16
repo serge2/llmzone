@@ -115,7 +115,19 @@
   }
 
   $effect(() => {
-    if (history.length || isGenerating) {
+    // 1. Следим за количеством сообщений
+    const len = history.length;
+    
+    // 2. Следим за текстом последнего сообщения (самое важное для стриминга!)
+    const lastMessageText = len > 0 ? history[len - 1].text : '';
+    
+    // 3. Следим за состоянием генерации
+    const generating = isGenerating;
+
+    // Если хоть что-то из этого изменилось — пробуем скроллить
+    if (len || generating || lastMessageText) {
+      // Используем untrack, если не хотим, чтобы scrollToBottom 
+      // создавал лишние зависимости (хотя здесь это не критично)
       scrollToBottom();
     }
   });
