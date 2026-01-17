@@ -113,24 +113,29 @@
 
   // Обновленный эффект для подсветки синтаксиса (включая JSON внутри виджетов)
   $effect(() => {
-    // Триггерим эффект при изменении контента или появлении результатов инструментов
-    if ((htmlContent || tool_calls || fullHistory || chain.length > 0) && proseEl) {
+    // Явно подписываемся на изменения текста и цепочки, чтобы эффект срабатывал при стриминге
+    const contentToWatch = text + JSON.stringify(tool_calls) + chain.length;
+    
+    if (proseEl) {
+      // Используем tick, чтобы дождаться, когда Svelte обновит DOM после изменения текста
       tick().then(() => {
         if (!proseEl) return;
         
-        // Находим все блоки кода в сообщении, включая виджеты инструментов
-        const messageContainer = proseEl.closest('.message-content');
-        if (!messageContainer) return;
+        // Находим контейнер сообщения
+        const container = proseEl.closest('.message-content');
+        if (!container) return;
 
-        const codeBlocks = messageContainer.querySelectorAll('pre code');
+        // Ищем все блоки кода
+        const codeBlocks = container.querySelectorAll('pre code');
         
         codeBlocks.forEach((block) => {
-          // Если это последнее сообщение (стриминг) — переподсвечиваем всегда
-          // Если старое — только если еще не подсвечено
+          // Во время стриминга (isLastMessage) мы должны обновлять подсветку постоянно,
+          // так как текст внутри блока кода дополняется новыми символами.
           const isHighlighted = block.classList.contains('prism-highlighted');
           
           if (!isHighlighted || isLastMessage) {
             Prism.highlightElement(block);
+            // Добавляем маркер, чтобы не переподсвечивать старые сообщения зря
             block.classList.add('prism-highlighted');
           }
         });
