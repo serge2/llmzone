@@ -34,7 +34,8 @@ export class ChatService {
           return server.tools
             .filter(t => t.enabled)
             .map(tool => {
-              let baseName = `${server.name}___${tool.name}`;
+              let baseName = `${tool.name}`;
+              // let baseName = `${server.name}___${tool.name}`; Some models can't use tolls with complex names
               let uniqueName = baseName;
               let counter = 1;
 
@@ -241,11 +242,7 @@ export class ChatService {
             openAIMsg.content = "Изображение получено.";
             apiMessages.push(openAIMsg);
 
-            // 3. Формируем Data URI, используя mimeType из ответа инструмента
-            const mimeType = imageItem.mimeType || 'image/png';
-            const imageUri = `data:${mimeType};base64,${mimeType}`; // Исправлено на валидный URI префикс
-
-            // 4. Добавляем сообщение от пользователя с картинкой для ЛЛМ
+            // 3. Добавляем сообщение от пользователя с картинкой для ЛЛМ
             let imagesRecords : any = [];
             for (const record of outerData.content) {
               if (record.type === 'image') {
@@ -373,7 +370,8 @@ export class ChatService {
                     return {
                         id: tc.id,
                         name: tc.name,
-                        arguments: parsedArgs
+                        arguments: parsedArgs,
+                        raw_arguments: tc.arguments // ПЕРЕДАЕМ СЫРУЮ СТРОКУ
                     };
                 });
                 onUpdateTools(currentTools);

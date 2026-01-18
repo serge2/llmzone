@@ -293,7 +293,7 @@
                       <span>Аргументы</span>
                       <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
                     </summary>
-                    <pre class="language-json"><code>{JSON.stringify(call.arguments, null, 2)}</code></pre>
+                    <pre class="language-json"><code>{ JSON.stringify(call.arguments, null, 2) }</code></pre>
                   </details>
 
                   <details class="sub-details">
@@ -340,7 +340,12 @@
                           <span>Аргументы</span>
                           <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
                         </summary>
-                        <pre class="language-json"><code>{JSON.stringify(call.arguments, null, 2)}</code></pre>
+                        <pre class="language-json"><code>{
+                          // Если есть распарсенный объект с ключами — показываем красиво
+                          Object.keys(call.arguments || {}).length > 0
+                            ? JSON.stringify(call.arguments, null, 2)
+                            : (call.raw_arguments || "{}") // Иначе показываем сырую строку генерации
+                        }</code></pre>
                       </details>
 
                       <details class="sub-details">

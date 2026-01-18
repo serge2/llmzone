@@ -53,6 +53,7 @@ export interface ToolCall {
   id: string;            // Уникальный ID вызова от LLM
   name: string;          // Имя вида "server__tool"
   arguments: any;        // Распаршенные аргументы (объект)
+  raw_arguments?: string; // Еще не распаршенные аргументы
 }
 
 export interface ToolResult {
