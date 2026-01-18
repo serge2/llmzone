@@ -6,6 +6,7 @@
   // Импорт иконок из ассетов
   import ArrowUpIcon from '$lib/assets/icons/arrow-up.svg?raw';
   import StopIcon from '$lib/assets/icons/stop.svg?raw';
+  import ChevronDownIcon from '$lib/assets/icons/chevron-down.svg?raw';
 
   let { 
     history, 
@@ -60,6 +61,7 @@
   let chatContainer: HTMLElement;
   let inputElement: HTMLTextAreaElement; // Ссылка на textarea для управления фокусом
   let shouldAutoScroll = true;
+  let showScrollButton = $state(false); // Состояние видимости кнопки прокрутки
 
   // Функция для автоматической подстройки высоты
   function adjustHeight() {
@@ -87,6 +89,10 @@
         top: chatContainer.scrollHeight,
         behavior: force ? 'auto' : 'smooth'
       });
+      if (force) {
+        shouldAutoScroll = true;
+        showScrollButton = false;
+      }
     }
   }
 
@@ -95,6 +101,9 @@
     const threshold = 150;
     const distanceFromBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight;
     shouldAutoScroll = distanceFromBottom < threshold;
+    
+    // Показывать кнопку, если пользователь прокрутил вверх больше чем на порог
+    showScrollButton = distanceFromBottom > threshold;
   }
 
   // Следим за изменением высоты контейнера при ресайзе окна
@@ -186,6 +195,16 @@
         />
       {/each} 
     </div>
+
+    {#if showScrollButton}
+      <button 
+        class="scroll-down-btn" 
+        onclick={() => scrollToBottom(true)}
+        aria-label="Scroll to bottom"
+      >
+        {@html ChevronDownIcon}
+      </button>
+    {/if}
   </div>
 
   <div class="input-container">
@@ -222,12 +241,14 @@
     flex-direction: column; 
     background: #fdfdfd; 
     height: 100vh;
+    position: relative;
   }
 
   .messages-container { 
     flex: 1; 
     overflow-y: auto; 
     padding: 0 5%; /* Отступы для центрирования контента как в ChatGPT */
+    position: relative;
   }
 
   .messages-list {
@@ -236,6 +257,38 @@
     padding: 20px 0;
     display: flex;
     flex-direction: column;
+  }
+
+  /* Кнопка прокрутки вниз */
+  .scroll-down-btn {
+    position: sticky;
+    bottom: 20px;
+    left: 100%;
+    transform: translateX(-100%);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #6b7280;
+    z-index: 10;
+    margin-bottom: 20px;
+    transition: background-color 0.2s;
+  }
+
+  .scroll-down-btn:hover {
+    background-color: #f9fafb;
+    color: #1f2937;
+  }
+
+  .scroll-down-btn :global(svg) {
+    width: 18px;
+    height: 18px;
   }
 
   .input-container { 
