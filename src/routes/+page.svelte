@@ -13,7 +13,9 @@
 
   // --- Импорт новых сервисов для MCP ---
   import { ChatService } from '$lib/services/chatService';
-  import { MCPServerInstance } from '$lib/mcp/manager.svelte'; // Убрал type так как создаем инстансы
+  // Менеджер теперь импортируется как синглтон для управления кэшем инстансов
+  import { mcpManager } from '$lib/mcp/instances.svelte'; 
+  import { MCPServerInstance } from '$lib/mcp/manager.svelte';
 
   // --- Импорты для Tauri 2 ---
   import { openUrl } from '@tauri-apps/plugin-opener';
@@ -44,7 +46,7 @@
 
   // Инстанс сервиса чата
   const chatService = new ChatService();
-  // Список активных MCP серверов (теперь инициализируется здесь)
+  // Список активных MCP серверов ДЛЯ ТЕКУЩЕГО ЭКРАНА (отображение в Инспекторе)
   let mcpServers = $state<MCPServerInstance[]>([]);
 
   // --- Состояние кастомного контекстного меню ---
@@ -62,56 +64,40 @@
 
   // --- ЛОГИКА ИНИЦИАЛИЗАЦИИ MCP СЕРВЕРОВ ---
   function syncMCPServers() {
-    if (!currentWorkspace) return;
+    if (workspaces.length === 0) return;
 
-    try {
-      const rawConfig = currentWorkspace.settings.mcpConfig || '{}';
-      const config = JSON.parse(rawConfig);
-      const serversDict = config.mcpServers || {};
+    // 1. Синхронизируем инстансы для ВСЕХ воркспейсов в глобальном менеджере
+    // Это важно для фоновой работы чатов в неактивных воркспейсах
+    workspaces.forEach(ws => {
+      try {
+        const rawConfig = ws.settings.mcpConfig || '{}';
+        const config = JSON.parse(rawConfig);
+        const serversDict = config.mcpServers || {};
 
-      // 1. Отключаем и удаляем те, которых больше нет в конфиге
-      mcpServers = mcpServers.filter(instance => {
-        if (!serversDict[instance.name]) {
-          instance.disconnect();
-          return false;
-        }
-        return true;
-      });
+        for (const [name, info] of Object.entries(serversDict)) {
+          const serverData = info as any;
+          if (!serverData.url) continue;
 
-      // 2. Добавляем новые или обновляем существующие
-      for (const [name, info] of Object.entries(serversDict)) {
-        const serverData = info as any;
-        if (!serverData.url) continue;
-
-        let existing = mcpServers.find(s => s.name === name);
-        if (existing) {
-          // Обновляем параметры если изменились, не прерывая коннект без нужды
-          existing.headers = serverData.headers || {};
-          if (existing.url !== serverData.url) {
-            existing.url = serverData.url;
-            if (existing.enabled) existing.connect(); 
-          }
-        } else {
-          // Создаем новый инстанс
-          const savedState = currentWorkspace.settings.mcpStates?.[name];
-          const newInstance = new MCPServerInstance(
+          const savedState = ws.settings.mcpStates?.[name];
+          
+          // Менеджер вернет существующий инстанс или создаст новый уникальный (wsId + name)
+          mcpManager.getOrCreate(
+            ws.id,
             name,
             serverData.url,
             serverData.headers || {},
             savedState,
-            () => { persistConfig(); } // Коллбэк на изменение состояния (enabled, tools и т.д.)
+            () => { persistConfig(); }
           );
-          
-          // ВАЖНО: Если в сохраненном состоянии сервер был включен — коннектимся сразу при старте
-          if (savedState?.enabled) {
-            newInstance.connect();
-          }
-          
-          mcpServers.push(newInstance);
         }
+      } catch (e) {
+        console.error(`MCP Sync Error for workspace ${ws.id}:`, e);
       }
-    } catch (e) {
-      console.error("MCP Sync Error:", e);
+    });
+
+    // 2. Обновляем локальный список серверов только для отображения в текущем Inspector
+    if (selectedWorkspaceId) {
+      mcpServers = mcpManager.getForWorkspace(selectedWorkspaceId);
     }
   }
 
@@ -120,9 +106,7 @@
     const wsId = selectedWorkspaceId;
     if (wsId) {
       untrack(() => {
-        // При смене воркспейса полностью пересобираем список серверов
-        mcpServers.forEach(s => s.disconnect());
-        mcpServers = [];
+        // При смене воркспейса просто обновляем список отображаемых серверов
         syncMCPServers();
       });
     }
@@ -211,6 +195,8 @@
       const activeWs = workspaces.find(w => w.id === selectedWorkspaceId);
       if (activeWs && activeWs.chats.length > 0) {
         selectedChatId = activeWs.chats[0].id;
+      } else if (activeWs) {
+        selectedChatId = '';
       }
 
       // --- Инициализируем MCP серверы сразу после загрузки воркспейсов ---
@@ -246,14 +232,17 @@
 
   // --- Работа с хранилищем (Раздельная) ---
   async function persistConfig() {
-    if (currentWorkspace) {
-      // СИНХРОНИЗАЦИЯ: Перед сохранением обновляем mcpStates данными из живых инстансов
-      const states: Record<string, any> = {};
-      mcpServers.forEach(server => {
-        states[server.name] = server.serialize(); // Предполагается, что serialize() возвращает объект с enabled и tools
-      });
-      currentWorkspace.settings.mcpStates = states;
-    }
+    // СИНХРОНИЗАЦИЯ: Перед сохранением обновляем mcpStates для всех воркспейсов
+    workspaces.forEach(ws => {
+        const instances = mcpManager.getForWorkspace(ws.id);
+        if (instances.length > 0) {
+          const states: Record<string, any> = {};
+          instances.forEach(server => {
+              states[server.name] = server.serialize();
+          });
+          ws.settings.mcpStates = states;
+        }
+    });
 
     // Делаем глубокий "снимок" состояния, чтобы избавиться от прокси
     const rawWorkspaces = $state.snapshot(workspaces);
@@ -335,6 +324,9 @@
     
     const ws = workspaces.find(w => w.id === id);
     if (confirm(`Удалить рабочее пространство "${ws?.name}" и все его чаты?`)) {
+      // Очищаем инстансы MCP серверов из памяти
+      mcpManager.removeWorkspace(id);
+      
       workspaces = workspaces.filter(w => w.id !== id);
       
       if (selectedWorkspaceId === id) {
@@ -466,14 +458,19 @@
 
     const chatToUpdate = currentChat;
     
+    // Находим воркспейс, к которому реально относится этот чат
+    // (важно для фоновой генерации в других воркспейсах)
+    const chatWorkspace = workspaces.find(ws => ws.chats.some(c => c.id === chatToUpdate.id));
+    if (!chatWorkspace) return;
+
     // Подготовка эффективных настроек
     const effectiveSettings = {
-      apiUrl: currentWorkspace.settings.apiUrl || globalConfig.apiUrl,
-      apiKey: currentWorkspace.settings.apiKey || globalConfig.apiKey,
-      modelName: currentWorkspace.settings.modelName || globalConfig.modelName,
-      systemPrompt: currentWorkspace.settings.systemPrompt,
-      temperature: currentWorkspace.settings.temperature,
-      mcpStates: currentWorkspace.settings.mcpStates
+      apiUrl: chatWorkspace.settings.apiUrl || globalConfig.apiUrl,
+      apiKey: chatWorkspace.settings.apiKey || globalConfig.apiKey,
+      modelName: chatWorkspace.settings.modelName || globalConfig.modelName,
+      systemPrompt: chatWorkspace.settings.systemPrompt,
+      temperature: chatWorkspace.settings.temperature,
+      mcpStates: chatWorkspace.settings.mcpStates
     };
 
     const chatToUpdateId = chatToUpdate.id;
@@ -486,10 +483,10 @@
     if (message.trim()) {
       chatToUpdate.history = [...chatToUpdate.history, { role: "user", text: message }];
       
-      const chatIndex = currentWorkspace.chats.findIndex(c => c.id === chatToUpdateId);
+      const chatIndex = chatWorkspace.chats.findIndex(c => c.id === chatToUpdateId);
       if (chatIndex > 0) {
-        const [movedChat] = currentWorkspace.chats.splice(chatIndex, 1);
-        currentWorkspace.chats.unshift(movedChat);
+        const [movedChat] = chatWorkspace.chats.splice(chatIndex, 1);
+        chatWorkspace.chats.unshift(movedChat);
       }
       
       message = "";
@@ -499,19 +496,22 @@
     
     if (chatToUpdate.history.length === 0) return;
 
-    // Скролл при начале
+    // Скролл при начале (только если это текущий активный чат)
     if (chatToUpdateId === selectedChatId) {
         await chatWindowComponent?.scrollToBottom();
     }
+
+    // Получаем специфичные для воркспейса этого чата инстансы серверов
+    const chatSpecificServers = mcpManager.getForWorkspace(chatWorkspace.id);
 
     try {
       // Вызываем универсальный сервис чата, который обработает цепочку MCP инструментов
       await chatService.send(
         chatToUpdate,
         effectiveSettings,
-        mcpServers, // Передаем активные инстансы серверов, инициализированных при старте
+        chatSpecificServers, // Передаем изолированные инстансы именно этого воркспейса
         () => {
-          // Коллбэк для реактивного обновления UI при каждом шаге (tool_call, ответ и т.д.)
+          // Коллбэк для реактивного обновления UI при каждом шаге
           workspaces = [...workspaces];
           if (chatToUpdateId === selectedChatId) {
               chatWindowComponent?.scrollToBottom();
@@ -570,7 +570,11 @@
     onSelectWorkspace={(id: string) => {
       selectedWorkspaceId = id;
       const ws = workspaces.find(w => w.id === id);
-      if (ws?.chats.length) selectedChatId = ws.chats[0].id;
+      if (ws?.chats.length) {
+        selectedChatId = ws.chats[0].id;
+      } else {
+        selectedChatId = '';
+      }
       persistConfig();
     }}
     onCreateWorkspace={createWorkspace}
@@ -615,7 +619,6 @@
       {globalConfig} 
       bind:serverInstances={mcpServers}
       onSettingsChange={() => {
-        // При изменении настроек в инспекторе (например, JSON конфига) синхронизируем серверы
         syncMCPServers();
         persistConfig();
       }} 
@@ -645,93 +648,74 @@
 </main>
 
 <style>
-  /* Стили оставлены без изменений */
-  :global(body), :global(html) {
-    margin: 0;
-    padding: 0;
-    height: 100vh;
-    overflow: hidden;
-  }
-
   .app-container {
+    height: 100vh;
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    width: 100vw;
-    background-color: #ffffff;
-    color: #1a1a1b;
     overflow: hidden;
-    position: fixed;
-    top: 0;
-    left: 0;
-  }
-
-  .modal-layer {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 9999;
-    background: white;
+    background-color: #f9fafb;
   }
 
   .main-row {
     display: flex;
     flex: 1;
-    overflow: hidden; 
-    min-height: 0;
+    overflow: hidden;
+    position: relative;
   }
 
   .center-content {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    position: relative;
     min-width: 0;
+    background: #ffffff;
+    position: relative;
+    z-index: 1;
+  }
+
+  .modal-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .custom-menu {
     position: fixed;
-    z-index: 10000;
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     padding: 4px;
+    z-index: 10000;
     display: flex;
     flex-direction: column;
     min-width: 180px;
   }
 
   .custom-menu button {
-    background: none;
-    border: none;
     padding: 8px 12px;
     text-align: left;
-    font-size: 14px;
+    background: none;
+    border: none;
     cursor: pointer;
-    border-radius: 4px;
+    font-size: 0.85rem;
     color: #374151;
-    transition: background 0.1s;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .custom-menu button:hover {
     background: #f3f4f6;
     color: #111827;
-  }
-
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background-color: #d1d5db;
-    border-radius: 10px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: transparent;
   }
 </style>
