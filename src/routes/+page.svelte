@@ -3,7 +3,8 @@
   import { onMount, untrack } from 'svelte';
   import { loadConfig, saveConfig } from '$lib/config';
   import type { Workspace, Chat, Message, AppSettings, GlobalConfig } from '$lib/types';
-  import { loadChats, saveChats } from '$lib/storage/chatStorage';
+  // Обновленные импорты для работы с раздельными чатами
+  import { loadChatsForWorkspace, saveChatsForWorkspace, deleteWorkspaceFolder } from '$lib/storage/chatStorage';
   import Inspector from '$lib/components/Inspector.svelte';
   
   import Sidebar from '$lib/components/Sidebar.svelte';
@@ -165,10 +166,8 @@
   });
 
   onMount(async () => {
-    // 1. Загружаем данные из обоих источников
+    // 1. Загружаем основной конфиг приложения
     const config = await loadConfig();
-    const savedChats = await loadChats();
-    const history = savedChats || [];
     
     // Загружаем глобальные настройки если они есть
     if (config?.globalConfig) {
@@ -176,18 +175,24 @@
     }
 
     if (config?.workspaces && config.workspaces.length > 0) {
-      // 2. Собираем воркспейсы: настройки из конфига + чаты из хранилища
-      workspaces = config.workspaces.map(ws => ({
-        ...ws,
-        settings: {
-          lastActiveTab: 'model', // Значение по умолчанию для старых конфигов
-          ...ws.settings
-        },
-        chats: history.find(h => h.id === ws.id)?.chats.map(c => ({
-          ...c,
-          isGenerating: false // Инициализируем флаг генерации
-        })) || []
-      })) as Workspace[];
+      // 2. Инициализируем воркспейсы и подгружаем чаты для каждого из своих каталогов
+      const loadedWorkspaces = await Promise.all(config.workspaces.map(async (ws) => {
+        const savedChats = await loadChatsForWorkspace(ws.id);
+        
+        return {
+          ...ws,
+          settings: {
+            lastActiveTab: 'model',
+            ...ws.settings
+          },
+          chats: (savedChats || []).map(c => ({
+            ...c,
+            isGenerating: false
+          }))
+        };
+      }));
+
+      workspaces = loadedWorkspaces as Workspace[];
 
       // 3. Восстанавливаем последнее выбранное состояние
       selectedWorkspaceId = config.lastSelectedWorkspaceId || workspaces[0].id;
@@ -204,8 +209,9 @@
 
     } else {
       // 4. Инициализация дефолтного воркспейса
+      const defaultWsId = 'ws-' + Date.now();
       const defaultWs: Workspace = {
-        id: 'ws-' + Date.now(),
+        id: defaultWsId,
         name: 'Основной',
         icon: '🏠',
         settings: {
@@ -220,7 +226,7 @@
       };
       
       workspaces = [defaultWs];
-      selectedWorkspaceId = defaultWs.id;
+      selectedWorkspaceId = defaultWsId;
       selectedChatId = defaultWs.chats[0].id;
 
       await persistConfig();
@@ -251,7 +257,7 @@
     const workspacesToSave = rawWorkspaces.map(({ chats, ...rest }) => rest);
     
     const configToSave: AppSettings = {
-      theme: 'system', // Можно позже заменить на динамическую переменную
+      theme: 'system', 
       lastSelectedWorkspaceId: selectedWorkspaceId,
       workspaces: workspacesToSave,
       globalConfig: $state.snapshot(globalConfig)
@@ -261,11 +267,11 @@
   }
 
   async function persistChats() {
-    const historyToSave = workspaces.map(ws => ({
-      id: ws.id,
-      chats: ws.chats.map(({ isGenerating, ...c }) => c) // Не сохраняем флаг генерации в БД
-    }));
-    await saveChats(historyToSave as any);
+    // НОВОЕ: Сохраняем чаты каждого воркспейса в его персональный каталог
+    for (const ws of workspaces) {
+      const chatsToSave = ws.chats.map(({ isGenerating, ...c }) => c);
+      await saveChatsForWorkspace(ws.id, chatsToSave as any);
+    }
   }
 
   async function saveToLocal() {
@@ -323,10 +329,14 @@
     if (workspaces.length <= 1) return;
     
     const ws = workspaces.find(w => w.id === id);
-    if (confirm(`Удалить рабочее пространство "${ws?.name}" и все его чаты?`)) {
-      // Очищаем инстансы MCP серверов из памяти
+    if (confirm(`Удалить рабочее пространство "${ws?.name}" и все его данные?`)) {
+      // 1. Очищаем инстансы MCP серверов из памяти
       mcpManager.removeWorkspace(id);
       
+      // 2. Удаляем персональную папку воркспейса с чатами
+      await deleteWorkspaceFolder(id);
+
+      // 3. Обновляем состояние воркспейсов
       workspaces = workspaces.filter(w => w.id !== id);
       
       if (selectedWorkspaceId === id) {
@@ -335,7 +345,6 @@
       }
       
       await persistConfig();
-      await persistChats();
     }
   }
 
@@ -459,7 +468,6 @@
     const chatToUpdate = currentChat;
     
     // Находим воркспейс, к которому реально относится этот чат
-    // (важно для фоновой генерации в других воркспейсах)
     const chatWorkspace = workspaces.find(ws => ws.chats.some(c => c.id === chatToUpdate.id));
     if (!chatWorkspace) return;
 
@@ -509,7 +517,7 @@
       await chatService.send(
         chatToUpdate,
         effectiveSettings,
-        chatSpecificServers, // Передаем изолированные инстансы именно этого воркспейса
+        chatSpecificServers, 
         () => {
           // Коллбэк для реактивного обновления UI при каждом шаге
           workspaces = [...workspaces];
