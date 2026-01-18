@@ -262,9 +262,15 @@
   /* Кнопка прокрутки вниз */
   .scroll-down-btn {
     position: sticky;
-    bottom: 20px;
+    /* Сдвигаем кнопку максимально вправо */
     left: 100%;
-    transform: translateX(-100%);
+    bottom: 20px;
+    
+    /* Убираем или уменьшаем translateX. 
+       Если поставить 0, она будет прижата к правому краю контейнера.
+       Если поставить, например, 20px, она выйдет за его пределы. */
+    transform: translateX(20px); 
+    
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -278,7 +284,7 @@
     color: #6b7280;
     z-index: 10;
     margin-bottom: 20px;
-    transition: background-color 0.2s;
+    transition: all 0.2s;
   }
 
   .scroll-down-btn:hover {

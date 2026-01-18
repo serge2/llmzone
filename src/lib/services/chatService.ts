@@ -378,6 +378,7 @@ export class ChatService {
               }
             } catch (e) {
               // Игнорируем неполные чанки
+              console.warn("Ошибка парсинга чанка:", e);
             }
           }
         }
