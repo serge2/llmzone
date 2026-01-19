@@ -1,4 +1,4 @@
-export type InspectorTab = 'context' | 'model' | 'tools';
+export type InspectorTab = 'context' | 'system' | 'model' | 'tools' ;
 
 export interface GlobalConfig {
   apiUrl: string;
@@ -65,6 +65,7 @@ export interface ToolResult {
 export interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
   text: string;
+  reasoning?: string;
   tool_calls?: ToolCall[];   // Если ассистент хочет вызвать инструменты
   tool_result?: ToolResult; // Если это сообщение-ответ от инструмента
   error?: string;

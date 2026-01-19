@@ -11,7 +11,7 @@
   let { 
     history, 
     isGenerating, 
-    message = $bindable(), 
+    message = $bindable(),
     onSendMessage,
     onEditMessage,
     onCopyMessage,
@@ -28,14 +28,14 @@
     onRegenerateMessage: () => void;
   }>();
 
-  // НОВОЕ: Группировка сообщений для отображения в виде единых блоков
+  // Группировка сообщений для отображения в виде единых блоков
   let displayGroups = $derived.by(() => {
     const groups: { main: Message; chain: Message[]; startIndex: number }[] = [];
     
     for (let i = 0; i < history.length; i++) {
       const msg = history[i];
       
-      if (msg.role === 'user') {
+      if (msg.role === 'user' || msg.role === 'system') {
         // Сообщение пользователя всегда начинает новую группу
         groups.push({ main: msg, chain: [], startIndex: i });
       } else if (msg.role === 'assistant') {
@@ -154,19 +154,14 @@
   }
 
   $effect(() => {
-    // 1. Следим за количеством сообщений
+    // Следим за состоянием для прокрутки
     const len = history.length;
-    
-    // 2. Следим за текстом последнего сообщения (самое важное для стриминга!)
-    const lastMessageText = len > 0 ? history[len - 1].text : '';
-    
-    // 3. Следим за состоянием генерации
+    const lastMessage = len > 0 ? history[len - 1] : null;
+    const lastMessageText = lastMessage?.text || '';
+    const lastMessageReasoning = lastMessage?.reasoning || '';
     const generating = isGenerating;
 
-    // Если хоть что-то из этого изменилось — пробуем скроллить
-    if (len || generating || lastMessageText) {
-      // Используем untrack, если не хотим, чтобы scrollToBottom 
-      // создавал лишние зависимости (хотя здесь это не критично)
+    if (len || generating || lastMessageText || lastMessageReasoning) {
       scrollToBottom();
     }
   });
@@ -183,6 +178,7 @@
         <MessageBubble 
           text={group.main.text} 
           role={group.main.role}
+          reasoning={group.main.reasoning}
           tool_calls={group.main.tool_calls} 
           chain={group.chain}
           isLastMessage={(group.startIndex + group.chain.length) >= history.length - 1}
@@ -195,7 +191,6 @@
         />
       {/each} 
     </div>
-
     {#if showScrollButton}
       <button 
         class="scroll-down-btn" 
@@ -206,6 +201,7 @@
       </button>
     {/if}
   </div>
+
 
   <div class="input-container">
     <div class="input-wrapper">
@@ -247,7 +243,7 @@
   .messages-container { 
     flex: 1; 
     overflow-y: auto; 
-    padding: 0 5%; /* Отступы для центрирования контента как в ChatGPT */
+    padding: 0 5%; 
     position: relative;
   }
 
@@ -270,7 +266,7 @@
        Если поставить 0, она будет прижата к правому краю контейнера.
        Если поставить, например, 20px, она выйдет за его пределы. */
     transform: translateX(20px); 
-    
+
     width: 32px;
     height: 32px;
     border-radius: 50%;

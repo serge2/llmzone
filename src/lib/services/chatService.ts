@@ -1,4 +1,3 @@
-// src/lib/services/chatService.ts
 import { fetch } from '@tauri-apps/plugin-http'; // ВАЖНО: Используем нативный fetch Tauri для обхода CORS
 import { toastService } from '$lib/services/toastService.svelte';
 import type { Message, Chat, WorkspaceSettings } from '$lib/types';
@@ -71,6 +70,7 @@ export class ChatService {
         chat.history.push({
           role: 'assistant',
           text: '', 
+          reasoning: '', // Инициализируем поле рассуждений
           tool_calls: []
         });
         onUpdate();
@@ -87,6 +87,13 @@ export class ChatService {
               onUpdate();
             }
           },
+          (updatedReasoning) => {
+            // НОВОЕ: Стриминг рассуждений (Reasoning/CoT)
+            if (currentAssistantMsgIdx !== null) {
+              chat.history[currentAssistantMsgIdx].reasoning = updatedReasoning;
+              onUpdate();
+            }
+          },
           (updatedTools) => {
             // НОВОЕ: Стриминг инструментов в реальном времени
             if (currentAssistantMsgIdx !== null) {
@@ -98,13 +105,14 @@ export class ChatService {
         );
 
         // ПРОВЕРКА: Если ответ пустой
-        if (!responseData || (!responseData.content && (!responseData.tool_calls || responseData.tool_calls.length === 0))) {
+        if (!responseData || (!responseData.content && !responseData.reasoning && (!responseData.tool_calls || responseData.tool_calls.length === 0))) {
           throw new Error("Модель вернула пустой ответ или не поддерживает данный формат сообщений");
         }
         
         // Финализируем данные после окончания стрима через прямые мутации
         if (currentAssistantMsgIdx !== null) {
           chat.history[currentAssistantMsgIdx].text = responseData.content;
+          chat.history[currentAssistantMsgIdx].reasoning = responseData.reasoning;
           chat.history[currentAssistantMsgIdx].tool_calls = responseData.tool_calls || [];
           onUpdate();
 
@@ -176,9 +184,10 @@ export class ChatService {
         
         // Если сообщение пустое (ошибка случилась до получения текста) — удаляем его
         const hasNoText = !assistantMsg.text || assistantMsg.text.trim() === '';
+        const hasNoReasoning = !assistantMsg.reasoning || assistantMsg.reasoning.trim() === '';
         const hasNoTools = !assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0;
 
-        if (hasNoText && hasNoTools) {
+        if (hasNoText && hasNoReasoning && hasNoTools) {
           // Используем splice для удаления элемента — Svelte 5 это увидит
           chat.history.splice(currentAssistantMsgIdx, 1);
         } else if (!isAbort) {
@@ -200,6 +209,7 @@ export class ChatService {
     settings: WorkspaceSettings, 
     tools: any[],
     onUpdateText: (fullText: string) => void,
+    onUpdateReasoning: (fullReasoning: string) => void, // Колбэк для стриминга рассуждений
     onUpdateTools: (tools: any[]) => void, // Добавлен колбэк для стриминга инструментов
     abortSignal: AbortSignal
   ) {
@@ -210,12 +220,18 @@ export class ChatService {
 
     for (const msg of history) {
       // Пропускаем пустые сообщения, которые могли остаться от прошлых итераций
-      if (msg.role === 'assistant' && !msg.text && (!msg.tool_calls || msg.tool_calls.length === 0)) continue;
+      if (msg.role === 'assistant' && !msg.text && !msg.reasoning && (!msg.tool_calls || msg.tool_calls.length === 0)) continue;
 
       const openAIMsg: any = {
         role: msg.role,
         content: msg.text || null
       };
+
+      // Добавляем reasoning если он есть (некоторые API поддерживают передачу обратно в историю)
+      if (msg.reasoning) {
+        openAIMsg.reasoning_content = msg.reasoning;
+      }
+
       if (msg.tool_calls && msg.tool_calls.length > 0) {
         openAIMsg.tool_calls = msg.tool_calls.map(tc => ({
           id: tc.id,
@@ -313,6 +329,7 @@ export class ChatService {
     const decoder = new TextDecoder();
     
     let fullContent = "";
+    let fullReasoning = "";
     let toolCallsRaw: any[] = [];
 
     if (reader) {
@@ -340,6 +357,12 @@ export class ChatService {
               const data = JSON.parse(trimmed.slice(6));
               const delta = data.choices[0]?.delta;
               if (!delta) continue;
+
+              // Обработка рассуждений (Reasoning Content)
+              if (delta.reasoning_content) {
+                fullReasoning += delta.reasoning_content;
+                onUpdateReasoning(fullReasoning);
+              }
 
               if (delta.content) {
                 fullContent += delta.content;
@@ -379,6 +402,7 @@ export class ChatService {
             } catch (e) {
               // Игнорируем неполные чанки
               console.warn("Ошибка парсинга чанка:", e);
+              console.warn("Line:", line);
             }
           }
         }
@@ -387,6 +411,7 @@ export class ChatService {
 
     return {
       content: fullContent,
+      reasoning: fullReasoning,
       tool_calls: toolCallsRaw.length > 0 ? toolCallsRaw.map(tc => ({
         id: tc.id,
         name: tc.name,

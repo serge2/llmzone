@@ -2,6 +2,7 @@
   import { marked } from 'marked';
   import Prism from 'prismjs';
   import { tick } from 'svelte';
+  import { slide } from 'svelte/transition'; // Добавлено для анимации размышлений
   import type { ToolCall, Message } from '$lib/types'; // Добавлен импорт Message
   
   // Темы и языки Prism
@@ -30,6 +31,7 @@
   let { 
     text = "", 
     role, 
+    reasoning = '',
     error, // Добавили проп ошибки
     isLastMessage = false,
     isTyping = false,
@@ -42,7 +44,8 @@
     onRegenerate
   }: {
     text: string, 
-    role: string,
+    role: 'user' | 'assistant' | 'tool' | 'system',
+    reasoning?: string;
     error?: string, // Типизация ошибки
     isLastMessage?: boolean,
     isTyping?: boolean,
@@ -201,8 +204,16 @@
   
 
   let isEditing = $state(false);
-  let editText = $state("");
+  let editText = $state(""); // Изначально пустая строка
   let textareaEl: HTMLTextAreaElement | undefined = $state();
+  let isReasoningExpanded = $state(true); // Состояние для раскрытия плашки мыслей
+
+  // синхронизируем editText с пропсом text
+  $effect(() => {
+    if (!isEditing) {
+      editText = text;
+    }
+  });
 
   // Функция включения режима редактирования
   function startEditing() {
@@ -251,6 +262,14 @@
     clearTimeout(deleteTimer);
     isConfirmingDelete = false;
   }
+
+  // Состояния для размышлений в цепочке сообщений
+  let chainReasoningExpanded = $state<Record<number, boolean>>({});
+
+  function toggleChainReasoning(index: number) {
+    const isCurrentlyExpanded = chainReasoningExpanded[index] ?? true;
+    chainReasoningExpanded[index] = !isCurrentlyExpanded;
+  }
 </script>
 
 <div class="message-wrapper {role}" class:is-generating={isTyping}>
@@ -267,10 +286,34 @@
               if (e.key === 'Escape') cancelEdit();
             }}
           ></textarea>
-        {:else if text}
-          {@html htmlContent}
-        {:else if role === 'assistant' && (!tool_calls || tool_calls.length === 0) && chain.length === 0}
-          <span class="thinking-text">ИИ думает...</span>
+        {:else}
+          {#if reasoning && reasoning.length > 0}
+            <div class="reasoning-container" class:expanded={isReasoningExpanded}>
+              <button 
+                class="reasoning-badge" 
+                onclick={() => isReasoningExpanded = !isReasoningExpanded}
+              >
+                <span class="brain-icon">💭</span>
+                <span class="reasoning-preview">
+                  {#if isReasoningExpanded}Рассуждения{:else}{reasoning}{/if}
+                </span>
+                <span class="chevron-icon" class:rotated={isReasoningExpanded}>{@html chevronDownIconRaw}</span>
+              </button>
+              
+              {#if isReasoningExpanded}
+                <div transition:slide={{ duration: 200 }} class="reasoning-content">
+                  {reasoning}
+                  {#if isTyping && !text}<span class="typing-dot">...</span>{/if}
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          {#if text}
+            {@html htmlContent}
+          {:else if role === 'assistant' && (!tool_calls || tool_calls.length === 0) && chain.length === 0 && !reasoning}
+            <span class="thinking-text">ИИ думает...</span>
+          {/if}
         {/if}
       </div>
 
@@ -293,8 +336,13 @@
                       <span>Аргументы</span>
                       <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
                     </summary>
-                    <pre class="language-json"><code>{ JSON.stringify(call.arguments, null, 2) }</code></pre>
-                  </details>
+                    <pre class="language-json"><code>{
+                      // Если есть распарсенный объект с ключами — показываем красиво
+                      Object.keys(call.arguments || {}).length > 0
+                        ? JSON.stringify(call.arguments, null, 2)
+                        : (call.raw_arguments || "{}") // Иначе показываем сырую строку генерации
+                    }</code></pre>
+                   </details>
 
                   <details class="sub-details">
                     <summary class="sub-summary">
@@ -315,11 +363,34 @@
       {/if}
 
       {#if chain.length > 0}
-        {#each chain as msg}
-          {#if msg.role === 'assistant' && msg.text}
-            <div class="prose chain-item-text">
-              {@html parseMarkdown(msg.text)}
-            </div>
+        {#each chain as msg, i}
+          {#if msg.role === 'assistant'}
+            {#if msg.reasoning && msg.reasoning.length > 0}
+              <div class="reasoning-container chain-reasoning" class:expanded={chainReasoningExpanded[i] ?? true}>
+                <button 
+                  class="reasoning-badge" 
+                  onclick={() => toggleChainReasoning(i)}
+                >
+                  <span class="brain-icon">💭</span>
+                  <span class="reasoning-preview">
+                    {#if (chainReasoningExpanded[i] ?? true)}Рассуждения{:else}{msg.reasoning}{/if}
+                  </span>
+                  <span class="chevron-icon" class:rotated={chainReasoningExpanded[i] ?? true}>{@html chevronDownIconRaw}</span>
+                </button>
+                
+                {#if (chainReasoningExpanded[i] ?? true)}
+                  <div transition:slide={{ duration: 200 }} class="reasoning-content">
+                    {msg.reasoning}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+
+            {#if msg.text}
+              <div class="prose chain-item-text">
+                {@html parseMarkdown(msg.text)}
+              </div>
+            {/if}
           {/if}
 
           {#if msg.tool_calls && msg.tool_calls.length > 0}
@@ -865,6 +936,77 @@
     line-height: 1.4;
     opacity: 0.9;
     word-break: break-word;
+  }
+
+  /* Стили для размышлений */
+  .reasoning-container {
+    margin-bottom: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+    overflow: hidden;
+    max-width: 100%;
+  }
+
+  /* Дополнительный отступ для размышлений внутри цепочки */
+  .chain-reasoning {
+    margin-top: 12px;
+  }
+
+  .reasoning-badge {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #64748b;
+    font-size: 0.85rem;
+    transition: background-color 0.2s;
+  }
+
+  .reasoning-badge:hover {
+    background-color: #f1f5f9;
+  }
+
+  .reasoning-preview {
+    flex: 1;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-style: italic;
+    opacity: 0.7;
+  }
+
+  .reasoning-content {
+    padding: 12px;
+    font-size: 0.8rem;
+    color: #15181b;
+    background: #fbfbfb;
+    border-top: 1px solid #f1f5f9;
+    white-space: pre-wrap;
+
+    line-height: 1.5;
+  }
+
+  .chevron-icon {
+    width: 12px;
+    height: 12px;
+    transition: transform 0.2s;
+    opacity: 0.5;
+  }
+
+  .chevron-icon.rotated {
+    transform: rotate(180deg);
+  }
+
+  .typing-dot {
+    display: inline-block;
+    animation: blink 1.5s infinite;
+    margin-left: 2px;
   }
 
   @keyframes pulse-opacity {
