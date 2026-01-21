@@ -2,7 +2,7 @@
   import { fetch } from '@tauri-apps/plugin-http';
   import { onMount, untrack } from 'svelte';
   import { loadConfig, saveConfig } from '$lib/config';
-  import type { Workspace, Chat, Message, AppSettings, GlobalConfig } from '$lib/types';
+  import type { Workspace, Chat, Message, AppSettings, GlobalConfig, Attachment } from '$lib/types'; // Добавлен импорт Attachment
   // Обновленные импорты для работы с раздельными чатами
   import { loadChatsForWorkspace, saveChatsForWorkspace, deleteWorkspaceFolder } from '$lib/storage/chatStorage';
   import Inspector from '$lib/components/Inspector.svelte';
@@ -410,14 +410,15 @@
     if (userMsgIndex !== -1) {
       // Сохраняем текст последнего вопроса
       const lastUserText = history[userMsgIndex].text;
+      const lastAttachments = history[userMsgIndex].attachments; // Сохраняем вложения
       
       // Удаляем всё, начиная с этого вопроса и до конца
       history.splice(userMsgIndex); 
       
-      // Помещаем текст обратно в поле ввода и вызываем отправку
+      // Помещаем текст и вложения обратно в вызов
       message = lastUserText;
       workspaces = [...workspaces];
-      await sendMessage();
+      await sendMessage(lastAttachments); // Передаем вложения при регенерации
     }
   }
 
@@ -457,7 +458,7 @@
   }
 
   // --- Основная логика отправки (теперь через ChatService с поддержкой MCP) ---
-  async function sendMessage() {
+  async function sendMessage(attachments: Attachment[] = []) { // Обновлено: принимает аттачи
     if (!currentChat || !currentWorkspace) return;
 
     if (currentChat.isGenerating) {
@@ -487,9 +488,13 @@
     const controller = new AbortController();
     abortControllers[chatToUpdateId] = controller;
 
-    // Добавляем сообщение пользователя если оно не пустое
-    if (message.trim()) {
-      chatToUpdate.history = [...chatToUpdate.history, { role: "user", text: message }];
+    // Добавляем сообщение пользователя если оно не пустое или есть вложения
+    if (message.trim() || attachments.length > 0) {
+      chatToUpdate.history = [...chatToUpdate.history, { 
+        role: "user", 
+        text: message,
+        attachments: attachments.length > 0 ? attachments : undefined // Сохраняем аттачи
+      }];
       
       const chatIndex = chatWorkspace.chats.findIndex(c => c.id === chatToUpdateId);
       if (chatIndex > 0) {

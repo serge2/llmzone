@@ -1,4 +1,14 @@
-export type InspectorTab = 'context' | 'system' | 'model' | 'tools' ;
+export type InspectorTab = 'context' | 'model' | 'tools' ;
+
+export interface Attachment {
+  id: string;              // Уникальный ID (UUID)
+  name: string;            // Оригинальное имя файла (например, "report.pdf")
+  size: number;            // Размер в байтах
+  mimeType: string;        // MIME-тип (image/png, application/pdf, и т.д.)
+  base64?: string;         // Содержимое для Vision или мелких файлов
+  path?: string;           // Локальный путь (для обработки через Tauri на бэкенде)
+  type: 'image' | 'document' | 'archive' | 'other';
+}
 
 export interface GlobalConfig {
   apiUrl: string;
@@ -47,8 +57,6 @@ export interface Workspace {
   chats: Chat[];
 }
 
-// --- ОБНОВЛЕННАЯ СТРУКТУРА СООБЩЕНИЙ ---
-
 export interface ToolCall {
   id: string;            // Уникальный ID вызова от LLM
   name: string;          // Имя вида "server__tool"
@@ -68,6 +76,7 @@ export interface Message {
   reasoning?: string;
   tool_calls?: ToolCall[];   // Если ассистент хочет вызвать инструменты
   tool_result?: ToolResult; // Если это сообщение-ответ от инструмента
+  attachments?: Attachment[]; // Универсальный массив вложений
   error?: string;
 }
 

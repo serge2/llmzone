@@ -3,7 +3,7 @@
   import Prism from 'prismjs';
   import { tick } from 'svelte';
   import { slide } from 'svelte/transition'; // Добавлено для анимации размышлений
-  import type { ToolCall, Message } from '$lib/types'; // Добавлен импорт Message
+  import type { ToolCall, Message, Attachment } from '$lib/types';
   
   // Темы и языки Prism
   import 'prismjs/themes/prism.css'; 
@@ -25,19 +25,20 @@
   import trashIconRaw from '$lib/assets/icons/trash.svg?raw';
   import refreshIconRaw from '$lib/assets/icons/refresh.svg?raw';
   import closeIconRaw from '$lib/assets/icons/close.svg?raw';
-  import chevronDownIconRaw from '$lib/assets/icons/chevron-down.svg?raw'; // Предполагается наличие иконки
+  import chevronDownIconRaw from '$lib/assets/icons/chevron-down.svg?raw';
 
   // В Svelte 5 самый надежный способ передачи типов в $props — деструктуризация с типами
   let { 
     text = "", 
     role, 
     reasoning = '',
+    attachments = [],
     error, // Добавили проп ошибки
     isLastMessage = false,
     isTyping = false,
     tool_calls,
     fullHistory = [], // Оставили для совместимости, но теперь приоритет у chain
-    chain = [], // НОВОЕ: Список связанных сообщений (tool и assistant)
+    chain = [], // Список связанных сообщений (tool и assistant)
     onEdit,
     onCopy,
     onDelete,
@@ -46,6 +47,7 @@
     text: string, 
     role: 'user' | 'assistant' | 'tool' | 'system',
     reasoning?: string;
+    attachments?: Attachment[]; // Типизация вложений
     error?: string, // Типизация ошибки
     isLastMessage?: boolean,
     isTyping?: boolean,
@@ -306,6 +308,26 @@
                   {#if isTyping && !text}<span class="typing-dot">...</span>{/if}
                 </div>
               {/if}
+            </div>
+          {/if}
+
+          {#if attachments && attachments.length > 0}
+            <div class="message-attachments" class:user-align={role === 'user'}>
+              {#each attachments as attr}
+                <div class="attachment-item">
+                  {#if attr.type === 'image'}
+                    <img src={attr.base64} alt={attr.name} class="attachment-image" />
+                  {:else}
+                    <div class="attachment-file-card">
+                      <span class="file-icon">📄</span>
+                      <div class="file-info">
+                        <span class="file-name" title={attr.name}>{attr.name}</span>
+                        <span class="file-meta">{attr.name.split('.').pop()?.toUpperCase()} • {(attr.size / 1024).toFixed(1)} KB</span>
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+              {/each}
             </div>
           {/if}
 
@@ -1007,6 +1029,72 @@
     display: inline-block;
     animation: blink 1.5s infinite;
     margin-left: 2px;
+  }
+
+  /* Стили для новых вложений (аттачментов) */
+  .message-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  
+  .user-align {
+    justify-content: flex-end;
+  }
+
+  .attachment-item {
+    max-width: 100%;
+  }
+
+  .attachment-image {
+    max-width: 320px;
+    max-height: 320px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    object-fit: contain;
+    background-color: #f8fafc;
+  }
+
+  .attachment-file-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #f1f5f9;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    min-width: 200px;
+    max-width: 300px;
+  }
+
+  .user .attachment-file-card {
+    background: rgba(255, 255, 255, 0.5);
+    border-color: rgba(13, 71, 161, 0.1);
+  }
+
+  .file-icon {
+    font-size: 1.5rem;
+  }
+
+  .file-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .file-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #334155;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .file-meta {
+    font-size: 0.7rem;
+    color: #64748b;
   }
 
   @keyframes pulse-opacity {

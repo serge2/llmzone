@@ -223,9 +223,33 @@ export class ChatService {
       if (msg.role === 'assistant' && !msg.text && !msg.reasoning && (!msg.tool_calls || msg.tool_calls.length === 0)) continue;
 
       const openAIMsg: any = {
-        role: msg.role,
-        content: msg.text || null
+        role: msg.role
       };
+
+      // ЛОГИКА ВЛОЖЕНИЙ И МУЛЬТИМОДАЛЬНОСТИ
+      if (msg.role === 'user' && msg.attachments && msg.attachments.some(a => a.type === 'image')) {
+        const content: any[] = [];
+        
+        // Добавляем текстовую часть, если она есть
+        if (msg.text) {
+          content.push({ type: 'text', text: msg.text });
+        }
+
+        // Добавляем изображения
+        for (const attr of msg.attachments) {
+          if (attr.type === 'image' && attr.base64) {
+            content.push({
+              type: 'image_url',
+              image_url: { url: attr.base64 } // attr.base64 уже содержит "data:image/...;base64,..."
+            });
+          }
+          // Другие типы вложений (PDF/Текст) пока можно игнорировать или 
+          // внедрять их содержимое как текст в будущем.
+        }
+        openAIMsg.content = content;
+      } else {
+        openAIMsg.content = msg.text || null;
+      }
 
       // Добавляем reasoning если он есть (некоторые API поддерживают передачу обратно в историю)
       if (msg.reasoning) {
