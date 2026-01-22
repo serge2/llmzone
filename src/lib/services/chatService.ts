@@ -62,6 +62,9 @@ export class ChatService {
       let isLooping = true;
 
       while (isLooping && iteration < this.MAX_ITERATIONS) {
+        // ПРОВЕРКА ПРЕРЫВАНИЯ: Останавливаем цикл, если получен сигнал
+        if (abortSignal.aborted) break;
+
         iteration++;
 
         // 1. Добавляем сообщение напрямую через push. 
@@ -104,6 +107,9 @@ export class ChatService {
           abortSignal
         );
 
+        // ПРОВЕРКА ПРЕРЫВАНИЯ: Если после запроса к API процесс был прерван
+        if (abortSignal.aborted) break;
+
         // ПРОВЕРКА: Если ответ пустой
         if (!responseData || (!responseData.content && !responseData.reasoning && (!responseData.tool_calls || responseData.tool_calls.length === 0))) {
           throw new Error("Модель вернула пустой ответ или не поддерживает данный формат сообщений");
@@ -121,6 +127,9 @@ export class ChatService {
           // 3. Проверка инструментов
           if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
             for (const call of assistantMsg.tool_calls) {
+              // ПРОВЕРКА ПРЕРЫВАНИЯ внутри цикла вызова инструментов
+              if (abortSignal.aborted) break;
+
               try {
                 // ПОИСК ОРИГИНАЛЬНОГО ИНСТРУМЕНТА ПО УНИКАЛЬНОМУ ИМЕНИ
                 const toolBinding = toolLookupMap.get(call.name);
@@ -157,6 +166,11 @@ export class ChatService {
             onUpdate();
             // Сбрасываем индекс перед следующей итерацией (будет создан новый ассистент)
             currentAssistantMsgIdx = null; 
+            
+            // Если во время выполнения инструментов был нажат стоп — выходим из внешнего цикла
+            if (abortSignal.aborted) {
+              isLooping = false;
+            }
           } else {
             isLooping = false;
           }

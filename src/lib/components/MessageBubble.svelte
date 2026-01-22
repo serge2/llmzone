@@ -334,7 +334,11 @@
           {#if text}
             {@html htmlContent}
           {:else if role === 'assistant' && (!tool_calls || tool_calls.length === 0) && chain.length === 0 && !reasoning}
-            <span class="thinking-text">ИИ думает...</span>
+            {#if isTyping}
+              <span class="thinking-text">ИИ думает...</span>
+            {:else}
+              <span class="thinking-text" style="animation: none; opacity: 0.6;">Генерация остановлена</span>
+            {/if}
           {/if}
         {/if}
       </div>

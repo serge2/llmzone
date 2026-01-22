@@ -66,9 +66,12 @@
     pendingAttachments = pendingAttachments.filter(a => a.id !== id);
   }
 
-  // Обертка над отправкой для учета вложений
+  // Обертка над отправкой для учета вложений и обработки остановки
   function internalSendMessage() {
-    if (!isGenerating && (message.trim() || pendingAttachments.length > 0)) {
+    if (isGenerating) {
+      // ИСПРАВЛЕНО: Если идет генерация, вызываем функцию отправки (она обработает стоп в +page.svelte)
+      onSendMessage([]);
+    } else if (message.trim() || pendingAttachments.length > 0) {
       onSendMessage([...pendingAttachments]);
       pendingAttachments = []; // Очистка после отправки
     }
@@ -192,7 +195,11 @@
       if (!isGenerating && (message.trim() || pendingAttachments.length > 0)) {
         e.preventDefault();
         internalSendMessage();
-      } else if (!isGenerating) {
+      } else if (isGenerating) {
+        // ИСПРАВЛЕНО: Позволяем Enter прерывать генерацию
+        e.preventDefault();
+        internalSendMessage();
+      } else {
         // Если генерации нет, но сообщение пустое — просто запрещаем перенос строки
         e.preventDefault(); 
       }
