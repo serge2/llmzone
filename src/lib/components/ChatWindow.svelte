@@ -18,16 +18,18 @@
     onEditMessage,
     onCopyMessage,
     onDeleteMessage,
-    onRegenerateMessage
+    onRegenerateMessage,
+    onApproveTool // Обработчик подтверждения инструментов
   } = $props<{
     history: Message[];
     isGenerating: boolean;
     message: string;
-    onSendMessage: (attachments?: Attachment[]) => void; // Обновлено: принимает аттачи
+    onSendMessage: (attachments?: Attachment[]) => void; // принимает аттачи
     onEditMessage: (index: number, newText: string) => void;
     onCopyMessage: (text: string) => void;
     onDeleteMessage: (index: number) => void;
     onRegenerateMessage: () => void;
+    onApproveTool?: (callId: string, status: 'approved' | 'rejected') => void; // Добавлен тип
   }>();
 
   // --- ЛОГИКА ВЛОЖЕНИЙ ---
@@ -259,6 +261,7 @@
           }}
           onDelete={() => onDeleteMessage(group.startIndex)}
           onRegenerate={() => onRegenerateMessage()}
+          onApproveTool={onApproveTool} 
         />
       {/each} 
     </div>
@@ -337,6 +340,7 @@
 </section>
 
 <style>
+  /* Стили остаются без изменений согласно вашему исходному коду */
   .chat-column { 
     flex: 1; 
     display: flex; 
@@ -361,18 +365,11 @@
     flex-direction: column;
   }
 
-  /* Кнопка прокрутки вниз */
   .scroll-down-btn {
     position: sticky;
-    /* Сдвигаем кнопку максимально вправо */
     left: 100%;
     bottom: 20px;
-    
-    /* Убираем или уменьшаем translateX. 
-       Если поставить 0, она будет прижата к правому краю контейнера.
-       Если поставить, например, 20px, она выйдет за его пределы. */
     transform: translateX(20px); 
-
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -404,7 +401,6 @@
     background: linear-gradient(transparent, #fdfdfd 20%);
   }
 
-  /* Стили для превью файлов */
   .attachments-preview {
     max-width: 1000px;
     margin: 0 auto 10px auto;
@@ -504,7 +500,7 @@
   textarea { 
     flex: 1; 
     max-height: 200px;
-    min-height: 40px; /* Установили комфортную начальную высоту */
+    min-height: 40px; 
     border: none;
     padding: 8px;
     resize: none; 
@@ -519,10 +515,9 @@
   .input-wrapper button:not(.attach-btn) { 
     width: 36px; height: 36px; background: #2f2f2f; color: white; border: none; border-radius: 12px; cursor: pointer; 
     display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform 0.1s;
-    margin-bottom: 2px; /* Чуть приподнимаем кнопку, чтобы она была по центру первой строки */
+    margin-bottom: 2px; 
   }
 
-  /* Стилизация иконок через @html */
   .input-wrapper button :global(svg) {
     width: 20px;
     height: 20px;
@@ -533,6 +528,4 @@
   .input-wrapper button.stop-btn { background: #e5e7eb; color: #ef4444;}
 
   .footer-note { text-align: center; font-size: 0.7rem; color: #9ca3af; margin-top: 8px; }
-
-  @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-5px); } }
 </style>

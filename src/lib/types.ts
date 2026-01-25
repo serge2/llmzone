@@ -62,6 +62,7 @@ export interface ToolCall {
   name: string;          // Имя вида "server__tool"
   arguments: any;        // Распаршенные аргументы (объект)
   raw_arguments?: string; // Еще не распаршенные аргументы
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
 }
 
 export interface ToolResult {

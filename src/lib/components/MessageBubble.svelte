@@ -38,7 +38,8 @@
     onEdit,
     onCopy,
     onDelete,
-    onRegenerate
+    onRegenerate,
+    onApproveTool // Обработчик подтверждения инструмента
   }: {
     role: 'user' | 'assistant' | 'tool' | 'system',
     error?: string, // Типизация ошибки
@@ -49,7 +50,8 @@
     onEdit?: (newText: string) => void,
     onCopy?: () => void,
     onDelete?: () => void,
-    onRegenerate?: () => void
+    onRegenerate?: () => void,
+    onApproveTool?: (callId: string, status: 'approved' | 'rejected') => void // Типизация
   } = $props();
 
 
@@ -328,16 +330,22 @@
                 {#each msg.tool_calls as call}
                   {@const result = getToolResult(call.id)}
                   {@const isError = result?.tool_result?.isError}
-                  <div class="tool-widget">
-                    <details class="main-details">
-                      <summary class="tool-summary" class:success={!!result && !isError} class:error={isError}>
-                        <span class="icon">🛠</span>
-                        <span class="name">Инструмент: <strong>{call.name}</strong></span>
+                  {@const isPending = call.approvalStatus === 'pending'}
+                  {@const isRejected = call.approvalStatus === 'rejected'}
+
+                  <div class="tool-widget" class:needs-approval={isPending} class:is-rejected={isRejected}>
+                    <details class="main-details" open={isPending}>
+                      <summary class="tool-summary" class:success={!!result && !isError} class:error={isError || isRejected} class:pending={isPending}>
+                        <span class="icon">{isPending ? '❓' : '🛠'}</span>
+                        <span class="name">
+                          {isPending ? 'Запрос разрешения:' : isRejected ? 'Отклонено:' : 'Инструмент:'} 
+                          <strong>{call.name}</strong>
+                        </span>
                         <span class="status-icon">{@html chevronDownIconRaw}</span>
                       </summary>
                       
                       <div class="tool-details-content">
-                        <details class="sub-details">
+                        <details class="sub-details" open={isPending}>
                           <summary class="sub-summary">
                             <span>Аргументы</span>
                             <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
@@ -355,17 +363,35 @@
                           {/key}
                         </details>
 
-                        <details class="sub-details">
-                          <summary class="sub-summary">
-                            <span>Ответ</span>
-                            <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
-                          </summary>
-                          {#if result}
-                            <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
-                          {:else}
-                            <div class="tool-loading">Выполнение запроса...</div>
-                          {/if}
-                        </details>
+                        {#if isPending}
+                          <div class="approval-actions" transition:slide>
+                            <p class="approval-hint">Модель хочет использовать этот инструмент. Разрешить выполнение?</p>
+                            <div class="approval-buttons">
+                              <button class="approve-btn" onclick={() => onApproveTool?.(call.id, 'approved')}>
+                                Разрешить
+                              </button>
+                              <button class="reject-btn" onclick={() => onApproveTool?.(call.id, 'rejected')}>
+                                Отклонить
+                              </button>
+                            </div>
+                          </div>
+                        {:else if isRejected}
+                          <div class="tool-rejected-note">
+                             Выполнение этого инструмента было отклонено пользователем.
+                          </div>
+                        {:else}
+                          <details class="sub-details">
+                            <summary class="sub-summary">
+                              <span>Ответ</span>
+                              <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
+                            </summary>
+                            {#if result}
+                              <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
+                            {:else}
+                              <div class="tool-loading">Выполнение запроса...</div>
+                            {/if}
+                          </details>
+                        {/if}
                       </div>
                     </details>
                   </div>
@@ -721,6 +747,18 @@
     border-radius: 10px;
     background: #f8fafc; /* Светлый фон заголовка */
     overflow: hidden;
+    transition: all 0.2s;
+  }
+
+  /* Оранжевое выделение, когда нужно подтверждение */
+  .tool-widget.needs-approval {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 1px #fef3c7;
+  }
+
+  .tool-widget.is-rejected {
+    border-color: #fca5a5;
+    opacity: 0.8;
   }
 
   .tool-summary {
@@ -747,6 +785,12 @@
     background-color: #fef2f2;
     color: #991b1b;
     border-bottom: 1px solid #fee2e2;
+  }
+
+  .tool-summary.pending {
+    background-color: #fffbeb;
+    color: #92400e;
+    border-bottom: 1px solid #fef3c7;
   }
   
   .tool-summary::-webkit-details-marker { display: none; }
@@ -827,6 +871,53 @@
     max-height: 400px;
     overflow-y: auto;
     border-top: 1px solid #f1f5f9;
+  }
+
+  /* Стили для блока подтверждения */
+  .approval-actions {
+    padding: 12px;
+    background: #fffbeb;
+    border-radius: 8px;
+    margin-top: 4px;
+    border: 1px dashed #fcd34d;
+  }
+
+  .approval-hint {
+    font-size: 0.75rem;
+    color: #92400e;
+    margin-bottom: 10px !important;
+    font-weight: 500;
+  }
+
+  .approval-buttons {
+    display: flex;
+    gap: 8px;
+  }
+
+  .approve-btn, .reject-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+
+  .approve-btn { background: #059669; color: white; }
+  .approve-btn:hover { background: #047857; }
+  
+  .reject-btn { background: #dc2626; color: white; }
+  .reject-btn:hover { background: #b91c1c; }
+
+  .tool-rejected-note {
+    padding: 12px;
+    font-size: 0.8rem;
+    color: #b91c1c;
+    font-style: italic;
+    background: #fef2f2;
+    border-radius: 8px;
+    margin-top: 4px;
   }
 
   .tool-loading {

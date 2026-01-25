@@ -1,6 +1,6 @@
 import { fetch } from '@tauri-apps/plugin-http'; // ВАЖНО: Используем нативный fetch Tauri для обхода CORS
 import { toastService } from '$lib/services/toastService.svelte';
-import type { Message, Chat, WorkspaceSettings } from '$lib/types';
+import type { Message, Chat, WorkspaceSettings, ToolCall } from '$lib/types';
 import type { MCPServerInstance } from '$lib/mcp/manager.svelte';
 
 export class ChatService {
@@ -34,7 +34,7 @@ export class ChatService {
             .filter(t => t.enabled)
             .map(tool => {
               let baseName = `${tool.name}`;
-              // let baseName = `${server.name}___${tool.name}`; Some models can't use tolls with complex names
+              // let baseName = `${server.name}___${tool.name}`; Some models can't use tools with complex names
               let uniqueName = baseName;
               let counter = 1;
 
@@ -67,68 +67,136 @@ export class ChatService {
 
         iteration++;
 
-        // 1. Добавляем сообщение напрямую через push. 
-        // В Svelte 5 это триггерит реактивность автоматически.
-        currentAssistantMsgIdx = chat.history.length;
-        chat.history.push({
-          role: 'assistant',
-          text: '', 
-          reasoning: '', // Инициализируем поле рассуждений
-          tool_calls: []
-        });
-        onUpdate();
+        // Проверяем, есть ли уже в последнем сообщении инструменты, ожидающие выполнения или подтверждения
+        const lastMsg = chat.history[chat.history.length - 1];
+        const hasExistingCalls = lastMsg?.role === 'assistant' && lastMsg.tool_calls && lastMsg.tool_calls.length > 0;
 
-        // 2. Делаем запрос к LM Studio со стримингом
-        const responseData = await this.fetchLLMResponse(
-          chat.history.slice(0, -1), // Для слайса копия допустима, так как это данные для API
-          settings, 
-          mcpTools,
-          (updatedText) => {
-            if (currentAssistantMsgIdx !== null) {
-              // Прямая мутация свойства. Svelte 5 обновит только текстовый узел в UI.
-              chat.history[currentAssistantMsgIdx].text = updatedText;
-              onUpdate();
-            }
-          },
-          (updatedReasoning) => {
-            // НОВОЕ: Стриминг рассуждений (Reasoning/CoT)
-            if (currentAssistantMsgIdx !== null) {
-              chat.history[currentAssistantMsgIdx].reasoning = updatedReasoning;
-              onUpdate();
-            }
-          },
-          (updatedTools) => {
-            // НОВОЕ: Стриминг инструментов в реальном времени
-            if (currentAssistantMsgIdx !== null) {
-              chat.history[currentAssistantMsgIdx].tool_calls = updatedTools;
-              onUpdate();
-            }
-          },
-          abortSignal
-        );
-
-        // ПРОВЕРКА ПРЕРЫВАНИЯ: Если после запроса к API процесс был прерван
-        if (abortSignal.aborted) break;
-
-        // ПРОВЕРКА: Если ответ пустой
-        if (!responseData || (!responseData.content && !responseData.reasoning && (!responseData.tool_calls || responseData.tool_calls.length === 0))) {
-          throw new Error("Модель вернула пустой ответ или не поддерживает данный формат сообщений");
-        }
-        
-        // Финализируем данные после окончания стрима через прямые мутации
-        if (currentAssistantMsgIdx !== null) {
-          chat.history[currentAssistantMsgIdx].text = responseData.content;
-          chat.history[currentAssistantMsgIdx].reasoning = responseData.reasoning;
-          chat.history[currentAssistantMsgIdx].tool_calls = responseData.tool_calls || [];
+        if (hasExistingCalls) {
+          // Если мы зашли в send, а инструменты уже есть — значит мы продолжаем после паузы (напр. после аппрува)
+          currentAssistantMsgIdx = chat.history.length - 1;
+        } else {
+          // Стандартный путь: создаем новое сообщение для ответа ассистента
+          currentAssistantMsgIdx = chat.history.length;
+          chat.history.push({
+            role: 'assistant',
+            text: '', 
+            reasoning: '', 
+            tool_calls: []
+          });
           onUpdate();
 
+          // 2. Делаем запрос к LM Studio со стримингом
+          const responseData = await this.fetchLLMResponse(
+            chat.history.slice(0, -1),
+            settings, 
+            mcpTools,
+            (updatedText) => {
+              if (currentAssistantMsgIdx !== null) {
+                chat.history[currentAssistantMsgIdx].text = updatedText;
+                onUpdate();
+              }
+            },
+            (updatedReasoning) => {
+              if (currentAssistantMsgIdx !== null) {
+                chat.history[currentAssistantMsgIdx].reasoning = updatedReasoning;
+                onUpdate();
+              }
+            },
+            (updatedTools) => {
+              if (currentAssistantMsgIdx !== null) {
+                chat.history[currentAssistantMsgIdx].tool_calls = updatedTools;
+                onUpdate();
+              }
+            },
+            abortSignal
+          );
+
+          if (abortSignal.aborted) break;
+
+          if (!responseData || (!responseData.content && !responseData.reasoning && (!responseData.tool_calls || responseData.tool_calls.length === 0))) {
+            throw new Error("Модель вернула пустой ответ или не поддерживает данный формат сообщений");
+          }
+          
+          if (currentAssistantMsgIdx !== null) {
+            chat.history[currentAssistantMsgIdx].text = responseData.content;
+            chat.history[currentAssistantMsgIdx].reasoning = responseData.reasoning;
+            chat.history[currentAssistantMsgIdx].tool_calls = responseData.tool_calls || [];
+            onUpdate();
+          }
+        }
+
+        // 3. Обработка инструментов
+        if (currentAssistantMsgIdx !== null) {
           const assistantMsg = chat.history[currentAssistantMsgIdx];
 
-          // 3. Проверка инструментов
           if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
-            for (const call of assistantMsg.tool_calls) {
-              // ПРОВЕРКА ПРЕРЫВАНИЯ внутри цикла вызова инструментов
+            
+            // --- ЛОГИКА ПОДТВЕРЖДЕНИЯ (Human-in-the-loop) ---
+            let needsUserApproval = false;
+
+            for (const call of assistantMsg.tool_calls as ToolCall[]) {
+              // Явно приводим к ToolCall, чтобы избежать ошибки "no overlap"
+              const currentStatus = call.approvalStatus as ToolCall['approvalStatus'];
+
+              // Если статус уже окончательный, пропускаем проверку
+              if (currentStatus === 'approved' || currentStatus === 'rejected') continue;
+
+              const toolBinding = toolLookupMap.get(call.name);
+              if (toolBinding) {
+                const server = toolBinding.server;
+                const toolDef = server.tools.find(t => t.name === toolBinding.originalName);
+                
+                // Проверяем: требует ли сервер или конкретный инструмент подтверждения
+                const isAutoApprove = server.autoApproveAll || toolDef?.alwaysAllow;
+                
+                if (!isAutoApprove) {
+                  // Если статус еще не задан, помечаем как ожидающий
+                  if (!call.approvalStatus) {
+                    call.approvalStatus = 'pending';
+                  }
+                  
+                  // Если статус всё еще не 'approved', значит нужно вмешательство пользователя
+                  if (call.approvalStatus !== 'approved') {
+                    needsUserApproval = true;
+                  }
+                } else {
+                  call.approvalStatus = 'approved';
+                }
+              }
+            }
+
+            // Если нашли хоть один инструмент, требующий подтверждения — ставим на паузу
+            if (needsUserApproval) {
+              chat.isGenerating = false;
+              onUpdate();
+              return; // Выход из метода send. Цикл прерван до реакции пользователя.
+            }
+
+            // --- ВЫПОЛНЕНИЕ ИНСТРУМЕНТОВ ---
+            for (const call of assistantMsg.tool_calls as ToolCall[]) {
               if (abortSignal.aborted) break;
+
+              // Пропускаем, если этот вызов отклонен пользователем
+              if (call.approvalStatus === 'rejected') {
+                // Добавляем сообщение об отказе, чтобы модель знала об этом
+                const alreadyHasResult = chat.history.some(m => m.role === 'tool' && m.tool_result?.tool_call_id === call.id);
+                if (!alreadyHasResult) {
+                  chat.history.push({
+                    role: 'tool',
+                    text: "User rejected execution of this tool.",
+                    tool_result: {
+                      tool_call_id: call.id,
+                      content: "Error: User rejected execution.",
+                      isError: true
+                    }
+                  });
+                }
+                continue;
+              }
+
+              // Пропускаем, если этот вызов уже имеет результат в истории (чтобы не дублировать при продолжении)
+              const alreadyHasResult = chat.history.some(m => m.role === 'tool' && m.tool_result?.tool_call_id === call.id);
+              if (alreadyHasResult) continue;
 
               try {
                 // ПОИСК ОРИГИНАЛЬНОГО ИНСТРУМЕНТА ПО УНИКАЛЬНОМУ ИМЕНИ
@@ -195,7 +263,7 @@ export class ChatService {
       // ЛОГИКА ОЧИСТКИ ИНТЕРФЕЙСА:
       if (currentAssistantMsgIdx !== null) {
         const assistantMsg = chat.history[currentAssistantMsgIdx];
-        
+
         // Если сообщение пустое (ошибка случилась до получения текста) — удаляем его
         const hasNoText = !assistantMsg.text || assistantMsg.text.trim() === '';
         const hasNoReasoning = !assistantMsg.reasoning || assistantMsg.reasoning.trim() === '';
@@ -243,7 +311,7 @@ export class ChatService {
       // ЛОГИКА ВЛОЖЕНИЙ И МУЛЬТИМОДАЛЬНОСТИ
       if (msg.role === 'user' && msg.attachments && msg.attachments.some(a => a.type === 'image')) {
         const content: any[] = [];
-        
+
         // Добавляем текстовую часть, если она есть
         if (msg.text) {
           content.push({ type: 'text', text: msg.text });
@@ -285,7 +353,7 @@ export class ChatService {
         try {
           // 1. Парсим строку из content, которая содержит { "content": [...] }
           const outerData = JSON.parse(msg.tool_result.content);
-          
+
           // 2. Ищем объект с типом 'image' внутри массива content
           const imageItem = Array.isArray(outerData.content) 
             ? outerData.content.find((item: any) => item.type === 'image')
@@ -315,10 +383,7 @@ export class ChatService {
             });
             continue; 
           }
-        } catch (e) {
-          // Если это не JSON или структура не совпала — идем по обычному пути
-        }
-
+        } catch (e) {/*Если это не JSON или структура не совпала — идем по обычному пути*/}
         openAIMsg.content = msg.tool_result.content;
       }
 

@@ -457,6 +457,64 @@
     navigator.clipboard.writeText(text);
   }
 
+  // --- ЛОГИКА ПОДТВЕРЖДЕНИЯ ИНСТРУМЕНТОВ ---
+  async function handleApproveTool(callId: string, status: 'approved' | 'rejected') {
+    if (!currentChat || !currentWorkspace) return;
+
+    // 1. Находим и обновляем статус подтверждения в истории
+    for (const msg of currentChat.history) {
+      if (msg.tool_calls) {
+        const call = msg.tool_calls.find(c => c.id === callId);
+        if (call) {
+          call.approvalStatus = status;
+          break;
+        }
+      }
+    }
+
+    // 2. Если пользователь нажал "Разрешить", возобновляем цикл в ChatService
+    if (status === 'approved') {
+      // Используем существующий или создаем новый контроллер для возобновления
+      if (!abortControllers[currentChat.id]) {
+        abortControllers[currentChat.id] = new AbortController();
+      }
+      
+      const effectiveSettings = {
+        apiUrl: currentWorkspace.settings.apiUrl || globalConfig.apiUrl,
+        apiKey: currentWorkspace.settings.apiKey || globalConfig.apiKey,
+        modelName: currentWorkspace.settings.modelName || globalConfig.modelName,
+        systemPrompt: currentWorkspace.settings.systemPrompt,
+        temperature: currentWorkspace.settings.temperature,
+        mcpStates: currentWorkspace.settings.mcpStates
+      };
+
+      const chatSpecificServers = mcpManager.getForWorkspace(currentWorkspace.id);
+
+      try {
+        await chatService.send(
+          currentChat,
+          effectiveSettings,
+          chatSpecificServers,
+          () => {
+            workspaces = [...workspaces];
+            chatWindowComponent?.scrollToBottom();
+          },
+          abortControllers[currentChat.id].signal
+        );
+      } catch (err) {
+        console.error("Error resuming after tool approval:", err);
+      } finally {
+        delete abortControllers[currentChat.id];
+        workspaces = [...workspaces];
+        await persistChats();
+      }
+    } else {
+      // Если отклонено, просто обновляем UI и сохраняем
+      workspaces = [...workspaces];
+      await persistChats();
+    }
+  }
+
   // --- Основная логика отправки (теперь через ChatService с поддержкой MCP) ---
   async function sendMessage(attachments: Attachment[] = []) { // Обновлено: принимает аттачи
     if (!currentChat || !currentWorkspace) return;
@@ -624,6 +682,7 @@
         onCopyMessage={handleCopyMessage}
         onDeleteMessage={handleDeleteMessage}
         onRegenerateMessage={handleRegenerateMessage}
+        onApproveTool={handleApproveTool} 
       />
     </div>
 
