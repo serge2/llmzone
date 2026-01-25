@@ -52,6 +52,7 @@
     onRegenerate?: () => void
   } = $props();
 
+
   let copied = $state(false);
   let isConfirmingDelete = $state(false);
   let deleteTimer: ReturnType<typeof setTimeout> | undefined;
@@ -341,11 +342,17 @@
                             <span>Аргументы</span>
                             <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
                           </summary>
-                          <pre class="language-json"><code>{
-                            Object.keys(call.arguments || {}).length > 0
-                              ? JSON.stringify(call.arguments, null, 2)
-                              : (call.raw_arguments || "{}")
-                          }</code></pre>
+                          
+                          {#key (call.raw_arguments || JSON.stringify(call.arguments))}
+                            <pre class="language-json"><code>{
+                              // 1. Если есть сырая строка в процессе стриминга - показываем её
+                              call.raw_arguments || 
+                              // 2. Если стриминг завершен и объект распарсен - показываем красиво форматированный объект
+                              (Object.keys(call.arguments || {}).length > 0 
+                                ? JSON.stringify(call.arguments, null, 2) 
+                                : "{}")
+                            }</code></pre>
+                          {/key}
                         </details>
 
                         <details class="sub-details">
