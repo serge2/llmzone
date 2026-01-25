@@ -79,28 +79,46 @@
 
   // Группировка сообщений для отображения в виде единых блоков
   let displayGroups = $derived.by(() => {
-    const groups: { main: Message; chain: Message[]; startIndex: number }[] = [];
+    const groups: { role: 'user' | 'assistant' | 'system'; messages: Message[]; startIndex: number }[] = [];
     
     for (let i = 0; i < history.length; i++) {
       const msg = history[i];
       
+      // Если сообщение от пользователя или системы — это всегда начало новой группы
       if (msg.role === 'user' || msg.role === 'system') {
-        // Сообщение пользователя всегда начинает новую группу
-        groups.push({ main: msg, chain: [], startIndex: i });
-      } else if (msg.role === 'assistant') {
+        groups.push({ 
+          role: msg.role, 
+          messages: [msg], 
+          startIndex: i 
+        });
+      } 
+      // Если сообщение от ассистента
+      else if (msg.role === 'assistant') {
         const lastGroup = groups[groups.length - 1];
-        // Если предыдущая группа уже была от ассистента, значит это продолжение (после инструментов)
-        if (lastGroup && lastGroup.main.role === 'assistant') {
-          lastGroup.chain.push(msg);
+        // Если последняя группа тоже от ассистента, добавляем в неё
+        if (lastGroup && lastGroup.role === 'assistant') {
+          lastGroup.messages.push(msg);
         } else {
-          // Иначе это первый ответ ассистента в этой итерации
-          groups.push({ main: msg, chain: [], startIndex: i });
+          // Иначе создаем новую группу ассистента
+          groups.push({ 
+            role: 'assistant', 
+            messages: [msg], 
+            startIndex: i 
+          });
         }
-      } else if (msg.role === 'tool') {
-        // Инструменты всегда прикрепляем к последней группе ассистента
+      } 
+      // Если сообщение от инструмента (tool), оно ВСЕГДА приклеивается к последней группе ассистента
+      else if (msg.role === 'tool') {
         const lastGroup = groups[groups.length - 1];
-        if (lastGroup) {
-          lastGroup.chain.push(msg);
+        if (lastGroup && lastGroup.role === 'assistant') {
+          lastGroup.messages.push(msg);
+        } else {
+          // На случай, если ассистент не успел создать сообщение (редко, но бывает)
+          groups.push({ 
+            role: 'assistant', 
+            messages: [msg], 
+            startIndex: i 
+          });
         }
       }
     }
@@ -229,17 +247,16 @@
     <div class="messages-list">
       {#each displayGroups as group (group.startIndex)}
         <MessageBubble 
-          text={group.main.text} 
-          role={group.main.role}
-          reasoning={group.main.reasoning}
-          tool_calls={group.main.tool_calls} 
-          attachments={group.main.attachments}
-          chain={group.chain}
-          isLastMessage={(group.startIndex + group.chain.length) >= history.length - 1}
-          isTyping={isGenerating && (group.startIndex + group.chain.length) >= history.length - 1}
+          role={group.role}
+          messages={group.messages}
+          isLastMessage={group.startIndex + group.messages.length >= history.length}
+          isTyping={isGenerating && (group.startIndex + group.messages.length >= history.length)}
           fullHistory={history} 
           onEdit={(newText) => onEditMessage(group.startIndex, newText)}
-          onCopy={() => onCopyMessage(group.main.text)}
+          onCopy={() => {
+            const fullText = group.messages.map(m => m.text).filter(Boolean).join('\n\n');
+            onCopyMessage(fullText);
+          }}
           onDelete={() => onDeleteMessage(group.startIndex)}
           onRegenerate={() => onRegenerateMessage()}
         />

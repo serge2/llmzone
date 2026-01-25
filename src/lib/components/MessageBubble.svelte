@@ -29,31 +29,23 @@
 
   // В Svelte 5 самый надежный способ передачи типов в $props — деструктуризация с типами
   let { 
-    text = "", 
     role, 
-    reasoning = '',
-    attachments = [],
     error, // Добавили проп ошибки
     isLastMessage = false,
     isTyping = false,
-    tool_calls,
-    fullHistory = [], // Оставили для совместимости, но теперь приоритет у chain
-    chain = [], // Список связанных сообщений (tool и assistant)
+    fullHistory = [], 
+    messages = [], // Теперь принимаем всю группу целиком
     onEdit,
     onCopy,
     onDelete,
     onRegenerate
   }: {
-    text: string, 
     role: 'user' | 'assistant' | 'tool' | 'system',
-    reasoning?: string;
-    attachments?: Attachment[]; // Типизация вложений
     error?: string, // Типизация ошибки
     isLastMessage?: boolean,
     isTyping?: boolean,
-    tool_calls?: ToolCall[];
-    fullHistory?: Message[];
-    chain?: Message[]; // Добавлено для группировки
+    fullHistory?: Message[],
+    messages?: Message[], // Список связанных сообщений в группе
     onEdit?: (newText: string) => void,
     onCopy?: () => void,
     onDelete?: () => void,
@@ -87,39 +79,30 @@
 
   marked.setOptions({ renderer, breaks: true });
 
-  // Используем $derived напрямую от деструктурированного text
-  let htmlContent = $derived.by(() => {
-    try {
-      return text ? marked.parse(text) : "";
-    } catch (e) {
-      console.error("Marked Error:", e);
-      return text;
-    }
-  });
-
-  // Вспомогательная функция для парсинга Markdown в цепочке
+  // Вспомогательная функция для парсинга Markdown
   function parseMarkdown(content: string) {
     try {
-      return marked.parse(content);
+      return content ? marked.parse(content) : "";
     } catch (e) {
+      console.error("Marked Error:", e);
       return content;
     }
   }
 
   // Функция для поиска результата конкретного вызова
   function getToolResult(callId: string) {
-    // Сначала ищем в переданной цепочке, потом в fullHistory
-    const inChain = chain.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === callId);
+    // Ищем в текущей группе сообщений
+    const inChain = messages.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === callId);
     if (inChain) return inChain;
     return fullHistory.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === callId);
   }
 
   let proseEl: HTMLDivElement | undefined = $state();
 
-  // Обновленный эффект для подсветки синтаксиса (включая JSON внутри виджетов)
+  // Обновленный эффект для подсветки синтаксиса
   $effect(() => {
-    // Явно подписываемся на изменения текста и цепочки, чтобы эффект срабатывал при стриминге
-    const contentToWatch = text + JSON.stringify(tool_calls) + chain.length;
+    // Подписываемся на изменения всей группы сообщений
+    const contentToWatch = JSON.stringify(messages) + isTyping;
     
     if (proseEl) {
       // Используем tick, чтобы дождаться, когда Svelte обновит DOM после изменения текста
@@ -134,8 +117,6 @@
         const codeBlocks = container.querySelectorAll('pre code');
         
         codeBlocks.forEach((block) => {
-          // Во время стриминга (isLastMessage) мы должны обновлять подсветку постоянно,
-          // так как текст внутри блока кода дополняется новыми символами.
           const isHighlighted = block.classList.contains('prism-highlighted');
           
           if (!isHighlighted || isLastMessage) {
@@ -185,17 +166,15 @@
 
   async function handleCopyClick() {
     try {
-      // Собираем текст из основного сообщения и всех текстовых ответов в цепочке
-      let fullText = text;
-      chain.forEach(m => {
-        if (m.text) fullText += "\n\n" + m.text;
+      // Собираем текст из всех сообщений в группе
+      let fullText = "";
+      messages.forEach(m => {
+        if (m.text) fullText += (fullText ? "\n\n" : "") + m.text;
       });
 
       await navigator.clipboard.writeText(fullText);
       copied = true;
-      // Вызываем внешний onCopy, если он нужен (например, для логов)
       if (onCopy) onCopy(); 
-      // Возвращаем иконку через 2 секунды
       setTimeout(() => {
         copied = false;
       }, 2000);
@@ -208,18 +187,20 @@
   let isEditing = $state(false);
   let editText = $state(""); // Изначально пустая строка
   let textareaEl: HTMLTextAreaElement | undefined = $state();
-  let isReasoningExpanded = $state(true); // Состояние для раскрытия плашки мыслей
+  
+  // Состояния для размышлений внутри группы
+  let reasoningExpanded = $state<Record<number, boolean>>({});
 
-  // синхронизируем editText с пропсом text
+  // синхронизируем editText с текстом первого сообщения (обычно User)
   $effect(() => {
-    if (!isEditing) {
-      editText = text;
+    if (!isEditing && messages[0]) {
+      editText = messages[0].text;
     }
   });
 
   // Функция включения режима редактирования
   function startEditing() {
-    editText = text; // Копируем текущий текст в буфер
+    editText = messages[0]?.text || ""; 
     isEditing = true;
     
     // Автофокус на поле ввода после его появления
@@ -232,7 +213,6 @@
   function saveEdit() {
     const trimmedText = editText.trim();
     if (trimmedText !== "") {
-      console.log("Bubble is sending:", trimmedText); 
       if (onEdit) onEdit(trimmedText);
       isEditing = false;
     }
@@ -241,7 +221,7 @@
   // Функция отмена
   function cancelEdit() {
     isEditing = false;
-    editText = text;
+    editText = messages[0]?.text || "";
   }
 
   // Новая логика удаления
@@ -265,12 +245,9 @@
     isConfirmingDelete = false;
   }
 
-  // Состояния для размышлений в цепочке сообщений
-  let chainReasoningExpanded = $state<Record<number, boolean>>({});
-
-  function toggleChainReasoning(index: number) {
-    const isCurrentlyExpanded = chainReasoningExpanded[index] ?? true;
-    chainReasoningExpanded[index] = !isCurrentlyExpanded;
+  function toggleReasoning(index: number) {
+    const isCurrentlyExpanded = reasoningExpanded[index] ?? true;
+    reasoningExpanded[index] = !isCurrentlyExpanded;
   }
 </script>
 
@@ -283,187 +260,114 @@
             bind:this={textareaEl}
             bind:value={editText}
             class="edit-textarea"
-            oninput={() => {}} onkeydown={(e) => {
+            onkeydown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveEdit();
               if (e.key === 'Escape') cancelEdit();
             }}
           ></textarea>
         {:else}
-          {#if reasoning && reasoning.length > 0}
-            <div class="reasoning-container" class:expanded={isReasoningExpanded}>
-              <button 
-                class="reasoning-badge" 
-                onclick={() => isReasoningExpanded = !isReasoningExpanded}
-              >
-                <span class="brain-icon">💭</span>
-                <span class="reasoning-preview">
-                  {#if isReasoningExpanded}Рассуждения{:else}{reasoning}{/if}
-                </span>
-                <span class="chevron-icon" class:rotated={isReasoningExpanded}>{@html chevronDownIconRaw}</span>
-              </button>
-              
-              {#if isReasoningExpanded}
-                <div transition:slide={{ duration: 200 }} class="reasoning-content">
-                  {reasoning}
-                  {#if isTyping && !text}<span class="typing-dot">...</span>{/if}
-                </div>
-              {/if}
-            </div>
-          {/if}
-
-          {#if attachments && attachments.length > 0}
-            <div class="message-attachments" class:user-align={role === 'user'}>
-              {#each attachments as attr}
-                <div class="attachment-item">
-                  {#if attr.type === 'image'}
-                    <img src={attr.base64} alt={attr.name} class="attachment-image" />
-                  {:else}
-                    <div class="attachment-file-card">
-                      <span class="file-icon">📄</span>
-                      <div class="file-info">
-                        <span class="file-name" title={attr.name}>{attr.name}</span>
-                        <span class="file-meta">{attr.name.split('.').pop()?.toUpperCase()} • {(attr.size / 1024).toFixed(1)} KB</span>
-                      </div>
-                    </div>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          {/if}
-
-          {#if text}
-            {@html htmlContent}
-          {:else if role === 'assistant' && (!tool_calls || tool_calls.length === 0) && chain.length === 0 && !reasoning}
-            {#if isTyping}
-              <span class="thinking-text">ИИ думает...</span>
-            {:else}
-              <span class="thinking-text" style="animation: none; opacity: 0.6;">Генерация остановлена</span>
-            {/if}
-          {/if}
-        {/if}
-      </div>
-
-      {#if tool_calls && tool_calls.length > 0}
-        <div class="tool-calls-container">
-          {#each tool_calls as call}
-            {@const result = getToolResult(call.id)}
-            {@const isError = result?.tool_result?.isError}
-            <div class="tool-widget">
-              <details class="main-details">
-                <summary class="tool-summary" class:success={!!result && !isError} class:error={isError}>
-                  <span class="icon">🛠</span>
-                  <span class="name">Инструмент: <strong>{call.name}</strong></span>
-                  <span class="status-icon">{@html chevronDownIconRaw}</span>
-                </summary>
-                
-                <div class="tool-details-content">
-                  <details class="sub-details">
-                    <summary class="sub-summary">
-                      <span>Аргументы</span>
-                      <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
-                    </summary>
-                    <pre class="language-json"><code>{
-                      // Если есть распарсенный объект с ключами — показываем красиво
-                      Object.keys(call.arguments || {}).length > 0
-                        ? JSON.stringify(call.arguments, null, 2)
-                        : (call.raw_arguments || "{}") // Иначе показываем сырую строку генерации
-                    }</code></pre>
-                   </details>
-
-                  <details class="sub-details">
-                    <summary class="sub-summary">
-                      <span>Ответ</span>
-                      <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
-                    </summary>
-                    {#if result}
-                      <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
-                    {:else}
-                      <div class="tool-loading">Выполнение запроса...</div>
-                    {/if}
-                  </details>
-                </div>
-              </details>
-            </div>
-          {/each}
-        </div>
-      {/if}
-
-      {#if chain.length > 0}
-        {#each chain as msg, i}
-          {#if msg.role === 'assistant'}
+          {#each messages as msg, i}
             {#if msg.reasoning && msg.reasoning.length > 0}
-              <div class="reasoning-container chain-reasoning" class:expanded={chainReasoningExpanded[i] ?? true}>
+              {@const isExpanded = reasoningExpanded[i] ?? true}
+              <div class="reasoning-container" class:expanded={isExpanded} class:chain-reasoning={i > 0}>
                 <button 
                   class="reasoning-badge" 
-                  onclick={() => toggleChainReasoning(i)}
+                  onclick={() => toggleReasoning(i)}
                 >
                   <span class="brain-icon">💭</span>
                   <span class="reasoning-preview">
-                    {#if (chainReasoningExpanded[i] ?? true)}Рассуждения{:else}{msg.reasoning}{/if}
+                    {#if isExpanded}Рассуждения{:else}{msg.reasoning}{/if}
                   </span>
-                  <span class="chevron-icon" class:rotated={chainReasoningExpanded[i] ?? true}>{@html chevronDownIconRaw}</span>
+                  <span class="chevron-icon" class:rotated={isExpanded}>{@html chevronDownIconRaw}</span>
                 </button>
                 
-                {#if (chainReasoningExpanded[i] ?? true)}
+                {#if isExpanded}
                   <div transition:slide={{ duration: 200 }} class="reasoning-content">
                     {msg.reasoning}
+                    {#if isTyping && !msg.text && i === messages.length - 1}<span class="typing-dot">...</span>{/if}
                   </div>
                 {/if}
               </div>
             {/if}
 
-            {#if msg.text}
-              <div class="prose chain-item-text">
-                {@html parseMarkdown(msg.text)}
+            {#if i === 0 && msg.attachments && msg.attachments.length > 0}
+              <div class="message-attachments" class:user-align={role === 'user'}>
+                {#each msg.attachments as attr}
+                  <div class="attachment-item">
+                    {#if attr.type === 'image'}
+                      <img src={attr.base64} alt={attr.name} class="attachment-image" />
+                    {:else}
+                      <div class="attachment-file-card">
+                        <span class="file-icon">📄</span>
+                        <div class="file-info">
+                          <span class="file-name" title={attr.name}>{attr.name}</span>
+                          <span class="file-meta">{attr.name.split('.').pop()?.toUpperCase()} • {(attr.size / 1024).toFixed(1)} KB</span>
+                        </div>
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
               </div>
             {/if}
-          {/if}
 
-          {#if msg.tool_calls && msg.tool_calls.length > 0}
-            <div class="tool-calls-container">
-              {#each msg.tool_calls as call}
-                {@const result = chain.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === call.id)}
-                {@const isError = result?.tool_result?.isError}
-                <div class="tool-widget">
-                  <details class="main-details">
-                    <summary class="tool-summary" class:success={!!result && !isError} class:error={isError}>
-                      <span class="icon">🛠</span>
-                      <span class="name">Инструмент: <strong>{call.name}</strong></span>
-                      <span class="status-icon">{@html chevronDownIconRaw}</span>
-                    </summary>
-                    <div class="tool-details-content">
-                      <details class="sub-details">
-                        <summary class="sub-summary">
-                          <span>Аргументы</span>
-                          <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
-                        </summary>
-                        <pre class="language-json"><code>{
-                          // Если есть распарсенный объект с ключами — показываем красиво
-                          Object.keys(call.arguments || {}).length > 0
-                            ? JSON.stringify(call.arguments, null, 2)
-                            : (call.raw_arguments || "{}") // Иначе показываем сырую строку генерации
-                        }</code></pre>
-                      </details>
+            {#if msg.text && msg.role !== 'tool'}
+              <div class:chain-item-text={i > 0}>
+                {@html parseMarkdown(msg.text)}
+              </div>
+            {:else if role === 'assistant' && i === messages.length - 1 && (!msg.tool_calls || msg.tool_calls.length === 0) && !msg.reasoning && msg.role !== 'tool'}
+               {#if isTyping}
+                <span class="thinking-text">ИИ думает...</span>
+              {:else}
+                <span class="thinking-text" style="animation: none; opacity: 0.6;">Генерация остановлена</span>
+              {/if}
+            {/if}
 
-                      <details class="sub-details">
-                        <summary class="sub-summary">
-                          <span>Ответ</span>
-                          <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
-                        </summary>
-                        {#if result}
-                          <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
-                        {:else}
-                          <div class="tool-loading">Выполнение запроса...</div>
-                        {/if}
-                      </details>
-                    </div>
-                  </details>
-                </div>
-              {/each}
-            </div>
-          {/if}
-        {/each}
-      {/if}
+            {#if msg.tool_calls && msg.tool_calls.length > 0}
+              <div class="tool-calls-container">
+                {#each msg.tool_calls as call}
+                  {@const result = getToolResult(call.id)}
+                  {@const isError = result?.tool_result?.isError}
+                  <div class="tool-widget">
+                    <details class="main-details">
+                      <summary class="tool-summary" class:success={!!result && !isError} class:error={isError}>
+                        <span class="icon">🛠</span>
+                        <span class="name">Инструмент: <strong>{call.name}</strong></span>
+                        <span class="status-icon">{@html chevronDownIconRaw}</span>
+                      </summary>
+                      
+                      <div class="tool-details-content">
+                        <details class="sub-details">
+                          <summary class="sub-summary">
+                            <span>Аргументы</span>
+                            <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
+                          </summary>
+                          <pre class="language-json"><code>{
+                            Object.keys(call.arguments || {}).length > 0
+                              ? JSON.stringify(call.arguments, null, 2)
+                              : (call.raw_arguments || "{}")
+                          }</code></pre>
+                        </details>
+
+                        <details class="sub-details">
+                          <summary class="sub-summary">
+                            <span>Ответ</span>
+                            <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
+                          </summary>
+                          {#if result}
+                            <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
+                          {:else}
+                            <div class="tool-loading">Выполнение запроса...</div>
+                          {/if}
+                        </details>
+                      </div>
+                    </details>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          {/each}
+        {/if}
+      </div>
 
       {#if error}
         <div class="error-banner">
@@ -534,7 +438,7 @@
       {/if}
     </div>
 
-    {#if isTyping && (text || chain.length > 0)}
+    {#if isTyping && messages.some(m => m.text || (m.tool_calls && m.tool_calls.length > 0))}
       <div class="status-note">ИИ работает...</div>
     {/if}
   </div>
@@ -714,10 +618,6 @@
     min-height: 1.55em;    /* Высота одной строки */
     white-space: pre-wrap; /* Улучшаем читаемость при редактировании длинных текстов */
     word-break: break-word;
-  }
-
-  .user .edit-textarea {
-    border-color: rgba(13, 71, 161, 0.2);
   }
 
   .confirm-text {
