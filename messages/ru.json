@@ -29,5 +29,32 @@
   "delete_workspace_confirm": "Удалить рабочее пространство \"{name}\" и все его данные?",
 
   "menu_open_link": "Открыть в браузере",
-  "menu_copy_link": "Копировать ссылку"
+  "menu_copy_link": "Копировать ссылку",
+
+  "chat_scroll_to_bottom": "Прокрутить вниз",
+  "chat_attach_files": "Прикрепить файлы",
+  "chat_input_placeholder": "Спросите о чем угодно...",
+  "chat_send_message": "Отправить сообщение",
+  "chat_stop_generating": "Остановить генерацию",
+  "chat_footer_note": "AI может ошибаться. Проверяйте важную информацию.",
+
+  "bubble_copy_code": "Копировать код",
+  "bubble_reasoning_title": "Рассуждения",
+  "bubble_ai_thinking": "ИИ думает...",
+  "bubble_ai_working": "ИИ работает...",
+  "bubble_generation_stopped": "Генерация остановлена",
+  "bubble_tool_label": "Инструмент:",
+  "bubble_tool_approval_request": "Запрос разрешения:",
+  "bubble_tool_rejected_label": "Отклонено:",
+  "bubble_tool_args": "Аргументы",
+  "bubble_tool_response": "Ответ",
+  "bubble_tool_approval_hint": "Модель хочет использовать этот инструмент. Разрешить выполнение?",
+  "bubble_tool_allow": "Разрешить",
+  "bubble_tool_deny": "Отклонить",
+  "bubble_tool_rejected_note": "Выполнение этого инструмента было отклонено пользователем.",
+  "bubble_tool_executing": "Выполнение запроса...",
+  "bubble_error_title": "Ошибка взаимодействия",
+  "bubble_action_copy": "Копировать всё сообщение",
+  "bubble_action_regenerate": "Перегенерировать",
+  "bubble_action_confirm_delete": "Да, удалить"
 }

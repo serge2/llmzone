@@ -5,6 +5,9 @@
   import { slide } from 'svelte/transition'; // Добавлено для анимации размышлений
   import type { ToolCall, Message, Attachment } from '$lib/types';
   
+  // Импорт локализации
+  import * as m from '$paraglide/messages';
+
   // Темы и языки Prism
   import 'prismjs/themes/prism.css'; 
   import 'prismjs/components/prism-typescript';
@@ -71,7 +74,7 @@
       <div class="code-block-wrapper">
         <div class="code-toolbar">
           <span class="code-lang">${lang}</span>
-          <button class="copy-code-btn" type="button" title="Копировать код">
+          <button class="copy-code-btn" type="button" title="${m.bubble_copy_code()}">
             ${copyIconRaw}
           </button>
         </div>
@@ -279,7 +282,7 @@
                 >
                   <span class="brain-icon">💭</span>
                   <span class="reasoning-preview">
-                    {#if isExpanded}Рассуждения{:else}{msg.reasoning}{/if}
+                    {#if isExpanded}{m.bubble_reasoning_title()}{:else}{msg.reasoning}{/if}
                   </span>
                   <span class="chevron-icon" class:rotated={isExpanded}>{@html chevronDownIconRaw}</span>
                 </button>
@@ -319,9 +322,9 @@
               </div>
             {:else if role === 'assistant' && i === messages.length - 1 && (!msg.tool_calls || msg.tool_calls.length === 0) && !msg.reasoning && msg.role !== 'tool'}
                {#if isTyping}
-                <span class="thinking-text">ИИ думает...</span>
+                <span class="thinking-text">{m.bubble_ai_thinking()}</span>
               {:else}
-                <span class="thinking-text" style="animation: none; opacity: 0.6;">Генерация остановлена</span>
+                <span class="thinking-text" style="animation: none; opacity: 0.6;">{m.bubble_generation_stopped()}</span>
               {/if}
             {/if}
 
@@ -338,7 +341,13 @@
                       <summary class="tool-summary" class:success={!!result && !isError} class:error={isError || isRejected} class:pending={isPending}>
                         <span class="icon">{isPending ? '❓' : '🛠'}</span>
                         <span class="name">
-                          {isPending ? 'Запрос разрешения:' : isRejected ? 'Отклонено:' : 'Инструмент:'} 
+                          {#if isPending}
+                            {m.bubble_tool_approval_request()}
+                          {:else if isRejected}
+                            {m.bubble_tool_rejected_label()}
+                          {:else}
+                            {m.bubble_tool_label()}
+                          {/if} 
                           <strong>{call.name}</strong>
                         </span>
                         <span class="status-icon">{@html chevronDownIconRaw}</span>
@@ -347,7 +356,7 @@
                       <div class="tool-details-content">
                         <details class="sub-details" open={isPending}>
                           <summary class="sub-summary">
-                            <span>Аргументы</span>
+                            <span>{m.bubble_tool_args()}</span>
                             <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
                           </summary>
                           
@@ -365,30 +374,30 @@
 
                         {#if isPending}
                           <div class="approval-actions" transition:slide>
-                            <p class="approval-hint">Модель хочет использовать этот инструмент. Разрешить выполнение?</p>
+                            <p class="approval-hint">{m.bubble_tool_approval_hint()}</p>
                             <div class="approval-buttons">
                               <button class="approve-btn" onclick={() => onApproveTool?.(call.id, 'approved')}>
-                                Разрешить
+                                {m.bubble_tool_allow()}
                               </button>
                               <button class="reject-btn" onclick={() => onApproveTool?.(call.id, 'rejected')}>
-                                Отклонить
+                                {m.bubble_tool_deny()}
                               </button>
                             </div>
                           </div>
                         {:else if isRejected}
                           <div class="tool-rejected-note">
-                             Выполнение этого инструмента было отклонено пользователем.
+                             {m.bubble_tool_rejected_note()}
                           </div>
                         {:else}
                           <details class="sub-details">
                             <summary class="sub-summary">
-                              <span>Ответ</span>
+                              <span>{m.bubble_tool_response()}</span>
                               <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
                             </summary>
                             {#if result}
                               <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
                             {:else}
-                              <div class="tool-loading">Выполнение запроса...</div>
+                              <div class="tool-loading">{m.bubble_tool_executing()}</div>
                             {/if}
                           </details>
                         {/if}
@@ -406,7 +415,7 @@
         <div class="error-banner">
           <div class="error-header">
             <span class="error-icon">⚠️</span>
-            <strong>Ошибка взаимодействия</strong>
+            <strong>{m.bubble_error_title()}</strong>
           </div>
           <div class="error-text">{error}</div>
         </div>
@@ -419,30 +428,30 @@
       class:force-visible={isEditing || isConfirmingDelete}
     >
       {#if isEditing}
-        <button class="action-btn success" title="Сохранить" onclick={saveEdit}>
+        <button class="action-btn success" title={m.sidebar_tooltip_save()} onclick={saveEdit}>
           {@html checkIconRaw}
         </button>
-        <button class="action-btn delete-btn" title="Отменить" onclick={cancelEdit}>
+        <button class="action-btn delete-btn" title={m.sidebar_tooltip_cancel()} onclick={cancelEdit}>
           {@html closeIconRaw}
         </button>
       {:else if isConfirmingDelete}
-        <span class="confirm-text">Удалить?</span>
-        <button class="action-btn danger" title="Да, удалить" onclick={confirmDelete}>
+        <span class="confirm-text">{m.sidebar_delete_confirm()}</span>
+        <button class="action-btn danger" title={m.bubble_action_confirm_delete()} onclick={confirmDelete}>
           {@html checkIconRaw}
         </button>
-        <button class="action-btn" title="Отмена" onclick={cancelDelete}>
+        <button class="action-btn" title={m.sidebar_tooltip_cancel()} onclick={cancelDelete}>
           {@html closeIconRaw}
         </button>
       {:else}
 
         {#if role === 'assistant' && isLastMessage}
-          <button class="action-btn" title="Перегенерировать" onclick={onRegenerate}>
+          <button class="action-btn" title={m.bubble_action_regenerate()} onclick={onRegenerate}>
             {@html refreshIconRaw}
           </button>
         {/if}
 
         {#if role === 'user'}
-          <button class="action-btn" title="Редактировать" onclick={startEditing}>
+          <button class="action-btn" title={m.sidebar_menu_rename()} onclick={startEditing}>
             {@html editIconRaw}
           </button>
         {/if}
@@ -451,7 +460,7 @@
           class="action-btn" 
           class:success={copied} 
           onclick={handleCopyClick}
-          title="Копировать всё сообщение"
+          title={m.bubble_action_copy()}
         >
           {#if copied}
             {@html checkIconRaw}
@@ -463,7 +472,7 @@
         <button 
           class="action-btn delete-btn" 
           onclick={askDelete}
-          title="Удалить сообщение"
+          title={m.sidebar_menu_delete()}
         >
           {@html trashIconRaw}
         </button>
@@ -472,7 +481,7 @@
     </div>
 
     {#if isTyping && messages.some(m => m.text || (m.tool_calls && m.tool_calls.length > 0))}
-      <div class="status-note">ИИ работает...</div>
+      <div class="status-note">{m.bubble_ai_working()}</div>
     {/if}
   </div>
 </div>

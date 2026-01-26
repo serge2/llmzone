@@ -3,6 +3,9 @@
   import MessageBubble from './MessageBubble.svelte';
   import { tick, onMount } from 'svelte';
 
+  // --- Система локализации ---
+  import * as m from '$paraglide/messages';
+
   // Импорт иконок из ассетов
   import ArrowUpIcon from '$lib/assets/icons/arrow-up.svg?raw';
   import StopIcon from '$lib/assets/icons/stop.svg?raw';
@@ -269,7 +272,7 @@
       <button 
         class="scroll-down-btn" 
         onclick={() => scrollToBottom(true)}
-        aria-label="Scroll to bottom"
+        aria-label={m.chat_scroll_to_bottom()}
       >
         {@html ChevronDownIcon}
       </button>
@@ -301,7 +304,7 @@
       <button 
         class="attach-btn" 
         onclick={() => fileInput?.click()}
-        title="Прикрепить файлы"
+        title={m.chat_attach_files()}
       >
         {@html PlusIcon}
       </button>
@@ -319,7 +322,7 @@
         bind:value={message} 
         onkeydown={handleKeydown} 
         oninput={adjustHeight}
-        placeholder="Спросите о чем угодно..."
+        placeholder={m.chat_input_placeholder()}
         rows="1"
       ></textarea>
       
@@ -327,6 +330,7 @@
         onclick={internalSendMessage} 
         class:stop-btn={isGenerating}
         disabled={!isGenerating && !message.trim() && pendingAttachments.length === 0}
+        title={isGenerating ? (m.chat_stop_generating()) : (m.chat_send_message())}
       >
         {#if isGenerating}
           {@html StopIcon}
@@ -335,7 +339,7 @@
         {/if}
       </button>
     </div>
-    <div class="footer-note">AI может ошибаться. Проверяйте важную информацию.</div>
+    <div class="footer-note">{m.chat_footer_note()}</div>
   </div>
 </section>
 

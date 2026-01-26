@@ -29,5 +29,32 @@
   "delete_workspace_confirm": "Delete workspace \"{name}\" and all its data?",
 
   "menu_open_link": "Open in Browser",
-  "menu_copy_link": "Copy Link"
+  "menu_copy_link": "Copy Link",
+
+  "chat_scroll_to_bottom": "Scroll to bottom",
+  "chat_attach_files": "Attach files",
+  "chat_input_placeholder": "Ask anything...",
+  "chat_send_message": "Send message",
+  "chat_stop_generating": "Stop generating",
+  "chat_footer_note": "AI can make mistakes. Check important information.",
+
+  "bubble_copy_code": "Copy code",
+  "bubble_reasoning_title": "Reasoning",
+  "bubble_ai_thinking": "AI is thinking...",
+  "bubble_ai_working": "AI is working...",
+  "bubble_generation_stopped": "Generation stopped",
+  "bubble_tool_label": "Tool:",
+  "bubble_tool_approval_request": "Approval request:",
+  "bubble_tool_rejected_label": "Rejected:",
+  "bubble_tool_args": "Arguments",
+  "bubble_tool_response": "Response",
+  "bubble_tool_approval_hint": "The model wants to use this tool. Allow execution?",
+  "bubble_tool_allow": "Allow",
+  "bubble_tool_deny": "Deny",
+  "bubble_tool_rejected_note": "This tool execution was rejected by the user.",
+  "bubble_tool_executing": "Executing request...",
+  "bubble_error_title": "Interaction Error",
+  "bubble_action_copy": "Copy message",
+  "bubble_action_regenerate": "Regenerate",
+  "bubble_action_confirm_delete": "Yes, delete"
 }
