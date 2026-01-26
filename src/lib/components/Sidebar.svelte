@@ -3,6 +3,10 @@
   import { slide } from 'svelte/transition';
   import type { Workspace } from '$lib/types';
     
+  // --- Система локализации ---
+  import { getLocale } from '$paraglide/runtime';
+  import * as m from '$paraglide/messages';
+
   // Импорт иконок из ассетов
   import TrashIcon from '$lib/assets/icons/trash.svg?raw';
   import PlusIcon from '$lib/assets/icons/plus.svg?raw';
@@ -43,8 +47,18 @@
   let editingChatId = $state<string | null>(null);
   let deletingChatId = $state<string | null>(null);
   let editValue = $state("");
+  
+  // Ссылка на элемент инпута поиска
+  let searchInputRef = $state<HTMLInputElement | null>(null);
 
   const currentWs = $derived(workspaces.find((w: Workspace) => w.id === selectedWorkspaceId));
+
+  // Производное состояние для отфильтрованных чатов (чтобы работал {:else})
+  const filteredChats = $derived(
+    currentWs ? currentWs.chats.filter(c => 
+      c.name.toLocaleLowerCase(getLocale()).includes(chatSearch.toLocaleLowerCase(getLocale()))
+    ) : []
+  );
 
   function closeMenus() {
     activeMenuId = null;
@@ -79,6 +93,20 @@
     deletingChatId = null;
   }
 
+  // Функция переключения поиска с установкой фокуса
+  async function toggleSearch(e: MouseEvent) {
+    e.stopPropagation();
+    searchActive = !searchActive;
+    
+    if (searchActive) {
+      // Ждем, пока Svelte отрисует инпут в DOM
+      await tick();
+      searchInputRef?.focus();
+    } else {
+      chatSearch = ""; // Очищаем поиск при закрытии
+    }
+  }
+
   // Action для автоматического фокуса и выделения текста
   function selectOnFocus(node: HTMLInputElement) {
     node.focus();
@@ -91,129 +119,140 @@
 <aside class="chats-sidebar">
   <div class="chats-list-header">
     <div class="toolbar">
-      <button 
-        class="icon" 
-        title="Поиск" 
-        type="button" 
-        onclick={(e) => { e.stopPropagation(); searchActive = !searchActive; }}
-      >
-        {@html SearchIcon}
-      </button>
+      <h2 class="sidebar-title">{m.sidebar_chats_title?.() || 'Чаты'}</h2>
       
-      <button 
-        class="icon icon-right" 
-        title="Новый чат" 
-        type="button" 
-        onclick={onCreateChat}
-      >
-        {@html PlusIcon}
-      </button>
+      <div class="actions-group">
+        <button 
+          class="icon" 
+          class:active={searchActive}
+          title={m.sidebar_search_tooltip()} 
+          type="button" 
+          onclick={toggleSearch}
+        >
+          {@html SearchIcon}
+        </button>
+        
+        <button 
+          class="icon icon-plus" 
+          title={m.sidebar_new_chat()} 
+          type="button" 
+          onclick={onCreateChat}
+        >
+          {@html PlusIcon}
+        </button>
+      </div>
     </div>
     
     {#if searchActive}
-      <input 
-        class="chat-search" 
-        placeholder="Поиск чата..." 
-        bind:value={chatSearch} 
-        onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => e.stopPropagation()}
-      />
+      <div transition:slide={{ duration: 150 }}>
+        <input 
+          bind:this={searchInputRef}
+          class="chat-search" 
+          placeholder={m.sidebar_search_placeholder()} 
+          bind:value={chatSearch} 
+          onclick={(e) => e.stopPropagation()}
+          onkeydown={(e) => {
+            if (e.key === 'Escape') searchActive = false;
+            e.stopPropagation();
+          }}
+        />
+      </div>
     {/if}
   </div>
 
   <div class="tree">
-    {#if currentWs && currentWs.chats.length > 0}
-      {#each currentWs.chats.filter(c => c.name.toLowerCase().includes(chatSearch.toLowerCase())) as chat (chat.id)}
-        <div class="chat-item-wrapper" class:selected={chat.id === selectedChatId} class:danger-zone={deletingChatId === chat.id}>
-          {#if editingChatId === chat.id}
-            <div 
-              class="edit-mode" 
-              role="presentation"
-              onmousedown={(e) => e.stopPropagation()}
-            >
-              <input 
-                class="edit-input"
-                use:selectOnFocus
-                bind:value={editValue} 
-                onkeydown={(e) => {
-                  if (e.key === 'Enter') confirmRename(chat.id);
-                  if (e.key === 'Escape') editingChatId = null;
-                  e.stopPropagation();
-                }}
-              />
-              <div class="edit-actions">
-                <button class="confirm-btn" onclick={() => confirmRename(chat.id)} title="Сохранить">
-                  {@html CheckIcon}
-                </button>
-                <button class="cancel-btn" onclick={() => editingChatId = null} title="Отмена">
-                  {@html CloseIcon}
-                </button>
-              </div>
+    {#each filteredChats as chat (chat.id)}
+      <div class="chat-item-wrapper" class:selected={chat.id === selectedChatId} class:danger-zone={deletingChatId === chat.id}>
+        {#if editingChatId === chat.id}
+          <div 
+            class="edit-mode" 
+            role="presentation"
+            onmousedown={(e) => e.stopPropagation()}
+          >
+            <input 
+              class="edit-input"
+              use:selectOnFocus
+              bind:value={editValue} 
+              onkeydown={(e) => {
+                if (e.key === 'Enter') confirmRename(chat.id);
+                if (e.key === 'Escape') editingChatId = null;
+                e.stopPropagation();
+              }}
+            />
+            <div class="edit-actions">
+              <button class="confirm-btn" onclick={() => confirmRename(chat.id)} title={m.sidebar_tooltip_save()}>
+                {@html CheckIcon}
+              </button>
+              <button class="cancel-btn" onclick={() => editingChatId = null} title={m.sidebar_tooltip_cancel()}>
+                {@html CloseIcon}
+              </button>
             </div>
-          {:else if deletingChatId === chat.id}
-            <div 
-              class="delete-confirm-mode" 
-              role="presentation"
-              onmousedown={(e) => e.stopPropagation()}
+          </div>
+        {:else if deletingChatId === chat.id}
+          <div 
+            class="delete-confirm-mode" 
+            role="presentation"
+            onmousedown={(e) => e.stopPropagation()}
+          >
+            <span class="confirm-label">{m.sidebar_delete_confirm()}</span>
+            <div class="edit-actions">
+              <button class="confirm-delete-btn" onclick={() => confirmDelete(chat.id)} title={m.sidebar_menu_delete()}>
+                {@html TrashIcon}
+              </button>
+              <button class="cancel-btn" onclick={cancelDelete} title={m.sidebar_tooltip_cancel()}>
+                {@html CloseIcon}
+              </button>
+            </div>
+          </div>
+        {:else}
+          <button 
+            type="button"
+            class="chat-item" 
+            onclick={() => onSelectChat(chat.id, currentWs?.id || "")}
+          >
+            <span class="chat-name-text">{chat.name}</span>
+          </button>
+
+          <div class="menu-anchor">
+            <button 
+              class="context-btn" 
+              onclick={(e) => { e.stopPropagation(); activeMenuId = activeMenuId === chat.id ? null : chat.id; }}
             >
-              <span class="confirm-label">Удалить?</span>
-              <div class="edit-actions">
-                <button class="confirm-delete-btn" onclick={() => confirmDelete(chat.id)} title="Удалить">
+              {@html MoreIcon}
+            </button>
+            
+            {#if activeMenuId === chat.id}
+              <div 
+                class="dropdown-menu" 
+                role="menu"
+                tabindex="-1"
+                onmousedown={(e) => e.stopPropagation()}
+                onkeydown={(e) => e.key === 'Escape' && (activeMenuId = null)}
+              >
+                <button role="menuitem" onclick={() => startRename(chat.id, chat.name)}>
+                  <span>{m.sidebar_menu_rename()}</span>
+                  {@html EditIcon}
+                </button>
+                <button role="menuitem" class="delete-opt" onclick={(e) => { e.stopPropagation(); requestDelete(chat.id); }}>
+                  <span>{m.sidebar_menu_delete()}</span>
                   {@html TrashIcon}
                 </button>
-                <button class="cancel-btn" onclick={cancelDelete} title="Отмена">
-                  {@html CloseIcon}
-                </button>
               </div>
-            </div>
-          {:else}
-            <button 
-              type="button"
-              class="chat-item" 
-              onclick={() => onSelectChat(chat.id, currentWs.id)}
-            >
-              <span class="chat-name-text">{chat.name}</span>
-            </button>
-
-            <div class="menu-anchor">
-              <button 
-                class="context-btn" 
-                onclick={(e) => { e.stopPropagation(); activeMenuId = activeMenuId === chat.id ? null : chat.id; }}
-              >
-                {@html MoreIcon}
-              </button>
-              
-              {#if activeMenuId === chat.id}
-                <div 
-                  class="dropdown-menu" 
-                  role="menu"
-                  tabindex="-1"
-                  onmousedown={(e) => e.stopPropagation()}
-                  onkeydown={(e) => e.key === 'Escape' && (activeMenuId = null)}
-                >
-                  <button role="menuitem" onclick={() => startRename(chat.id, chat.name)}>
-                    <span>Переименовать</span>
-                    {@html EditIcon}
-                  </button>
-                  <button role="menuitem" class="delete-opt" onclick={(e) => { e.stopPropagation(); requestDelete(chat.id); }}>
-                    <span>Удалить</span>
-                    {@html TrashIcon}
-                  </button>
-                </div>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      {/each}
+            {/if}
+          </div>
+        {/if}
+      </div>
     {:else}
-      <div class="empty-state">Нет чатов</div>
-    {/if}
+      <div class="empty-state">
+        {chatSearch ? (m.sidebar_no_results?.() || "No results") : m.sidebar_no_chats()}
+      </div>
+    {/each}
   </div>
 
   <div class="sidebar-footer">
     <button class="footer-btn" onclick={onOpenSettings}>
       <span class="footer-icon">{@html SettingsIcon}</span>
-      <span>Настройки</span>
+      <span>{m.sidebar_settings()}</span>
     </button>
   </div>
 </aside>
@@ -236,7 +275,24 @@
   
   .toolbar { 
     display: flex; 
-    gap: 4px; 
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px; 
+    height: 32px;
+  }
+
+  .sidebar-title {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+  }
+
+  .actions-group {
+    display: flex;
+    gap: 2px;
   }
   
   .icon { 
@@ -251,13 +307,12 @@
     transition: all 0.2s;
   }
   
-  .icon:hover { 
+  .icon:hover, .icon.active { 
     background: #e5e7eb; 
     color: #111827;
   }
   
-  .icon-right { 
-    margin-left: auto; 
+  .icon-plus { 
     color: #5865f2; 
     background: rgba(88, 101, 242, 0.05);
   }

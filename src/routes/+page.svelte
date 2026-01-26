@@ -20,6 +20,9 @@
 
   // --- Импорты для Tauri 2 ---
   import { openUrl } from '@tauri-apps/plugin-opener';
+  // --- Система локализации --
+  import { setLocale, getLocale } from '$paraglide/runtime';
+  import * as m from '$paraglide/messages';
 
   // --- Состояние приложения (Svelte 5 Runes) ---
   let workspaces = $state<Workspace[]>([]);
@@ -49,6 +52,9 @@
   const chatService = new ChatService();
   // Список активных MCP серверов ДЛЯ ТЕКУЩЕГО ЭКРАНА (отображение в Инспекторе)
   let mcpServers = $state<MCPServerInstance[]>([]);
+
+  // Переменная-триггер для принудительного обновления интерфейса при смене языка
+  let localeTrigger = $state(0);
 
   // --- Состояние кастомного контекстного меню ---
   let menuState = $state({
@@ -168,6 +174,12 @@
   onMount(async () => {
     // 1. Загружаем основной конфиг приложения
     const config = await loadConfig();
+
+    // Устанавливаем язык ПЕРВЫМ делом, чтобы UI не мерцал
+    if (config?.language) {
+      setLocale(config.language, { reload: false });
+      localeTrigger += 1;
+    }
     
     // Загружаем глобальные настройки если они есть
     if (config?.globalConfig) {
@@ -212,7 +224,7 @@
       const defaultWsId = 'ws-' + Date.now();
       const defaultWs: Workspace = {
         id: defaultWsId,
-        name: 'Основной',
+        name: m.workspace_first_name(),
         icon: '🏠',
         settings: {
           apiUrl: '', // Пусто, чтобы использовался глобальный
@@ -222,7 +234,7 @@
           temperature: 0.7,
           lastActiveTab: 'model'
         },
-        chats: [{ id: 'c-' + Date.now(), name: 'Новый чат', history: [], isGenerating: false }]
+        chats: [{ id: 'c-' + Date.now(), name: m.chat_new_name(), history: [], isGenerating: false }]
       };
       
       workspaces = [defaultWs];
@@ -257,13 +269,17 @@
     const workspacesToSave = rawWorkspaces.map(({ chats, ...rest }) => rest);
     
     const configToSave: AppSettings = {
-      theme: 'system', 
+      theme: 'system',
+      language: getLocale() as 'en' | 'ru',
       lastSelectedWorkspaceId: selectedWorkspaceId,
       workspaces: workspacesToSave,
       globalConfig: $state.snapshot(globalConfig)
     };
     
     await saveConfig(configToSave);
+
+    // Увеличиваем триггер, чтобы Svelte обновил все строки переводов
+    localeTrigger += 1;
   }
 
   async function persistChats() {
@@ -285,7 +301,7 @@
     const newChatId = 'c-' + Date.now();
     const newWs: Workspace = { 
       id: newWsId, 
-      name: 'Workspace ' + (workspaces.length + 1), 
+      name: m.workspace_new_name() + ' ' + (workspaces.length + 1), 
       icon: '📁',
       settings: {
         apiUrl: '',
@@ -297,7 +313,7 @@
       },
       chats: [{ 
         id: newChatId, 
-        name: 'Новый чат', 
+        name: m.chat_new_name(), 
         history: [], 
         isGenerating: false 
       }] 
@@ -329,7 +345,7 @@
     if (workspaces.length <= 1) return;
     
     const ws = workspaces.find(w => w.id === id);
-    if (confirm(`Удалить рабочее пространство "${ws?.name}" и все его данные?`)) {
+    if (confirm(m.delete_workspace_confirm({ name: ws?.name || "" }))) {
       // 1. Очищаем инстансы MCP серверов из памяти
       mcpManager.removeWorkspace(id);
       
@@ -350,7 +366,13 @@
 
   function createChat() {
     if (!currentWorkspace) return;
-    const newChat: Chat = { id: 'c-' + Date.now(), name: 'Новый чат', history: [], isGenerating: false };
+    // Используем m.chat_new_name() из paraglide для дефолтного имени
+    const newChat: Chat = { 
+      id: 'c-' + Date.now(), 
+      name: m.chat_new_name(), 
+      history: [], 
+      isGenerating: false 
+    };
     currentWorkspace.chats = [newChat, ...currentWorkspace.chats];
     selectedChatId = newChat.id;
     persistChats();
@@ -623,103 +645,96 @@
 </script>
 
 <main class="app-container">
-  {#if selectedTab === 'settings'}
-    <div class="modal-layer">
-      <GlobalSettings 
-        {globalConfig} 
-        onSave={persistConfig} 
-        onClose={() => selectedTab = 'chats'} 
-      />
-    </div>
-  {/if}
-
-  <AppHeader 
-    bind:workspaces={workspaces}
-    {selectedWorkspaceId}
-    currentChatName={currentChat?.name || 'Выберите чат'}
-    bind:sidebarVisible={sidebarVisible}
-    onSelectWorkspace={(id: string) => {
-      selectedWorkspaceId = id;
-      const ws = workspaces.find(w => w.id === id);
-      if (ws?.chats.length) {
-        selectedChatId = ws.chats[0].id;
-      } else {
-        selectedChatId = '';
-      }
-      persistConfig();
-    }}
-    onCreateWorkspace={createWorkspace}
-    onRenameWorkspace={handleRenameWorkspace}
-    onDeleteWorkspace={handleDeleteWorkspace}
-  />
-
-  <div class="main-row">
-    {#if sidebarVisible}
-      <Sidebar 
-        bind:workspaces={workspaces} 
-        {selectedWorkspaceId}
-        {selectedChatId} 
-        bind:chatSearch={chatSearch}
-        bind:searchActive={searchActive}
-        onCreateChat={createChat}
-        onSelectChat={selectChat} 
-        onRenameChat={handleRenameChat}
-        onDeleteChat={handleDeleteChat}
-        onOpenSettings={() => {
-          selectedTab = 'settings';
-        }}
-      />
+  {#key localeTrigger}
+    {#if selectedTab === 'settings'}
+      <div class="modal-layer">
+        <GlobalSettings 
+          {globalConfig}
+          onSave={persistConfig} 
+          onClose={() => selectedTab = 'chats'} 
+        />
+      </div>
     {/if}
 
-    <div class="center-content">
-      <ChatWindow 
-        bind:this={chatWindowComponent}
-        history={currentChat?.history || []}
-        isGenerating={currentChat?.isGenerating || false} 
-        bind:message
-        onSendMessage={sendMessage}
-        onEditMessage={handleEditMessage}
-        onCopyMessage={handleCopyMessage}
-        onDeleteMessage={handleDeleteMessage}
-        onRegenerateMessage={handleRegenerateMessage}
-        onApproveTool={handleApproveTool} 
+    <AppHeader 
+      bind:workspaces={workspaces}
+      {selectedWorkspaceId}
+      currentChatName={currentChat?.name || m.sidebar_no_chats()}
+      bind:sidebarVisible={sidebarVisible}
+      onSelectWorkspace={(id: string) => {
+        selectedWorkspaceId = id;
+        const ws = workspaces.find(w => w.id === id);
+        if (ws?.chats.length) {
+          selectedChatId = ws.chats[0].id;
+        } else {
+          selectedChatId = '';
+        }
+        persistConfig();
+      }}
+      onCreateWorkspace={createWorkspace}
+      onRenameWorkspace={handleRenameWorkspace}
+      onDeleteWorkspace={handleDeleteWorkspace}
+    />
+
+    <div class="main-row">
+      {#if sidebarVisible}
+        <Sidebar 
+          bind:workspaces={workspaces} 
+          {selectedWorkspaceId}
+          {selectedChatId} 
+          bind:chatSearch={chatSearch}
+          bind:searchActive={searchActive}
+          onCreateChat={createChat}
+          onSelectChat={selectChat} 
+          onRenameChat={handleRenameChat}
+          onDeleteChat={handleDeleteChat}
+          onOpenSettings={() => {
+            selectedTab = 'settings';
+          }}
+        />
+      {/if}
+
+      <div class="center-content">
+        <ChatWindow 
+          bind:this={chatWindowComponent}
+          history={currentChat?.history || []}
+          isGenerating={currentChat?.isGenerating || false} 
+          bind:message
+          onSendMessage={sendMessage}
+          onEditMessage={handleEditMessage}
+          onCopyMessage={handleCopyMessage}
+          onDeleteMessage={handleDeleteMessage}
+          onRegenerateMessage={handleRegenerateMessage}
+          onApproveTool={handleApproveTool} 
+        />
+      </div>
+
+      <Inspector 
+        bind:currentWorkspace={workspaces[workspaces.findIndex(w => w.id === selectedWorkspaceId)]} 
+        {globalConfig} 
+        bind:serverInstances={mcpServers}
+        onSettingsChange={() => {
+          syncMCPServers();
+          persistConfig();
+        }} 
       />
     </div>
-
-    <Inspector 
-      bind:currentWorkspace={workspaces[workspaces.findIndex(w => w.id === selectedWorkspaceId)]} 
-      {globalConfig} 
-      bind:serverInstances={mcpServers}
-      onSettingsChange={() => {
-        syncMCPServers();
-        persistConfig();
-      }} 
-    />
-  </div>
+  {/key}
 
   {#if menuState.visible}
-    <div 
-      class="custom-menu" 
-      style:left="{menuState.x}px" 
-      style:top="{menuState.y}px"
-    >
-      <button onclick={() => {
-        openUrl(menuState.href);
-        menuState.visible = false;
-      }}>
-        🌐 Открыть в браузере
+    <div class="custom-menu" style:left="{menuState.x}px" style:top="{menuState.y}px">
+      <button onclick={() => { openUrl(menuState.href); menuState.visible = false; }}>
+        🌐 {m.menu_open_link()}
       </button>
-      <button onclick={() => {
-        navigator.clipboard.writeText(menuState.href);
-        menuState.visible = false;
-      }}>
-        📋 Копировать ссылку
+      <button onclick={() => { navigator.clipboard.writeText(menuState.href); menuState.visible = false; }}>
+        📋 {m.menu_copy_link()}
       </button>
     </div>
   {/if}
 </main>
 
 <style>
+
   .app-container {
     height: 100vh;
     display: flex;

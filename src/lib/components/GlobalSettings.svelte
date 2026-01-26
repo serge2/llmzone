@@ -1,23 +1,48 @@
 <script lang="ts">
   import type { GlobalConfig } from '$lib/types';
+  import { setLocale, getLocale } from '$paraglide/runtime';
+  import * as m from '$paraglide/messages';
 
   let { globalConfig, onSave, onClose }: { 
     globalConfig: GlobalConfig, 
     onSave: () => void,
     onClose: () => void 
   } = $props();
+
+  function handleLanguageChange(e: Event) {
+    const newLang = (e.target as HTMLSelectElement).value as 'ru' | 'en';
+    
+    // Устанавливаем локаль в Paraglide
+    setLocale(newLang, { reload: false });
+    
+    // Сохраняем конфиг (в +page.svelte сработает persistConfig)
+    onSave();
+  }
 </script>
 
 <div class="settings-overlay">
   <div class="settings-container">
     <header class="settings-header">
-      <button class="back-btn" onclick={onClose}>← Назад к чатам</button>
-      <h2>Глобальные настройки</h2>
+      <button class="back-btn" onclick={onClose}>{m.settings_back()}</button>
+      <h2>{m.settings_title()}</h2>
     </header>
 
     <div class="settings-form">
       <div class="setting-item">
-        <label for="apiUrl">API URL</label>
+        <label for="languageSelect">{m.settings_label_language()}</label>
+        <select 
+          id="languageSelect"
+          value={getLocale()} 
+          onchange={handleLanguageChange}
+          class="settings-select"
+        >
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+
+      <div class="setting-item">
+        <label for="apiUrl">{m.settings_label_api_url()}</label>
         <input 
           id="apiUrl"
           type="text" 
@@ -28,18 +53,18 @@
       </div>
 
       <div class="setting-item">
-        <label for="apiKey">API Key</label>
+        <label for="apiKey">{m.settings_label_api_key()}</label>
         <input 
           id="apiKey"
           type="password" 
           bind:value={globalConfig.apiKey} 
           onchange={onSave}
-          placeholder="Ключ API (если требуется)"
+          placeholder={m.settings_label_api_key()}
         />
       </div>
 
       <div class="setting-item">
-        <label for="modelName">Имя модели по умолчанию</label>
+        <label for="modelName">{m.settings_label_model()}</label>
         <input 
           id="modelName"
           type="text" 
@@ -50,7 +75,7 @@
       </div>
       
       <div class="footer-info">
-        <p>Эти параметры используются как запасные (fallback), если они не указаны в настройках конкретного воркспейса.</p>
+        <p>{m.settings_footer_info()}</p>
       </div>
     </div>
   </div>
@@ -111,15 +136,16 @@
     text-transform: uppercase;
   }
 
-  input {
+  input, .settings-select {
     padding: 12px;
     border: 1px solid #d1d5db;
     border-radius: 8px;
     font-size: 1rem;
     outline: none;
+    background: white;
   }
 
-  input:focus {
+  input:focus, .settings-select:focus {
     border-color: #5865f2;
     box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.1);
   }

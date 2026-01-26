@@ -1,0 +1,33 @@
+{
+  "$schema": "https://inlang.com/schema/plugin-message-format",
+  "settings_title": "Глобальные настройки",
+  "settings_back": "← Назад к чатам",
+  "settings_label_language": "Язык интерфейса",
+  "settings_label_api_url": "API URL",
+  "settings_label_api_key": "API Key",
+  "settings_label_model": "Модель по умолчанию",
+  "settings_footer_info": "Эти параметры используются по умолчанию, если они не указаны в настройках конкретного рабочего пространства.",
+  
+  "sidebar_chats_title": "Чаты",
+  "sidebar_new_chat": "Новый чат",
+  "sidebar_search_placeholder": "Поиск чата...",
+  "sidebar_search_tooltip": "Поиск",
+  "sidebar_no_results": "Ничего не найдено",
+  "sidebar_settings": "Настройки",
+  "sidebar_no_chats": "Нет чатов",
+  "sidebar_delete_confirm": "Удалить?",
+  "sidebar_menu_rename": "Переименовать",
+  "sidebar_menu_delete": "Удалить",
+  "sidebar_tooltip_save": "Сохранить",
+  "sidebar_tooltip_cancel": "Отмена",
+  "sidebar_toggle_aria": "Скрыть/показать боковую панель",
+  
+  "chat_new_name": "Новый чат",
+  "workspace_first_name": "Основное пространство",
+  "workspace_new_name": "Рабочее пространство",
+  "workspace_add_button": "Новое пространство",
+  "delete_workspace_confirm": "Удалить рабочее пространство \"{name}\" и все его данные?",
+
+  "menu_open_link": "Открыть в браузере",
+  "menu_copy_link": "Копировать ссылку"
+}

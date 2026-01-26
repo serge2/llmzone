@@ -1,0 +1,33 @@
+{
+  "$schema": "https://inlang.com/schema/plugin-message-format",
+  "settings_title": "Global Settings",
+  "settings_back": "← Back to chats",
+  "settings_label_language": "Interface Language",
+  "settings_label_api_url": "API URL",
+  "settings_label_api_key": "API Key",
+  "settings_label_model": "Default Model Name",
+  "settings_footer_info": "These parameters are used as fallbacks if not specified in the individual workspace settings.",
+  
+  "sidebar_chats_title": "Chats",
+  "sidebar_new_chat": "New Chat",
+  "sidebar_search_placeholder": "Search chat...",
+  "sidebar_search_tooltip": "Search",
+  "sidebar_no_results": "No results found",
+  "sidebar_settings": "Settings",
+  "sidebar_no_chats": "No chats",
+  "sidebar_delete_confirm": "Delete?",
+  "sidebar_menu_rename": "Rename",
+  "sidebar_menu_delete": "Delete",
+  "sidebar_tooltip_save": "Save",
+  "sidebar_tooltip_cancel": "Cancel",
+  "sidebar_toggle_aria": "Toggle sidebar",
+  
+  "chat_new_name": "New Chat",
+  "workspace_first_name": "Main Workspace",
+  "workspace_new_name": "Workspace",
+  "workspace_add_button": "New Workspace",
+  "delete_workspace_confirm": "Delete workspace \"{name}\" and all its data?",
+
+  "menu_open_link": "Open in Browser",
+  "menu_copy_link": "Copy Link"
+}

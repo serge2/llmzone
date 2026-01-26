@@ -3,6 +3,8 @@
   import type { Workspace } from '$lib/types';
   import WorkspaceIconPicker from './WorkspaceIconPicker.svelte';
   import { tick } from 'svelte';
+  import { setLocale, getLocale } from '$paraglide/runtime';
+  import * as m from '$paraglide/messages';
 
   // Иконки
   import MenuIcon from '$lib/assets/icons/menu.svg?raw';
@@ -75,7 +77,7 @@
   <button 
     class="sidebar-toggle" 
     onclick={(e) => { e.stopPropagation(); sidebarVisible = !sidebarVisible; }} 
-    aria-label="Toggle sidebar"
+    aria-label={m.sidebar_toggle_aria()}
   >
     {@html MenuIcon}
   </button>
@@ -87,8 +89,8 @@
       aria-expanded={isWsOpen}
       aria-haspopup="listbox"
     >
-      <span class="ws-icon-current">{currentWs?.icon || 'W'}</span>
-      <span class="ws-name-current">{currentWs?.name || 'Workspace'}</span>
+      <span class="ws-icon-current">{currentWs?.icon || '📁'}</span>
+      <span class="ws-name-current">{currentWs?.name || m.workspace_new_name()}</span>
       <span class="chevron" class:rotated={isWsOpen}>{@html ChevronDownIcon}</span>
     </button>
 
@@ -153,7 +155,7 @@
         <div class="ws-footer">
           <button class="add-ws-btn" onclick={onCreateWorkspace}>
             {@html PlusIcon}
-            <span>Новое пространство</span>
+            <span>{m.workspace_add_button()}</span>
           </button>
         </div>
       </div>
