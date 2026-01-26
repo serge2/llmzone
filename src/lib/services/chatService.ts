@@ -3,6 +3,9 @@ import { toastService } from '$lib/services/toastService.svelte';
 import type { Message, Chat, WorkspaceSettings, ToolCall } from '$lib/types';
 import type { MCPServerInstance } from '$lib/mcp/manager.svelte';
 
+// Импорт локализации
+import * as m from '$paraglide/messages';
+
 export class ChatService {
   private MAX_ITERATIONS = 10; // Защита от бесконечных циклов
 
@@ -114,7 +117,7 @@ export class ChatService {
           if (abortSignal.aborted) break;
 
           if (!responseData || (!responseData.content && !responseData.reasoning && (!responseData.tool_calls || responseData.tool_calls.length === 0))) {
-            throw new Error("Модель вернула пустой ответ или не поддерживает данный формат сообщений");
+            throw new Error(m.chat_error_empty_response());
           }
           
           if (currentAssistantMsgIdx !== null) {
@@ -183,10 +186,10 @@ export class ChatService {
                 if (!alreadyHasResult) {
                   chat.history.push({
                     role: 'tool',
-                    text: "User rejected execution of this tool.",
+                    text: m.chat_tool_rejected_by_user(),
                     tool_result: {
                       tool_call_id: call.id,
-                      content: "Error: User rejected execution.",
+                      content: m.chat_tool_error_rejected(),
                       isError: true
                     }
                   });
@@ -203,7 +206,7 @@ export class ChatService {
                 const toolBinding = toolLookupMap.get(call.name);
 
                 if (!toolBinding) {
-                  throw new Error(`Инструмент "${call.name}" не найден в карте вызовов`);
+                  throw new Error(m.chat_error_tool_not_found({ name: call.name }));
                 }
 
                 // Вызов через оригинальный сервер и оригинальное имя функции
@@ -254,10 +257,10 @@ export class ChatService {
       
       if (isAbort) {
         console.log("Генерация прервана пользователем");
-        toastService.show("Генерация прервана", "info");
+        toastService.show(m.chat_toast_aborted(), "info");
       } else {
         console.error("Chat Error:", error);
-        toastService.show(`Ошибка связи: ${error.message}`, "error");
+        toastService.show(m.chat_toast_conn_error({ message: error.message }), "error");
       }
 
       // ЛОГИКА ОЧИСТКИ ИНТЕРФЕЙСА:
@@ -361,7 +364,7 @@ export class ChatService {
           
           if (imageItem && imageItem.data) {
             // Отправляем текстовое подтверждение в роль tool
-            openAIMsg.content = "Изображение получено.";
+            openAIMsg.content = m.chat_tool_image_received();
             apiMessages.push(openAIMsg);
 
             // 3. Добавляем сообщение от пользователя с картинкой для ЛЛМ
@@ -377,7 +380,7 @@ export class ChatService {
             apiMessages.push({
               role: 'user',
               content: [
-                { type: 'text', text: 'Вот изображение(я), которое вернул инструмент:' },
+                { type: 'text', text: m.chat_tool_image_msg_prefix() },
                 ...imagesRecords
               ]
             });
@@ -425,7 +428,7 @@ export class ChatService {
 
     if (!response.ok) {
       const errorData = await response.text();
-      throw new Error(`API Error (${response.status}): ${errorData}`);
+      throw new Error(m.chat_error_api({ status: response.status.toString(), message: errorData }));
     }
 
     const reader = response.body?.getReader();

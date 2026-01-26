@@ -2,6 +2,9 @@
   import { slide, fade } from 'svelte/transition';
   import type { MCPServerInstance } from '$lib/mcp/manager.svelte';
   
+  // Импорт локализации
+  import * as m from '$paraglide/messages';
+
   // Импорт иконок
   import ChevronIcon from '$lib/assets/icons/chevron-down.svg?raw';
   import QuestionIcon from '$lib/assets/icons/help.svg?raw'; 
@@ -66,7 +69,7 @@
         class="restart-btn" 
         onclick={handleRestart} 
         disabled={server.isLoading}
-        title="Переподключиться"
+        title={m.mcp_widget_restart_title()}
       >
         {@html RestartIcon}
       </button>
@@ -94,15 +97,15 @@
       {#if server.tools.length > 0}
         <div class="tools-list">
           <div class="section-header">
-            <div class="section-title">Доступные инструменты:</div>
+            <div class="section-title">{m.mcp_widget_tools_title()}</div>
             
             <div class="global-policy">
-              <span class="policy-label">{server.autoApproveAll ? 'Разрешить все' : 'Управление'}</span>
+              <span class="policy-label">{server.autoApproveAll ? m.mcp_widget_policy_allow_all() : m.mcp_widget_policy_control()}</span>
               <button 
                 class="policy-toggle" 
                 onclick={togglePolicy}
                 class:is-active={server.autoApproveAll}
-                title="Сменить режим подтверждения"
+                title={m.mcp_widget_policy_toggle_title()}
               >
                 <div class="toggle-track"></div>
               </button>
@@ -130,9 +133,9 @@
                     class="auth-badge" 
                     class:is-trusted={tool.alwaysAllow}
                     onclick={() => { tool.alwaysAllow = !tool.alwaysAllow; server.notify(); }}
-                    title={tool.alwaysAllow ? 'Выполнять автоматически' : 'Требовать подтверждение'}
+                    title={tool.alwaysAllow ? m.mcp_widget_tool_auto_title() : m.mcp_widget_tool_ask_title()}
                   >
-                    {tool.alwaysAllow ? 'Разрешить' : 'Спрашивать'}
+                    {tool.alwaysAllow ? m.mcp_widget_tool_allow() : m.mcp_widget_tool_ask()}
                   </button>
                 {/if}
 
@@ -160,7 +163,7 @@
           {/each}
         </div>
       {:else if !server.isLoading}
-        <div class="empty-state">Инструменты не найдены или сервер отключен</div>
+        <div class="empty-state">{m.mcp_widget_empty_tools()}</div>
       {/if}
     </div>
   {/if}

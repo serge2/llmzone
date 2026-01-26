@@ -1,6 +1,9 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
 
+  // Импорт локализации
+  import * as m from '$paraglide/messages';
+
   let { value = $bindable('📁'), onSelect } = $props<{
     value: string;
     onSelect: (icon: string) => void;
@@ -15,10 +18,10 @@
   }
 
   const groups = [
-    { name: 'Работа', icons: ['💼', '💻', '⚙️', '📈', '📋', '📁'] },
-    { name: 'Кодинг', icons: ['🤖', '🧠', '🧪', '⚡', '🛠️', '📡'] },
-    { name: 'Учеба', icons: ['🎓', '📚', '✍️', '📝', '🧠', '💡'] },
-    { name: 'Личное', icons: ['🏠', '🎨', '🎬', '🧘', '🌍', '🍕'] }
+    { name: m.icon_picker_group_work(), icons: ['💼', '💻', '⚙️', '📈', '📋', '📁'] },
+    { name: m.icon_picker_group_coding(), icons: ['🤖', '🧠', '🧪', '⚡', '🛠️', '📡'] },
+    { name: m.icon_picker_group_study(), icons: ['🎓', '📚', '✍️', '📝', '🧠', '💡'] },
+    { name: m.icon_picker_group_personal(), icons: ['🏠', '🎨', '🎬', '🧘', '🌍', '🍕'] }
   ];
 
   function select(icon: string) {

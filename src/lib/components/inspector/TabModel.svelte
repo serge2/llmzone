@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { Workspace, GlobalConfig } from '$lib/types';
 
+  // Импорт локализации
+  import * as m from '$paraglide/messages';
+
   let { 
     currentWorkspace = $bindable(), 
     globalConfig,
@@ -14,7 +17,7 @@
 
 <div class="settings-group">
   <label>
-    <span class="label-text">API URL</span>
+    <span class="label-text">{m.tab_model_api_url()}</span>
     <input 
       bind:value={currentWorkspace.settings.apiUrl} 
       onchange={onSettingsChange}
@@ -22,7 +25,7 @@
     />
   </label>
   <label>
-    <span class="label-text">Название модели</span>
+    <span class="label-text">{m.tab_model_name()}</span>
     <input 
       bind:value={currentWorkspace.settings.modelName} 
       onchange={onSettingsChange}
@@ -30,16 +33,16 @@
     />
   </label>
   <label>
-    <span class="label-text">API Key</span>
+    <span class="label-text">{m.tab_model_api_key()}</span>
     <input 
       type="password"
       bind:value={currentWorkspace.settings.apiKey} 
       onchange={onSettingsChange}
-      placeholder={globalConfig.apiKey ? "••••••••" : "Ключ не задан"} 
+      placeholder={globalConfig.apiKey ? "••••••••" : m.tab_model_api_key_not_set()} 
     />
   </label>
   <label>
-    <span class="label-text">Температура: {currentWorkspace.settings.temperature}</span>
+    <span class="label-text">{m.tab_model_temperature()}: {currentWorkspace.settings.temperature}</span>
     <input 
       type="range" 
       min="0" 

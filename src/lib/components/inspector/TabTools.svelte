@@ -4,6 +4,9 @@
   import { untrack } from 'svelte';
   import type { Workspace } from '$lib/types';
   
+  // Импорт локализации
+  import * as m from '$paraglide/messages';
+
   // Импорт иконок из ассетов
   import CloseIcon from '$lib/assets/icons/close.svg?raw';
   import ExpandIcon from '$lib/assets/icons/edit.svg?raw';
@@ -82,14 +85,14 @@
 
 <div class="tab-tools">
   <div class="header-row">
-    <span class="label-text">Конфигурация MCP</span>
+    <span class="label-text">{m.tab_tools_config_label()}</span>
     <button class="config-btn" onclick={() => isExpanded = true}>
       {@html ExpandIcon}
-      <span>Конфигурация</span>
+      <span>{m.tab_tools_config_button()}</span>
     </button>
   </div>
 
-  <p class="info-text">Настройте MCP-серверы для расширения возможностей модели инструментами.</p>
+  <p class="info-text">{m.tab_tools_info_text()}</p>
 
   {#if serverInstances.length > 0}
     <div class="servers-list">
@@ -99,7 +102,7 @@
     </div>
   {:else}
     <div class="empty-placeholder">
-       Нет активных MCP серверов. Добавьте их в конфигурацию.
+       {m.tab_tools_empty_placeholder()}
     </div>
   {/if}
 
@@ -117,19 +120,19 @@
     >
       <div class="panel-header">
         <div class="title-group">
-          <h3>Настройка MCP-серверов</h3>
-          <span class="workspace-badge">Воркспейс: {currentWorkspace.name}</span>
+          <h3>{m.tab_tools_editor_title()}</h3>
+          <span class="workspace-badge">{m.tab_tools_workspace_label()} {currentWorkspace.name}</span>
         </div>
-        <button class="icon-close-btn" onclick={handleCancel} title="Закрыть без сохранения">
+        <button class="icon-close-btn" onclick={handleCancel} title={m.tab_tools_close_hint()}>
           {@html CloseIcon}
         </button>
       </div>
 
       <div class="panel-body">
         <div class="editor-top-bar">
-          <span class="hint">На данный момент есть поддержка только Streamable HTTP(S) серверов</span>
+          <span class="hint">{m.tab_tools_http_hint()}</span>
           {#if jsonError}
-            <span class="error-badge">Ошибка валидации</span>
+            <span class="error-badge">{m.tab_tools_validation_error()}</span>
           {/if}
         </div>
         
@@ -152,21 +155,21 @@
         
         {#if jsonError}
           <div class="error-details">
-            <strong>Ошибка в структуре JSON:</strong><br>
+            <strong>{m.tab_tools_json_error_prefix()}</strong><br>
             {jsonError}
           </div>
         {/if}
       </div>
 
       <div class="panel-footer">
-        <button class="secondary-btn" onclick={handleCancel}>Отмена</button>
+        <button class="secondary-btn" onclick={handleCancel}>{m.tab_tools_cancel()}</button>
         <button 
           class="primary-btn" 
           class:is-success={isSaved}
           onclick={validateAndSave}
           disabled={!canSave}
         >
-          {isSaved ? 'Сохранено!' : 'Применить изменения'}
+          {isSaved ? m.tab_tools_saved_status() : m.tab_tools_apply_button()}
         </button>
       </div>
     </div>

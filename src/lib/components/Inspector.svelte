@@ -5,6 +5,9 @@
   import TabTools from './inspector/TabTools.svelte';
   import type { MCPServerInstance } from '$lib/mcp/manager.svelte'; // Импорт типа инстанса
 
+  // Импорт локализации
+  import * as m from '$paraglide/messages';
+
   // Импорт иконок из ассетов
   import MessageIcon from '$lib/assets/icons/message.svg?raw';
   import CpuIcon from '$lib/assets/icons/cpu.svg?raw';
@@ -38,15 +41,15 @@
   <div class="tabs">
     <button class:active={inspectorTab === 'model'} onclick={() => setTab('model')}>
       {@html CpuIcon}
-      Модель
+      {m.inspector_tab_model()}
     </button>
     <button class:active={inspectorTab === 'context'} onclick={() => setTab('context')}>
       {@html MessageIcon}
-      Контекст
+      {m.inspector_tab_context()}
     </button>
     <button class:active={inspectorTab === 'tools'} onclick={() => setTab('tools')}>
       {@html ToolsIcon}
-      Инструменты
+      {m.inspector_tab_tools()}
     </button>
   </div>
 
@@ -64,7 +67,7 @@
         />
       {/if}
     {:else}
-      <p class="empty-text">Выберите воркспейс для настройки</p>
+      <p class="empty-text">{m.inspector_empty_state()}</p>
     {/if}
   </div>
 </aside>

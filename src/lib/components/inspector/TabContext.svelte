@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { Workspace } from '$lib/types';
 
+  // Импорт локализации
+  import * as m from '$paraglide/messages';
+
   let { 
     currentWorkspace = $bindable(), 
     onSettingsChange 
@@ -12,12 +15,12 @@
 
 <div class="settings-group">
   <label>
-    <span class="label-text">Системный промпт</span>
+    <span class="label-text">{m.tab_context_system_prompt()}</span>
     <textarea 
       bind:value={currentWorkspace.settings.systemPrompt} 
       onchange={onSettingsChange}
       rows="10" 
-      placeholder="Инструкции для модели..."
+      placeholder={m.tab_context_system_prompt_placeholder()}
     ></textarea>
   </label>
 </div>
