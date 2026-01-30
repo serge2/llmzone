@@ -81,6 +81,7 @@ export class ChatService {
           // Стандартный путь: создаем новое сообщение для ответа ассистента
           currentAssistantMsgIdx = chat.history.length;
           chat.history.push({
+            id: crypto.randomUUID(), // Исправлено: добавлен уникальный ID
             role: 'assistant',
             text: '', 
             reasoning: '', 
@@ -185,6 +186,7 @@ export class ChatService {
                 const alreadyHasResult = chat.history.some(m => m.role === 'tool' && m.tool_result?.tool_call_id === call.id);
                 if (!alreadyHasResult) {
                   chat.history.push({
+                    id: crypto.randomUUID(), // Исправлено: добавлен уникальный ID
                     role: 'tool',
                     text: m.chat_tool_rejected_by_user(),
                     tool_result: {
@@ -214,6 +216,7 @@ export class ChatService {
                 
                 // Снова используем push вместо пересоздания всего массива
                 chat.history.push({
+                  id: crypto.randomUUID(), // Исправлено: добавлен уникальный ID
                   role: 'tool',
                   text: JSON.stringify(result),
                   tool_result: {
@@ -224,6 +227,7 @@ export class ChatService {
                 });
               } catch (err: any) {
                 chat.history.push({
+                  id: crypto.randomUUID(), // Исправлено: добавлен уникальный ID
                   role: 'tool',
                   text: `Error: ${err.message}`,
                   tool_result: {

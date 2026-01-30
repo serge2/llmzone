@@ -72,6 +72,7 @@ export interface ToolResult {
 }
 
 export interface Message {
+  id: string;           // НОВОЕ: Уникальный ID сообщения
   role: 'user' | 'assistant' | 'system' | 'tool';
   text: string;
   reasoning?: string;

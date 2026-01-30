@@ -1,21 +1,27 @@
 <script lang="ts">
   import type { GlobalConfig } from '$lib/types';
-  import { setLocale, getLocale } from '$paraglide/runtime';
+  import { setLocale } from '$paraglide/runtime'; // getLocale больше не нужен здесь
   import * as m from '$paraglide/messages';
 
-  let { globalConfig, onSave, onClose }: { 
+  let { globalConfig, currentLocale, onSave, onClose }: { 
     globalConfig: GlobalConfig, 
+    currentLocale: string, // ПРИНИМАЕМ СНАРУЖИ
     onSave: () => void,
     onClose: () => void 
   } = $props();
 
+  // Создаем зависимость для всех m. ключей внутри этого файла
+  const _i18n = $derived(currentLocale);
+
   function handleLanguageChange(e: Event) {
     const newLang = (e.target as HTMLSelectElement).value as 'ru' | 'en';
     
-    // Устанавливаем локаль в Paraglide
+    // 1. Сначала меняем локаль в рантайме
     setLocale(newLang, { reload: false });
     
-    // Сохраняем конфиг (в +page.svelte сработает persistConfig)
+    // 2. Вызываем сохранение. 
+    // В +page.svelte функция persistConfig обновит currentLocaleState, 
+    // и этот компонент (и все остальные) мгновенно перерисуется.
     onSave();
   }
 </script>
@@ -23,16 +29,18 @@
 <div class="settings-overlay">
   <div class="settings-container">
     <header class="settings-header">
-      <button class="back-btn" onclick={onClose}>{m.settings_back()}</button>
-      <h2>{m.settings_title()}</h2>
+      <button class="back-btn" onclick={onClose}>
+        {_i18n && m.settings_back()}
+      </button>
+      <h2>{_i18n && m.settings_title()}</h2>
     </header>
 
     <div class="settings-form">
       <div class="setting-item">
-        <label for="languageSelect">{m.settings_label_language()}</label>
+        <label for="languageSelect">{_i18n && m.settings_label_language()}</label>
         <select 
           id="languageSelect"
-          value={getLocale()} 
+          value={currentLocale} 
           onchange={handleLanguageChange}
           class="settings-select"
         >
@@ -40,9 +48,9 @@
           <option value="en">English</option>
         </select>
       </div>
-
+      
       <div class="setting-item">
-        <label for="apiUrl">{m.settings_label_api_url()}</label>
+        <label for="apiUrl">{_i18n && m.settings_label_api_url()}</label>
         <input 
           id="apiUrl"
           type="text" 
@@ -53,18 +61,18 @@
       </div>
 
       <div class="setting-item">
-        <label for="apiKey">{m.settings_label_api_key()}</label>
+        <label for="apiKey">{_i18n && m.settings_label_api_key()}</label>
         <input 
           id="apiKey"
           type="password" 
           bind:value={globalConfig.apiKey} 
           onchange={onSave}
-          placeholder={m.settings_label_api_key()}
+          placeholder={_i18n && m.settings_label_api_key()}
         />
       </div>
 
       <div class="setting-item">
-        <label for="modelName">{m.settings_label_model()}</label>
+        <label for="modelName">{_i18n && m.settings_label_model()}</label>
         <input 
           id="modelName"
           type="text" 
@@ -75,13 +83,14 @@
       </div>
       
       <div class="footer-info">
-        <p>{m.settings_footer_info()}</p>
+        <p>{_i18n && m.settings_footer_info()}</p>
       </div>
     </div>
   </div>
 </div>
 
 <style>
+  /* Стили без изменений */
   .settings-overlay {
     position: fixed;
     top: 0;

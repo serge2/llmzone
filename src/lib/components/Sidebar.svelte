@@ -4,7 +4,6 @@
   import type { Workspace } from '$lib/types';
     
   // --- Система локализации ---
-  import { getLocale } from '$paraglide/runtime';
   import * as m from '$paraglide/messages';
 
   // Импорт иконок из ассетов
@@ -20,6 +19,7 @@
   // Используем деструктуризацию пропсов Svelte 5
   let { 
     workspaces = $bindable(), 
+    currentLocale, // Реактивная руна из +page.svelte
     selectedWorkspaceId,
     selectedChatId, 
     chatSearch = $bindable(), 
@@ -31,6 +31,7 @@
     onOpenSettings
   }: {
     workspaces: Workspace[],
+    currentLocale: string,
     selectedWorkspaceId: string,
     selectedChatId: string,
     chatSearch: string,
@@ -41,6 +42,11 @@
     onDeleteChat: (chatId: string) => void,
     onOpenSettings: () => void
   } = $props();
+
+  // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ
+  // Эта переменная будет меняться в +page.svelte. 
+  // Используя её в шаблоне рядом с m.функциями, мы заставляем Svelte их перевызывать.
+  const _i18n = $derived(currentLocale);
 
   // Состояние для управления контекстным меню и редактированием
   let activeMenuId = $state<string | null>(null);
@@ -53,10 +59,10 @@
 
   const currentWs = $derived(workspaces.find((w: Workspace) => w.id === selectedWorkspaceId));
 
-  // Производное состояние для отфильтрованных чатов (чтобы работал {:else})
+  // Производное состояние для отфильтрованных чатов
   const filteredChats = $derived(
     currentWs ? currentWs.chats.filter(c => 
-      c.name.toLocaleLowerCase(getLocale()).includes(chatSearch.toLocaleLowerCase(getLocale()))
+      c.name.toLocaleLowerCase(currentLocale).includes(chatSearch.toLocaleLowerCase(currentLocale))
     ) : []
   );
 
@@ -119,13 +125,15 @@
 <aside class="chats-sidebar">
   <div class="chats-list-header">
     <div class="toolbar">
-      <h2 class="sidebar-title">{m.sidebar_chats_title?.() || 'Чаты'}</h2>
+      <h2 class="sidebar-title">
+        {_i18n && m.sidebar_chats_title()}
+      </h2>
       
       <div class="actions-group">
         <button 
           class="icon" 
           class:active={searchActive}
-          title={m.sidebar_search_tooltip()} 
+          title={_i18n && m.sidebar_search_tooltip()} 
           type="button" 
           onclick={toggleSearch}
         >
@@ -134,7 +142,7 @@
         
         <button 
           class="icon icon-plus" 
-          title={m.sidebar_new_chat()} 
+          title={_i18n && m.sidebar_new_chat()} 
           type="button" 
           onclick={onCreateChat}
         >
@@ -148,7 +156,7 @@
         <input 
           bind:this={searchInputRef}
           class="chat-search" 
-          placeholder={m.sidebar_search_placeholder()} 
+          placeholder={_i18n && m.sidebar_search_placeholder()} 
           bind:value={chatSearch} 
           onclick={(e) => e.stopPropagation()}
           onkeydown={(e) => {
@@ -180,10 +188,10 @@
               }}
             />
             <div class="edit-actions">
-              <button class="confirm-btn" onclick={() => confirmRename(chat.id)} title={m.sidebar_tooltip_save()}>
+              <button class="confirm-btn" onclick={() => confirmRename(chat.id)} title={_i18n && m.sidebar_tooltip_save()}>
                 {@html CheckIcon}
               </button>
-              <button class="cancel-btn" onclick={() => editingChatId = null} title={m.sidebar_tooltip_cancel()}>
+              <button class="cancel-btn" onclick={() => editingChatId = null} title={_i18n && m.sidebar_tooltip_cancel()}>
                 {@html CloseIcon}
               </button>
             </div>
@@ -194,12 +202,12 @@
             role="presentation"
             onmousedown={(e) => e.stopPropagation()}
           >
-            <span class="confirm-label">{m.sidebar_delete_confirm()}</span>
+            <span class="confirm-label">{_i18n && m.sidebar_delete_confirm()}</span>
             <div class="edit-actions">
-              <button class="confirm-delete-btn" onclick={() => confirmDelete(chat.id)} title={m.sidebar_menu_delete()}>
+              <button class="confirm-delete-btn" onclick={() => confirmDelete(chat.id)} title={_i18n && m.sidebar_menu_delete()}>
                 {@html TrashIcon}
               </button>
-              <button class="cancel-btn" onclick={cancelDelete} title={m.sidebar_tooltip_cancel()}>
+              <button class="cancel-btn" onclick={cancelDelete} title={_i18n && m.sidebar_tooltip_cancel()}>
                 {@html CloseIcon}
               </button>
             </div>
@@ -230,11 +238,11 @@
                 onkeydown={(e) => e.key === 'Escape' && (activeMenuId = null)}
               >
                 <button role="menuitem" onclick={() => startRename(chat.id, chat.name)}>
-                  <span>{m.sidebar_menu_rename()}</span>
+                  <span>{_i18n && m.sidebar_menu_rename()}</span>
                   {@html EditIcon}
                 </button>
                 <button role="menuitem" class="delete-opt" onclick={(e) => { e.stopPropagation(); requestDelete(chat.id); }}>
-                  <span>{m.sidebar_menu_delete()}</span>
+                  <span>{_i18n && m.sidebar_menu_delete()}</span>
                   {@html TrashIcon}
                 </button>
               </div>
@@ -244,7 +252,7 @@
       </div>
     {:else}
       <div class="empty-state">
-        {chatSearch ? (m.sidebar_no_results?.() || "No results") : m.sidebar_no_chats()}
+        {chatSearch ? ((_i18n && m.sidebar_no_results?.()) || "No results") : (_i18n && m.sidebar_no_chats())}
       </div>
     {/each}
   </div>
@@ -252,12 +260,13 @@
   <div class="sidebar-footer">
     <button class="footer-btn" onclick={onOpenSettings}>
       <span class="footer-icon">{@html SettingsIcon}</span>
-      <span>{m.sidebar_settings()}</span>
+      <span>{_i18n && m.sidebar_settings()}</span>
     </button>
   </div>
 </aside>
 
 <style>
+  /* Стили без изменений */
   .chats-sidebar { 
     width: 260px; 
     flex-shrink: 0; 
@@ -465,7 +474,6 @@
     font-size: 0.8rem;
   }
 
-  /* Стили для редактирования и удаления */
   .edit-mode, .delete-confirm-mode {
     display: flex;
     align-items: center;

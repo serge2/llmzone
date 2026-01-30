@@ -16,14 +16,19 @@
   let { 
     currentWorkspace = $bindable(), 
     globalConfig,
+    currentLocale, // Новое: принимаем текущую локаль
     serverInstances = $bindable(), // Добавляем bindable проп для серверов
     onSettingsChange 
   }: { 
     currentWorkspace: Workspace | undefined, 
     globalConfig: GlobalConfig,
+    currentLocale: string, // Типизация локали
     serverInstances: MCPServerInstance[], // Типизация массива инстансов
     onSettingsChange: () => void 
   } = $props();
+
+  // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ ПЕРЕВОДОВ
+  const _i18n = $derived(currentLocale);
 
   // Производное состояние: берем вкладку из настроек воркспейса или 'model' по умолчанию
   const inspectorTab = $derived(currentWorkspace?.settings.lastActiveTab || 'model');
@@ -41,33 +46,43 @@
   <div class="tabs">
     <button class:active={inspectorTab === 'model'} onclick={() => setTab('model')}>
       {@html CpuIcon}
-      {m.inspector_tab_model()}
+      {_i18n && m.inspector_tab_model()}
     </button>
     <button class:active={inspectorTab === 'context'} onclick={() => setTab('context')}>
       {@html MessageIcon}
-      {m.inspector_tab_context()}
+      {_i18n && m.inspector_tab_context()}
     </button>
     <button class:active={inspectorTab === 'tools'} onclick={() => setTab('tools')}>
       {@html ToolsIcon}
-      {m.inspector_tab_tools()}
+      {_i18n && m.inspector_tab_tools()}
     </button>
   </div>
 
   <div class="content">
     {#if currentWorkspace}
       {#if inspectorTab === 'model'}
-        <TabModel bind:currentWorkspace={currentWorkspace} {globalConfig} {onSettingsChange} />
+        <TabModel 
+          bind:currentWorkspace={currentWorkspace} 
+          {globalConfig} 
+          {onSettingsChange} 
+          currentLocale={currentLocale}
+        />
       {:else if inspectorTab === 'context'}
-        <TabContext bind:currentWorkspace={currentWorkspace} {onSettingsChange} />
+        <TabContext 
+          bind:currentWorkspace={currentWorkspace} 
+          {onSettingsChange} 
+          currentLocale={currentLocale} 
+        />
       {:else if inspectorTab === 'tools'}
         <TabTools 
           bind:currentWorkspace={currentWorkspace} 
           bind:serverInstances={serverInstances} 
           {onSettingsChange} 
+          currentLocale={currentLocale} 
         />
       {/if}
     {:else}
-      <p class="empty-text">{m.inspector_empty_state()}</p>
+      <p class="empty-text">{_i18n && m.inspector_empty_state()}</p>
     {/if}
   </div>
 </aside>

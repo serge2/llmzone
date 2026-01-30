@@ -6,21 +6,26 @@
 
   let { 
     currentWorkspace = $bindable(), 
+    currentLocale, // Добавляем проп для локали
     onSettingsChange 
   }: { 
     currentWorkspace: Workspace, 
+    currentLocale: string, // Типизация локали
     onSettingsChange: () => void 
   } = $props();
+
+  // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ ПЕРЕВОДОВ
+  const _i18n = $derived(currentLocale);
 </script>
 
 <div class="settings-group">
   <label>
-    <span class="label-text">{m.tab_context_system_prompt()}</span>
+    <span class="label-text">{_i18n && m.tab_context_system_prompt()}</span>
     <textarea 
       bind:value={currentWorkspace.settings.systemPrompt} 
       onchange={onSettingsChange}
       rows="10" 
-      placeholder={m.tab_context_system_prompt_placeholder()}
+      placeholder={_i18n && m.tab_context_system_prompt_placeholder()}
     ></textarea>
   </label>
 </div>

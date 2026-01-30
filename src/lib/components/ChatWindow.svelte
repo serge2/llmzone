@@ -12,9 +12,11 @@
   import ChevronDownIcon from '$lib/assets/icons/chevron-down.svg?raw';
   import PlusIcon from '$lib/assets/icons/plus.svg?raw'; 
   import CloseIcon from '$lib/assets/icons/close.svg?raw';
+  import CpuIcon from '$lib/assets/icons/cpu.svg?raw'; // Используем как логотип приветствия
 
   let { 
     history, 
+    currentLocale, // Принимаем реактивную руну для i18n
     isGenerating, 
     message = $bindable(),
     onSendMessage,
@@ -25,6 +27,7 @@
     onApproveTool // Обработчик подтверждения инструментов
   } = $props<{
     history: Message[];
+    currentLocale: string;
     isGenerating: boolean;
     message: string;
     onSendMessage: (attachments?: Attachment[]) => void; // принимает аттачи
@@ -34,6 +37,9 @@
     onRegenerateMessage: () => void;
     onApproveTool?: (callId: string, status: 'approved' | 'rejected') => void; // Добавлен тип
   }>();
+
+  // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ ПЕРЕВОДОВ
+  const _i18n = $derived(currentLocale);
 
   // --- ЛОГИКА ВЛОЖЕНИЙ ---
   let pendingAttachments = $state<Attachment[]>([]);
@@ -249,30 +255,41 @@
     bind:this={chatContainer} 
     onscroll={handleScroll}
   >
-    <div class="messages-list">
-      {#each displayGroups as group (group.startIndex)}
-        <MessageBubble 
-          role={group.role}
-          messages={group.messages}
-          isLastMessage={group.startIndex + group.messages.length >= history.length}
-          isTyping={isGenerating && (group.startIndex + group.messages.length >= history.length)}
-          fullHistory={history} 
-          onEdit={(newText) => onEditMessage(group.startIndex, newText)}
-          onCopy={() => {
-            const fullText = group.messages.map(m => m.text).filter(Boolean).join('\n\n');
-            onCopyMessage(fullText);
-          }}
-          onDelete={() => onDeleteMessage(group.startIndex)}
-          onRegenerate={() => onRegenerateMessage()}
-          onApproveTool={onApproveTool} 
-        />
-      {/each} 
-    </div>
+    {#if history.length === 0}
+      <div class="welcome-screen">
+        <div class="welcome-logo">
+          {@html CpuIcon}
+        </div>
+        <h2 class="welcome-text">{_i18n && m.chat_welcome_submessage()}</h2>
+      </div>
+    {:else}
+      <div class="messages-list">
+        {#each displayGroups as group (group.startIndex)}
+          <MessageBubble 
+            currentLocale={currentLocale}
+            role={group.role}
+            messages={group.messages}
+            isLastMessage={group.startIndex + group.messages.length >= history.length}
+            isTyping={isGenerating && (group.startIndex + group.messages.length >= history.length)}
+            fullHistory={history} 
+            onEdit={(newText) => onEditMessage(group.startIndex, newText)}
+            onCopy={() => {
+              const fullText = group.messages.map(m => m.text).filter(Boolean).join('\n\n');
+              onCopyMessage(fullText);
+            }}
+            onDelete={() => onDeleteMessage(group.startIndex)}
+            onRegenerate={() => onRegenerateMessage()}
+            onApproveTool={onApproveTool} 
+          />
+        {/each} 
+      </div>
+    {/if}
+
     {#if showScrollButton}
       <button 
         class="scroll-down-btn" 
         onclick={() => scrollToBottom(true)}
-        aria-label={m.chat_scroll_to_bottom()}
+        aria-label={_i18n && m.chat_scroll_to_bottom()}
       >
         {@html ChevronDownIcon}
       </button>
@@ -304,7 +321,7 @@
       <button 
         class="attach-btn" 
         onclick={() => fileInput?.click()}
-        title={m.chat_attach_files()}
+        title={_i18n && m.chat_attach_files()}
       >
         {@html PlusIcon}
       </button>
@@ -322,7 +339,7 @@
         bind:value={message} 
         onkeydown={handleKeydown} 
         oninput={adjustHeight}
-        placeholder={m.chat_input_placeholder()}
+        placeholder={_i18n && m.chat_input_placeholder()}
         rows="1"
       ></textarea>
       
@@ -330,7 +347,7 @@
         onclick={internalSendMessage} 
         class:stop-btn={isGenerating}
         disabled={!isGenerating && !message.trim() && pendingAttachments.length === 0}
-        title={isGenerating ? (m.chat_stop_generating()) : (m.chat_send_message())}
+        title={_i18n && (isGenerating ? m.chat_stop_generating() : m.chat_send_message())}
       >
         {#if isGenerating}
           {@html StopIcon}
@@ -339,7 +356,7 @@
         {/if}
       </button>
     </div>
-    <div class="footer-note">{m.chat_footer_note()}</div>
+    <div class="footer-note">{_i18n && m.chat_footer_note()}</div>
   </div>
 </section>
 
@@ -359,6 +376,40 @@
     overflow-y: auto; 
     padding: 0 5%; 
     position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .welcome-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    opacity: 0.8;
+  }
+
+  .welcome-logo {
+    width: 64px;
+    height: 64px;
+    color: #5865f2;
+    background: #f5f3ff;
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .welcome-logo :global(svg) {
+    width: 100%;
+    height: 100%;
+  }
+
+  .welcome-text {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+    text-align: center;
   }
 
   .messages-list {
@@ -367,6 +418,7 @@
     padding: 20px 0;
     display: flex;
     flex-direction: column;
+    width: 100%;
   }
 
   .scroll-down-btn {

@@ -33,6 +33,7 @@
   // В Svelte 5 самый надежный способ передачи типов в $props — деструктуризация с типами
   let { 
     role, 
+    currentLocale, // Принимаем реактивную руну для i18n
     error, // Добавили проп ошибки
     isLastMessage = false,
     isTyping = false,
@@ -45,6 +46,7 @@
     onApproveTool // Обработчик подтверждения инструмента
   }: {
     role: 'user' | 'assistant' | 'tool' | 'system',
+    currentLocale: string,
     error?: string, // Типизация ошибки
     isLastMessage?: boolean,
     isTyping?: boolean,
@@ -57,6 +59,8 @@
     onApproveTool?: (callId: string, status: 'approved' | 'rejected') => void // Типизация
   } = $props();
 
+  // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ ПЕРЕВОДОВ
+  const _i18n = $derived(currentLocale);
 
   let copied = $state(false);
   let isConfirmingDelete = $state(false);
@@ -74,7 +78,7 @@
       <div class="code-block-wrapper">
         <div class="code-toolbar">
           <span class="code-lang">${lang}</span>
-          <button class="copy-code-btn" type="button" title="${m.bubble_copy_code()}">
+          <button class="copy-code-btn" type="button" title="${_i18n && m.bubble_copy_code()}">
             ${copyIconRaw}
           </button>
         </div>
@@ -197,6 +201,9 @@
   // Состояния для размышлений внутри группы
   let reasoningExpanded = $state<Record<number, boolean>>({});
 
+  // Состояние для раскрытых инструментов (callId -> boolean)
+  let expandedTools = $state<Record<string, boolean>>({});
+
   // синхронизируем editText с текстом первого сообщения (обычно User)
   $effect(() => {
     if (!isEditing && messages[0]) {
@@ -255,6 +262,12 @@
     const isCurrentlyExpanded = reasoningExpanded[index] ?? true;
     reasoningExpanded[index] = !isCurrentlyExpanded;
   }
+
+  // Функция переключения состояния инструмента
+  function toggleTool(callId: string, currentlyOpen: boolean) {
+    // Явно сохраняем инвертированное состояние
+    expandedTools[callId] = !currentlyOpen;
+  }
 </script>
 
 <div class="message-wrapper {role}" class:is-generating={isTyping}>
@@ -282,7 +295,7 @@
                 >
                   <span class="brain-icon">💭</span>
                   <span class="reasoning-preview">
-                    {#if isExpanded}{m.bubble_reasoning_title()}{:else}{msg.reasoning}{/if}
+                    {#if isExpanded}{_i18n && m.bubble_reasoning_title()}{:else}{msg.reasoning}{/if}
                   </span>
                   <span class="chevron-icon" class:rotated={isExpanded}>{@html chevronDownIconRaw}</span>
                 </button>
@@ -322,9 +335,9 @@
               </div>
             {:else if role === 'assistant' && i === messages.length - 1 && (!msg.tool_calls || msg.tool_calls.length === 0) && !msg.reasoning && msg.role !== 'tool'}
                {#if isTyping}
-                <span class="thinking-text">{m.bubble_ai_thinking()}</span>
+                <span class="thinking-text">{_i18n && m.bubble_ai_thinking()}</span>
               {:else}
-                <span class="thinking-text" style="animation: none; opacity: 0.6;">{m.bubble_generation_stopped()}</span>
+                <span class="thinking-text" style="animation: none; opacity: 0.6;">{_i18n && m.bubble_generation_stopped()}</span>
               {/if}
             {/if}
 
@@ -335,28 +348,35 @@
                   {@const isError = result?.tool_result?.isError}
                   {@const isPending = call.approvalStatus === 'pending'}
                   {@const isRejected = call.approvalStatus === 'rejected'}
+                  {@const isOpen = expandedTools[call.id] ?? isPending}
 
                   <div class="tool-widget" class:needs-approval={isPending} class:is-rejected={isRejected}>
-                    <details class="main-details" open={isPending}>
-                      <summary class="tool-summary" class:success={!!result && !isError} class:error={isError || isRejected} class:pending={isPending}>
+                    <details class="main-details" open={isOpen}>
+                      <summary 
+                        class="tool-summary" 
+                        class:success={!!result && !isError} 
+                        class:error={isError || isRejected} 
+                        class:pending={isPending}
+                        onclick={(e) => { e.preventDefault(); toggleTool(call.id, isOpen); }}
+                      >
                         <span class="icon">{isPending ? '❓' : '🛠'}</span>
                         <span class="name">
                           {#if isPending}
-                            {m.bubble_tool_approval_request()}
+                            {_i18n && m.bubble_tool_approval_request()}
                           {:else if isRejected}
-                            {m.bubble_tool_rejected_label()}
+                            {_i18n && m.bubble_tool_rejected_label()}
                           {:else}
-                            {m.bubble_tool_label()}
+                            {_i18n && m.bubble_tool_label()}
                           {/if} 
                           <strong>{call.name}</strong>
                         </span>
-                        <span class="status-icon">{@html chevronDownIconRaw}</span>
+                        <span class="status-icon" class:rotated={isOpen}>{@html chevronDownIconRaw}</span>
                       </summary>
                       
                       <div class="tool-details-content">
-                        <details class="sub-details" open={isPending}>
+                        <details class="sub-details" open={true}>
                           <summary class="sub-summary">
-                            <span>{m.bubble_tool_args()}</span>
+                            <span>{_i18n && m.bubble_tool_args()}</span>
                             <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
                           </summary>
                           
@@ -374,30 +394,30 @@
 
                         {#if isPending}
                           <div class="approval-actions" transition:slide>
-                            <p class="approval-hint">{m.bubble_tool_approval_hint()}</p>
+                            <p class="approval-hint">{_i18n && m.bubble_tool_approval_hint()}</p>
                             <div class="approval-buttons">
                               <button class="approve-btn" onclick={() => onApproveTool?.(call.id, 'approved')}>
-                                {m.bubble_tool_allow()}
+                                {_i18n && m.bubble_tool_allow()}
                               </button>
                               <button class="reject-btn" onclick={() => onApproveTool?.(call.id, 'rejected')}>
-                                {m.bubble_tool_deny()}
+                                {_i18n && m.bubble_tool_deny()}
                               </button>
                             </div>
                           </div>
                         {:else if isRejected}
                           <div class="tool-rejected-note">
-                             {m.bubble_tool_rejected_note()}
+                             {_i18n && m.bubble_tool_rejected_note()}
                           </div>
                         {:else}
                           <details class="sub-details">
                             <summary class="sub-summary">
-                              <span>{m.bubble_tool_response()}</span>
+                              <span>{_i18n && m.bubble_tool_response()}</span>
                               <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
                             </summary>
                             {#if result}
                               <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
                             {:else}
-                              <div class="tool-loading">{m.bubble_tool_executing()}</div>
+                              <div class="tool-loading">{_i18n && m.bubble_tool_executing()}</div>
                             {/if}
                           </details>
                         {/if}
@@ -415,7 +435,7 @@
         <div class="error-banner">
           <div class="error-header">
             <span class="error-icon">⚠️</span>
-            <strong>{m.bubble_error_title()}</strong>
+            <strong>{_i18n && m.bubble_error_title()}</strong>
           </div>
           <div class="error-text">{error}</div>
         </div>
@@ -428,30 +448,30 @@
       class:force-visible={isEditing || isConfirmingDelete}
     >
       {#if isEditing}
-        <button class="action-btn success" title={m.sidebar_tooltip_save()} onclick={saveEdit}>
+        <button class="action-btn success" title={_i18n && m.sidebar_tooltip_save()} onclick={saveEdit}>
           {@html checkIconRaw}
         </button>
-        <button class="action-btn delete-btn" title={m.sidebar_tooltip_cancel()} onclick={cancelEdit}>
+        <button class="action-btn delete-btn" title={_i18n && m.sidebar_tooltip_cancel()} onclick={cancelEdit}>
           {@html closeIconRaw}
         </button>
       {:else if isConfirmingDelete}
-        <span class="confirm-text">{m.sidebar_delete_confirm()}</span>
-        <button class="action-btn danger" title={m.bubble_action_confirm_delete()} onclick={confirmDelete}>
+        <span class="confirm-text">{_i18n && m.sidebar_delete_confirm()}</span>
+        <button class="action-btn danger" title={_i18n && m.bubble_action_confirm_delete()} onclick={confirmDelete}>
           {@html checkIconRaw}
         </button>
-        <button class="action-btn" title={m.sidebar_tooltip_cancel()} onclick={cancelDelete}>
+        <button class="action-btn" title={_i18n && m.sidebar_tooltip_cancel()} onclick={cancelDelete}>
           {@html closeIconRaw}
         </button>
       {:else}
 
         {#if role === 'assistant' && isLastMessage}
-          <button class="action-btn" title={m.bubble_action_regenerate()} onclick={onRegenerate}>
+          <button class="action-btn" title={_i18n && m.bubble_action_regenerate()} onclick={onRegenerate}>
             {@html refreshIconRaw}
           </button>
         {/if}
 
         {#if role === 'user'}
-          <button class="action-btn" title={m.sidebar_menu_rename()} onclick={startEditing}>
+          <button class="action-btn" title={_i18n && m.sidebar_menu_rename()} onclick={startEditing}>
             {@html editIconRaw}
           </button>
         {/if}
@@ -460,7 +480,7 @@
           class="action-btn" 
           class:success={copied} 
           onclick={handleCopyClick}
-          title={m.bubble_action_copy()}
+          title={_i18n && m.bubble_action_copy()}
         >
           {#if copied}
             {@html checkIconRaw}
@@ -472,7 +492,7 @@
         <button 
           class="action-btn delete-btn" 
           onclick={askDelete}
-          title={m.sidebar_menu_delete()}
+          title={_i18n && m.sidebar_menu_delete()}
         >
           {@html trashIconRaw}
         </button>
@@ -481,7 +501,7 @@
     </div>
 
     {#if isTyping && messages.some(m => m.text || (m.tool_calls && m.tool_calls.length > 0))}
-      <div class="status-note">{m.bubble_ai_working()}</div>
+      <div class="status-note">{_i18n && m.bubble_ai_working()}</div>
     {/if}
   </div>
 </div>
@@ -815,7 +835,7 @@
     align-items: center;
   }
 
-  .main-details[open] .status-icon {
+  .status-icon.rotated {
     transform: rotate(180deg);
   }
 

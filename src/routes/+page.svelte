@@ -36,6 +36,10 @@
     modelName: 'local-model'
   });
 
+  // --- РЕАКТИВНЫЙ МОСТИК ЛОКАЛИЗАЦИИ ---
+  // Мы создаем явный стейт для локали, чтобы Svelte видел его изменения
+  let currentLocaleState = $state(getLocale());
+
   let message = $state("");
   // Словарь для независимых контроллеров отмены: { chatId: AbortController }
   let abortControllers = $state<Record<string, AbortController>>({});
@@ -53,9 +57,6 @@
   // Список активных MCP серверов ДЛЯ ТЕКУЩЕГО ЭКРАНА (отображение в Инспекторе)
   let mcpServers = $state<MCPServerInstance[]>([]);
 
-  // Переменная-триггер для принудительного обновления интерфейса при смене языка
-  let localeTrigger = $state(0);
-
   // --- Состояние кастомного контекстного меню ---
   let menuState = $state({
     visible: false,
@@ -68,6 +69,13 @@
   const currentWorkspace = $derived(workspaces.find(w => w.id === selectedWorkspaceId));
   const currentChat = $derived(currentWorkspace?.chats.find(c => c.id === selectedChatId));
   const collapsedWorkspaces = $state<Record<string, boolean>>({});
+
+  // Реактивный заголовок чата, который обновляется при смене языка
+  const headerChatName = $derived.by(() => {
+    // Используем нашу руну как зависимость
+    currentLocaleState;
+    return currentChat?.name || m.sidebar_no_chats();
+  });
 
   // --- ЛОГИКА ИНИЦИАЛИЗАЦИИ MCP СЕРВЕРОВ ---
   function syncMCPServers() {
@@ -178,7 +186,7 @@
     // Устанавливаем язык ПЕРВЫМ делом, чтобы UI не мерцал
     if (config?.language) {
       setLocale(config.language, { reload: false });
-      localeTrigger += 1;
+      currentLocaleState = config.language; // Синхронизируем руну
     }
     
     // Загружаем глобальные настройки если они есть
@@ -199,6 +207,11 @@
           },
           chats: (savedChats || []).map(c => ({
             ...c,
+            // МИГРАЦИЯ: Восстанавливаем ID для старых сообщений, чтобы они отображались
+            history: (c.history || []).map(msg => ({
+              ...msg,
+              id: msg.id || crypto.randomUUID()
+            })),
             isGenerating: false
           }))
         };
@@ -250,6 +263,9 @@
 
   // --- Работа с хранилищем (Раздельная) ---
   async function persistConfig() {
+    // ОБНОВЛЯЕМ РУНУ: Синхронизируем наше состояние языка с текущей локалью Paraglide
+    currentLocaleState = getLocale();
+
     // СИНХРОНИЗАЦИЯ: Перед сохранением обновляем mcpStates для всех воркспейсов
     workspaces.forEach(ws => {
         const instances = mcpManager.getForWorkspace(ws.id);
@@ -277,9 +293,8 @@
     };
     
     await saveConfig(configToSave);
-
-    // Увеличиваем триггер, чтобы Svelte обновил все строки переводов
-    localeTrigger += 1;
+    currentLocaleState = getLocale(); // Обновляем руну
+    console.log("Locale updated to:", currentLocaleState); // Проверка в консоли
   }
 
   async function persistChats() {
@@ -404,7 +419,11 @@
     if (!currentChat) return;
     
     let newHistory = [...currentChat.history];
-    newHistory[index] = { ...newHistory[index], text: newText };
+    newHistory[index] = { 
+      ...newHistory[index], 
+      text: newText,
+      id: newHistory[index].id || crypto.randomUUID() // Обеспечиваем ID при редактировании
+    };
     newHistory = newHistory.slice(0, index + 1);
     
     currentChat.history = newHistory;
@@ -570,7 +589,8 @@
 
     // Добавляем сообщение пользователя если оно не пустое или есть вложения
     if (message.trim() || attachments.length > 0) {
-      chatToUpdate.history = [...chatToUpdate.history, { 
+      chatToUpdate.history = [...chatToUpdate.history, {
+        id: crypto.randomUUID(), // Гарантируем наличие ID при отправке
         role: "user", 
         text: message,
         attachments: attachments.length > 0 ? attachments : undefined // Сохраняем аттачи
@@ -645,11 +665,11 @@
 </script>
 
 <main class="app-container">
-  {#key localeTrigger}
     {#if selectedTab === 'settings'}
       <div class="modal-layer">
         <GlobalSettings 
           {globalConfig}
+          currentLocale={currentLocaleState}
           onSave={persistConfig} 
           onClose={() => selectedTab = 'chats'} 
         />
@@ -658,8 +678,9 @@
 
     <AppHeader 
       bind:workspaces={workspaces}
+      currentLocale={currentLocaleState}
       {selectedWorkspaceId}
-      currentChatName={currentChat?.name || m.sidebar_no_chats()}
+      currentChatName={headerChatName}
       bind:sidebarVisible={sidebarVisible}
       onSelectWorkspace={(id: string) => {
         selectedWorkspaceId = id;
@@ -679,6 +700,7 @@
     <div class="main-row">
       {#if sidebarVisible}
         <Sidebar 
+          currentLocale={currentLocaleState}
           bind:workspaces={workspaces} 
           {selectedWorkspaceId}
           {selectedChatId} 
@@ -697,6 +719,7 @@
       <div class="center-content">
         <ChatWindow 
           bind:this={chatWindowComponent}
+          currentLocale={currentLocaleState}
           history={currentChat?.history || []}
           isGenerating={currentChat?.isGenerating || false} 
           bind:message
@@ -712,6 +735,7 @@
       <Inspector 
         bind:currentWorkspace={workspaces[workspaces.findIndex(w => w.id === selectedWorkspaceId)]} 
         {globalConfig} 
+        currentLocale={currentLocaleState}
         bind:serverInstances={mcpServers}
         onSettingsChange={() => {
           syncMCPServers();
@@ -719,7 +743,6 @@
         }} 
       />
     </div>
-  {/key}
 
   {#if menuState.visible}
     <div class="custom-menu" style:left="{menuState.x}px" style:top="{menuState.y}px">
@@ -734,7 +757,7 @@
 </main>
 
 <style>
-
+  /* Стили без изменений */
   .app-container {
     height: 100vh;
     display: flex;

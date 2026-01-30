@@ -17,13 +17,18 @@
 
   let { 
     currentWorkspace = $bindable(), 
+    currentLocale, // Добавляем проп для локали
     serverInstances = $bindable([]), // Делаем список инстансов биндабельным пропом
     onSettingsChange 
   }: { 
     currentWorkspace: Workspace, 
+    currentLocale: string, // Типизация локали
     serverInstances: MCPServerInstance[],
     onSettingsChange: () => void 
   } = $props();
+
+  // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ ПЕРЕВОДОВ
+  const _i18n = $derived(currentLocale);
 
   let isSaved = $state(false);
   let isExpanded = $state(false);
@@ -85,24 +90,26 @@
 
 <div class="tab-tools">
   <div class="header-row">
-    <span class="label-text">{m.tab_tools_config_label()}</span>
+    <span class="label-text">{_i18n && m.tab_tools_config_label()}</span>
     <button class="config-btn" onclick={() => isExpanded = true}>
       {@html ExpandIcon}
-      <span>{m.tab_tools_config_button()}</span>
+      <span>{_i18n && m.tab_tools_config_button()}</span>
     </button>
   </div>
 
-  <p class="info-text">{m.tab_tools_info_text()}</p>
+  <p class="info-text">{_i18n && m.tab_tools_info_text()}</p>
 
   {#if serverInstances.length > 0}
     <div class="servers-list">
       {#each serverInstances as server (server.name + server.url)}
-        <MCPServerWidget {server} />
+        <MCPServerWidget {server}
+          currentLocale={currentLocale}
+        />
       {/each}
     </div>
   {:else}
     <div class="empty-placeholder">
-       {m.tab_tools_empty_placeholder()}
+       {_i18n && m.tab_tools_empty_placeholder()}
     </div>
   {/if}
 
@@ -120,19 +127,19 @@
     >
       <div class="panel-header">
         <div class="title-group">
-          <h3>{m.tab_tools_editor_title()}</h3>
-          <span class="workspace-badge">{m.tab_tools_workspace_label()} {currentWorkspace.name}</span>
+          <h3>{_i18n && m.tab_tools_editor_title()}</h3>
+          <span class="workspace-badge">{_i18n && m.tab_tools_workspace_label()} {currentWorkspace.name}</span>
         </div>
-        <button class="icon-close-btn" onclick={handleCancel} title={m.tab_tools_close_hint()}>
+        <button class="icon-close-btn" onclick={handleCancel} title={_i18n && m.tab_tools_close_hint()}>
           {@html CloseIcon}
         </button>
       </div>
 
       <div class="panel-body">
         <div class="editor-top-bar">
-          <span class="hint">{m.tab_tools_http_hint()}</span>
+          <span class="hint">{_i18n && m.tab_tools_http_hint()}</span>
           {#if jsonError}
-            <span class="error-badge">{m.tab_tools_validation_error()}</span>
+            <span class="error-badge">{_i18n && m.tab_tools_validation_error()}</span>
           {/if}
         </div>
         
@@ -155,21 +162,21 @@
         
         {#if jsonError}
           <div class="error-details">
-            <strong>{m.tab_tools_json_error_prefix()}</strong><br>
+            <strong>{_i18n && m.tab_tools_json_error_prefix()}</strong><br>
             {jsonError}
           </div>
         {/if}
       </div>
 
       <div class="panel-footer">
-        <button class="secondary-btn" onclick={handleCancel}>{m.tab_tools_cancel()}</button>
+        <button class="secondary-btn" onclick={handleCancel}>{_i18n && m.tab_tools_cancel()}</button>
         <button 
           class="primary-btn" 
           class:is-success={isSaved}
           onclick={validateAndSave}
           disabled={!canSave}
         >
-          {isSaved ? m.tab_tools_saved_status() : m.tab_tools_apply_button()}
+          {isSaved ? (_i18n && m.tab_tools_saved_status()) : (_i18n && m.tab_tools_apply_button())}
         </button>
       </div>
     </div>

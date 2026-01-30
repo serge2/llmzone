@@ -10,7 +10,16 @@
   import QuestionIcon from '$lib/assets/icons/help.svg?raw'; 
   import RestartIcon from '$lib/assets/icons/refresh.svg?raw';
 
-  let { server }: { server: MCPServerInstance } = $props();
+  let { 
+    server,
+    currentLocale // Принимаем локаль от родителя (TabTools)
+  }: { 
+    server: MCPServerInstance,
+    currentLocale: string 
+  } = $props();
+
+  // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ ПЕРЕВОДОВ
+  const _i18n = $derived(currentLocale);
   
   // Состояние тултипов остается локальным
   let activeTooltip = $state<string | null>(null);
@@ -69,7 +78,7 @@
         class="restart-btn" 
         onclick={handleRestart} 
         disabled={server.isLoading}
-        title={m.mcp_widget_restart_title()}
+        title={_i18n && m.mcp_widget_restart_title()}
       >
         {@html RestartIcon}
       </button>
@@ -97,15 +106,15 @@
       {#if server.tools.length > 0}
         <div class="tools-list">
           <div class="section-header">
-            <div class="section-title">{m.mcp_widget_tools_title()}</div>
+            <div class="section-title">{_i18n && m.mcp_widget_tools_title()}</div>
             
             <div class="global-policy">
-              <span class="policy-label">{server.autoApproveAll ? m.mcp_widget_policy_allow_all() : m.mcp_widget_policy_control()}</span>
+              <span class="policy-label">{server.autoApproveAll ? (_i18n && m.mcp_widget_policy_allow_all()) : (_i18n && m.mcp_widget_policy_control())}</span>
               <button 
                 class="policy-toggle" 
                 onclick={togglePolicy}
                 class:is-active={server.autoApproveAll}
-                title={m.mcp_widget_policy_toggle_title()}
+                title={_i18n && m.mcp_widget_policy_toggle_title()}
               >
                 <div class="toggle-track"></div>
               </button>
@@ -133,9 +142,9 @@
                     class="auth-badge" 
                     class:is-trusted={tool.alwaysAllow}
                     onclick={() => { tool.alwaysAllow = !tool.alwaysAllow; server.notify(); }}
-                    title={tool.alwaysAllow ? m.mcp_widget_tool_auto_title() : m.mcp_widget_tool_ask_title()}
+                    title={tool.alwaysAllow ? (_i18n && m.mcp_widget_tool_auto_title()) : (_i18n && m.mcp_widget_tool_ask_title())}
                   >
-                    {tool.alwaysAllow ? m.mcp_widget_tool_allow() : m.mcp_widget_tool_ask()}
+                    {tool.alwaysAllow ? (_i18n && m.mcp_widget_tool_allow()) : (_i18n && m.mcp_widget_tool_ask())}
                   </button>
                 {/if}
 
@@ -163,13 +172,14 @@
           {/each}
         </div>
       {:else if !server.isLoading}
-        <div class="empty-state">{m.mcp_widget_empty_tools()}</div>
+        <div class="empty-state">{_i18n && m.mcp_widget_empty_tools()}</div>
       {/if}
     </div>
   {/if}
 </div>
 
 <style>
+  /* Стили сохранены без изменений */
   .server-card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: visible; transition: all 0.2s; position: relative; }
   .card-main { display: flex; align-items: center; padding: 12px; gap: 12px; }
   .expand-btn { background: none; border: none; cursor: pointer; color: #94a3b8; display: flex; transition: transform 0.2s; padding: 4px; }

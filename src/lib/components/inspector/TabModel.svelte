@@ -7,17 +7,22 @@
   let { 
     currentWorkspace = $bindable(), 
     globalConfig,
+    currentLocale, // Добавляем проп для локали
     onSettingsChange 
   }: { 
     currentWorkspace: Workspace, 
     globalConfig: GlobalConfig,
+    currentLocale: string, // Типизация локали
     onSettingsChange: () => void 
   } = $props();
+
+  // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ ПЕРЕВОДОВ
+  const _i18n = $derived(currentLocale);
 </script>
 
 <div class="settings-group">
   <label>
-    <span class="label-text">{m.tab_model_api_url()}</span>
+    <span class="label-text">{_i18n && m.tab_model_api_url()}</span>
     <input 
       bind:value={currentWorkspace.settings.apiUrl} 
       onchange={onSettingsChange}
@@ -25,7 +30,7 @@
     />
   </label>
   <label>
-    <span class="label-text">{m.tab_model_name()}</span>
+    <span class="label-text">{_i18n && m.tab_model_name()}</span>
     <input 
       bind:value={currentWorkspace.settings.modelName} 
       onchange={onSettingsChange}
@@ -33,16 +38,16 @@
     />
   </label>
   <label>
-    <span class="label-text">{m.tab_model_api_key()}</span>
+    <span class="label-text">{_i18n && m.tab_model_api_key()}</span>
     <input 
       type="password"
       bind:value={currentWorkspace.settings.apiKey} 
       onchange={onSettingsChange}
-      placeholder={globalConfig.apiKey ? "••••••••" : m.tab_model_api_key_not_set()} 
+      placeholder={globalConfig.apiKey ? "••••••••" : (_i18n && m.tab_model_api_key_not_set())} 
     />
   </label>
   <label>
-    <span class="label-text">{m.tab_model_temperature()}: {currentWorkspace.settings.temperature}</span>
+    <span class="label-text">{_i18n && m.tab_model_temperature()}: {currentWorkspace.settings.temperature}</span>
     <input 
       type="range" 
       min="0" 

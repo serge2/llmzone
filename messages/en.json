@@ -31,6 +31,7 @@
   "menu_open_link": "Open in Browser",
   "menu_copy_link": "Copy Link",
 
+  "chat_welcome_submessage": "How can I help you today?",
   "chat_scroll_to_bottom": "Scroll to bottom",
   "chat_attach_files": "Attach files",
   "chat_input_placeholder": "Ask anything...",

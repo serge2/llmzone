@@ -17,6 +17,7 @@
 
   let {
     workspaces = $bindable(),
+    currentLocale, // Принимаем реактивную руну
     selectedWorkspaceId,
     currentChatName,
     sidebarVisible = $bindable(),
@@ -26,6 +27,7 @@
     onDeleteWorkspace
   }: {
     workspaces: Workspace[],
+    currentLocale: string,
     selectedWorkspaceId: string,
     currentChatName: string,
     sidebarVisible: boolean,
@@ -34,6 +36,9 @@
     onRenameWorkspace: (id: string, name: string) => void,
     onDeleteWorkspace: (id: string) => void
   } = $props();
+
+  // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ
+  const _i18n = $derived(currentLocale);
 
   let isWsOpen = $state(false);
   let editingWsId = $state<string | null>(null);
@@ -77,7 +82,7 @@
   <button 
     class="sidebar-toggle" 
     onclick={(e) => { e.stopPropagation(); sidebarVisible = !sidebarVisible; }} 
-    aria-label={m.sidebar_toggle_aria()}
+    aria-label={_i18n && m.sidebar_toggle_aria()}
   >
     {@html MenuIcon}
   </button>
@@ -90,7 +95,7 @@
       aria-haspopup="listbox"
     >
       <span class="ws-icon-current">{currentWs?.icon || '📁'}</span>
-      <span class="ws-name-current">{currentWs?.name || m.workspace_new_name()}</span>
+      <span class="ws-name-current">{currentWs?.name || (_i18n && m.workspace_new_name())}</span>
       <span class="chevron" class:rotated={isWsOpen}>{@html ChevronDownIcon}</span>
     </button>
 
@@ -155,7 +160,7 @@
         <div class="ws-footer">
           <button class="add-ws-btn" onclick={onCreateWorkspace}>
             {@html PlusIcon}
-            <span>{m.workspace_add_button()}</span>
+            <span>{_i18n && m.workspace_add_button()}</span>
           </button>
         </div>
       </div>
