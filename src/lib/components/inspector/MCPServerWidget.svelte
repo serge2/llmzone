@@ -9,6 +9,9 @@
   import ChevronIcon from '$lib/assets/icons/chevron-down.svg?raw';
   import QuestionIcon from '$lib/assets/icons/help.svg?raw'; 
   import RestartIcon from '$lib/assets/icons/refresh.svg?raw';
+  // Новые иконки для типов подключения
+  import GlobeIcon from '$lib/assets/icons/globe.svg?raw'; 
+  import TerminalIcon from '$lib/assets/icons/terminal.svg?raw';
 
   let { 
     server,
@@ -23,6 +26,12 @@
   
   // Состояние тултипов остается локальным
   let activeTooltip = $state<string | null>(null);
+
+  // Определяем, является ли сервер локальным процессом
+  // @ts-ignore - обращаемся к приватному конфигу для отображения
+  const isLocal = $derived(!!server.config.command);
+  // @ts-ignore
+  const displaySource = $derived(isLocal ? `${server.config.command} ${server.config.args?.join(' ') || ''}` : server.url);
 
   function toggleTooltip(name: string, e: MouseEvent) {
     e.stopPropagation();
@@ -58,7 +67,7 @@
 
 <svelte:window onclick={closeTooltip} />
 
-<div class="server-card" class:is-loading={server.isLoading}>
+<div class="server-card" class:is-loading={server.isLoading} class:is-disabled={!server.enabled}>
   <div class="card-main">
     <button 
       class="expand-btn" 
@@ -68,9 +77,13 @@
       {@html ChevronIcon}
     </button>
     
+    <div class="type-icon" title={isLocal ? "Local Process" : "Remote SSE"}>
+      {@html isLocal ? TerminalIcon : GlobeIcon}
+    </div>
+
     <div class="info">
       <div class="name">{server.name}</div>
-      <div class="url">{server.url}</div>
+      <div class="url" title={displaySource}>{displaySource}</div>
     </div>
 
     <div class="actions">
@@ -181,13 +194,19 @@
 <style>
   /* Стили сохранены без изменений */
   .server-card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: visible; transition: all 0.2s; position: relative; }
+  .server-card.is-disabled { opacity: 0.8; border-style: dashed; }
   .card-main { display: flex; align-items: center; padding: 12px; gap: 12px; }
   .expand-btn { background: none; border: none; cursor: pointer; color: #94a3b8; display: flex; transition: transform 0.2s; padding: 4px; }
   .expand-btn.is-expanded { transform: rotate(180deg); }
   .expand-btn :global(svg) { width: 16px; height: 16px; }
+  
+  /* Новый стиль для иконки типа */
+  .type-icon { color: #94a3b8; display: flex; align-items: center; opacity: 0.7; }
+  .type-icon :global(svg) { width: 14px; height: 14px; }
+
   .info { flex: 1; min-width: 0; }
   .name { font-weight: 600; font-size: 0.9rem; color: #1f2937; }
-  .url { font-size: 0.75rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .url { font-size: 0.75rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
   .actions { display: flex; align-items: center; gap: 12px; }
   .restart-btn { background: none; border: none; cursor: pointer; color: #94a3b8; padding: 6px; display: flex; border-radius: 6px; transition: all 0.2s; }
   .restart-btn:hover { color: #6366f1; background: #f5f3ff; }

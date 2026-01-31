@@ -15,8 +15,7 @@
   // --- Импорт новых сервисов для MCP ---
   import { ChatService } from '$lib/services/chatService';
   // Менеджер теперь импортируется как синглтон для управления кэшем инстансов
-  import { mcpManager } from '$lib/mcp/instances.svelte'; 
-  import { MCPServerInstance } from '$lib/mcp/manager.svelte';
+  import { mcpManager, MCPServerInstance } from '$lib/mcp/manager.svelte';
 
   // --- Импорты для Tauri 2 ---
   import { openUrl } from '@tauri-apps/plugin-opener';
@@ -271,7 +270,7 @@
         const instances = mcpManager.getForWorkspace(ws.id);
         if (instances.length > 0) {
           const states: Record<string, any> = {};
-          instances.forEach(server => {
+          instances.forEach((server: MCPServerInstance) => {
               states[server.name] = server.serialize();
           });
           ws.settings.mcpStates = states;

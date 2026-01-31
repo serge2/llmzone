@@ -19,6 +19,20 @@
     "fs:scope-appconfig-recursive",
     "fs:allow-app-meta-recursive",
     "fs:allow-app-read-recursive",
-    "fs:allow-app-write-recursive"
+    "fs:allow-app-write-recursive",
+
+    "shell:allow-spawn",
+    "shell:allow-stdin-write",
+    "shell:allow-kill",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        { "name": "node", "cmd": "node", "args": true },
+        { "name": "python", "cmd": "python", "args": true },
+        { "name": "python3", "cmd": "python3", "args": true },
+        { "name": "npx", "cmd": "npx", "args": true },
+        { "name": "uvx", "cmd": "uvx", "args": true }
+      ]
+    }
   ]
 }
