@@ -77,7 +77,7 @@
   });
 
   // --- ЛОГИКА ИНИЦИАЛИЗАЦИИ MCP СЕРВЕРОВ ---
-  function syncMCPServers() {
+  async function syncMCPServers() {
     if (workspaces.length === 0) return;
 
     // 1. Синхронизируем инстансы для ВСЕХ воркспейсов в глобальном менеджере
@@ -90,7 +90,8 @@
 
         for (const [name, info] of Object.entries(serversDict)) {
           const serverData = info as any;
-          if (!serverData.url) continue;
+          // Обновлено: проверяем и URL, и command (для локальных серверов)
+          if (!serverData.url && !serverData.command) continue;
 
           const savedState = ws.settings.mcpStates?.[name];
           
@@ -112,6 +113,8 @@
     // 2. Обновляем локальный список серверов только для отображения в текущем Inspector
     if (selectedWorkspaceId) {
       mcpServers = mcpManager.getForWorkspace(selectedWorkspaceId);
+      // НОВОЕ: Инициируем подключение разрешенных серверов при входе в воркспейс
+      await mcpManager.initializeWorkspaceServers(selectedWorkspaceId);
     }
   }
 
@@ -229,7 +232,7 @@
       }
 
       // --- Инициализируем MCP серверы сразу после загрузки воркспейсов ---
-      syncMCPServers();
+      await syncMCPServers();
 
     } else {
       // 4. Инициализация дефолтного воркспейса
@@ -256,7 +259,7 @@
       await persistConfig();
       await persistChats();
       
-      syncMCPServers();
+      await syncMCPServers();
     }
   });
 

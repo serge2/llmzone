@@ -63,12 +63,12 @@ class TauriStdioTransport implements Transport {
 
 /**
  * Гибридный HTTP транспорт для Tauri.
- * Поддерживает сохранение сессии через кастомные заголовки.
+ * Поддерживает сохранение сессии через заголовок mcp-session-id.
  */
 class TauriHttpTransport implements Transport {
   private closeController = new AbortController();
   private cleanUrl: string;
-  private sessionHeaders: Record<string, string> = {}; // Хранилище сессионных заголовков
+  private sessionHeaders: Record<string, string> = {}; 
   
   onclose?: () => void;
   onerror?: (error: Error) => void;
@@ -90,7 +90,7 @@ class TauriHttpTransport implements Transport {
         method: 'POST',
         headers: { 
           ...this.headers, 
-          ...this.sessionHeaders, // Пробрасываем ID сессии, если он уже получен
+          ...this.sessionHeaders, 
           'Content-Type': 'application/json',
           'Accept': 'application/json, text/event-stream'
         },
@@ -98,11 +98,10 @@ class TauriHttpTransport implements Transport {
         signal: this.closeController.signal
       });
 
-      // ИЗВЛЕЧЕНИЕ СЕССИИ: Проверяем заголовки ответа на наличие ID сессии
+      // Извлекаем ID сессии, если сервер его прислал
       const sid = response.headers.get('mcp-session-id');
-      
       if (sid) {
-        this.sessionHeaders['Mcp-Session-ID'] = sid;
+        this.sessionHeaders['mcp-session-id'] = sid;
       }
 
       if (!response.ok && !isInitializedNotification) {
@@ -114,7 +113,6 @@ class TauriHttpTransport implements Transport {
       if (contentType.includes('application/json')) {
         const json = await response.json();
         
-        // Игнорируем ошибку сессии только для нотификации initialized
         if (isInitializedNotification && json.error?.code === -32001) {
           return;
         }
@@ -206,19 +204,31 @@ export class MCPServerInstance {
   name = $state('');
   url = $state(''); 
   headers = $state<Record<string, string>>({}); 
-  enabled = $state(false);
+  enabled = $state(false); // Разрешено ли соединение (Toggle)
+  isConnected = $state(false); // Установлено ли соединение по факту (Индикатор)
   autoApproveAll = $state(true);
   isExpanded = $state(false);
   isLoading = $state(false);
   tools = $state<MCPTool[]>([]);
   error = $state<string | null>(null);
   
+  // СОСТОЯНИЕ ДЛЯ ВИЗУАЛИЗАЦИИ ТАЙМЕРА
+  retryProgress = $state(0); // 0..100%
+  retryTimeLeft = $state(0); // Время до следующей попытки в мс
+
   workspaceId: string = '';
 
   private client: Client | null = null;
   public config: MCPServerConfig;
   private _initialState?: MCPServerState;
   onStateChange: () => void;
+
+  // ТАЙМЕРЫ И ПАРАМЕТРЫ ПЕРЕПОДКЛЮЧЕНИЯ
+  private heartbeatInterval: any = null;
+  private retryTimeout: any = null;
+  private progressInterval: any = null;
+  private readonly CHECK_INTERVAL = 30000; // 30 секунд
+  private retryAttempt = 0;
 
   constructor(
     config: MCPServerConfig,
@@ -257,7 +267,7 @@ export class MCPServerInstance {
   }
 
   getToolsForLLM() {
-    if (!this.enabled) return [];
+    if (!this.enabled || !this.isConnected) return [];
     
     return this.tools
       .filter(t => t.enabled)
@@ -269,7 +279,7 @@ export class MCPServerInstance {
   }
 
   async callTool(toolName: string, arguments_?: any) {
-    if (!this.client || !this.enabled) {
+    if (!this.client || !this.isConnected) {
       throw new Error(`Server ${this.name} is not connected`);
     }
 
@@ -280,6 +290,8 @@ export class MCPServerInstance {
       });
     } catch (e: any) {
       console.error(`[MCP CallTool Error] ${this.name}/${toolName}:`, e);
+      // Если во время вызова произошла ошибка — проверяем связь немедленно
+      this.checkConnection();
       throw e;
     }
   }
@@ -293,6 +305,9 @@ export class MCPServerInstance {
     
     this.isLoading = true;
     this.error = null;
+    this.isConnected = false;
+    this.stopProgress(); // Сбрасываем визуальный таймер при попытке подключения
+
     try {
       let transport: Transport;
 
@@ -305,14 +320,12 @@ export class MCPServerInstance {
           this.config.env || {}
         );
       } else {
-        throw new Error("Server configuration must provide either 'url' or 'command'");
+        throw new Error("Server configuration missing");
       }
 
       this.client = new Client(
         { name: "cai-client", version: "1.0.0" },
-        { 
-          capabilities: {} 
-        }
+        { capabilities: {} }
       );
 
       await this.client.connect(transport);
@@ -330,19 +343,107 @@ export class MCPServerInstance {
         };
       });
       
-      this.enabled = true; 
+      this.isConnected = true; 
+      this.retryAttempt = 0; // Сброс попыток при успехе
+      this.startHeartbeat(); // Запуск мониторинга
       this.notify(); 
     } catch (e: any) {
       console.error(`[MCP Connect Error] ${this.name}:`, e);
       this.error = e.message || "Failed to connect";
-      this.enabled = false;
+      this.isConnected = false;
       this.notify();
+      
+      // Планируем повтор с визуальным прогрессом
+      this.scheduleRetry();
     } finally {
       this.isLoading = false;
     }
   }
 
+  /**
+   * Планирует повторное подключение и запускает интервал обновления прогресса
+   */
+  private scheduleRetry() {
+    if (!this.enabled || this.retryTimeout) return;
+
+    this.retryAttempt++;
+    const delay = Math.min(Math.pow(2, this.retryAttempt) * 1000, 30000);
+    const startTime = Date.now();
+
+    this.startProgress(startTime, delay);
+
+    this.retryTimeout = setTimeout(() => {
+      this.retryTimeout = null;
+      this.stopProgress();
+      if (this.enabled && !this.isConnected) {
+        this.connect();
+      }
+    }, delay);
+  }
+
+  private startProgress(startTime: number, duration: number) {
+    this.stopProgress();
+    this.progressInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min((elapsed / duration) * 100, 100);
+      this.retryProgress = progress;
+      this.retryTimeLeft = Math.max(duration - elapsed, 0);
+      
+      if (progress >= 100) this.stopProgress();
+    }, 50); // Плавное обновление 20 раз в секунду
+  }
+
+  private stopProgress() {
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+      this.progressInterval = null;
+    }
+    this.retryProgress = 0;
+    this.retryTimeLeft = 0;
+  }
+
+  private startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatInterval = setInterval(() => this.checkConnection(), this.CHECK_INTERVAL);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    if (this.retryTimeout) {
+      clearTimeout(this.retryTimeout);
+      this.retryTimeout = null;
+    }
+    this.stopProgress();
+  }
+
+  /**
+   * Проверяет, жива ли сессия, и если нет — инициирует переподключение
+   */
+  private async checkConnection() {
+    if (!this.enabled || this.isLoading || !this.client) return;
+
+    try {
+      await this.client.listTools();
+    } catch (e) {
+      console.warn(`[MCP Heartbeat] Server ${this.name} lost connection`);
+      this.isConnected = false;
+      this.reconnect();
+    }
+  }
+
+  async reconnect() {
+    await this.disconnect();
+    if (this.enabled) {
+      await this.connect();
+    }
+  }
+
   async disconnect() {
+    this.stopHeartbeat();
+    this.retryAttempt = 0; // Сбрасываем попытки при ручном отключении
     if (this.client) {
       try {
         await this.client.close();
@@ -350,17 +451,18 @@ export class MCPServerInstance {
         console.warn(`[MCP Disconnect Warning] ${this.name}:`, e);
       }
     }
-    this.enabled = false;
+    this.isConnected = false;
     this.tools = [];
     this.client = null;
     this.notify();
   }
 
   toggle() {
+    this.enabled = !this.enabled;
     if (this.enabled) {
-      this.disconnect();
-    } else {
       this.connect();
+    } else {
+      this.disconnect();
     }
   }
 }
@@ -372,7 +474,19 @@ export class MCPManager {
   instances = $state<MCPServerInstance[]>([]);
 
   constructor() {}
-
+  
+  async initializeWorkspaceServers(workspaceId: string) {
+    const workspaceServers = this.getForWorkspace(workspaceId);
+    
+    // Запускаем подключения параллельно
+    await Promise.all(workspaceServers.map(async (server) => {
+      // Подключаем только если: разрешен пользователем И еще не подключен И не в процессе загрузки
+      if (server.enabled && !server.isConnected && !server.isLoading) {
+        await server.connect();
+      }
+    }));
+  }
+  
   getOrCreate(
     workspaceId: string,
     name: string,
