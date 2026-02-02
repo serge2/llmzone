@@ -2,9 +2,13 @@
   import { marked } from 'marked';
   import Prism from 'prismjs';
   import { tick } from 'svelte';
-  import { slide } from 'svelte/transition'; // Добавлено для анимации размышлений
+  import { slide } from 'svelte/transition';
   import type { ToolCall, Message, Attachment } from '$lib/types';
   
+  // Импорт новых подкомпонентов
+  import ToolWidget from './ToolWidget.svelte';
+  import ReasoningBlock from './ReasoningBlock.svelte';
+
   // Импорт локализации
   import * as m from '$paraglide/messages';
 
@@ -257,17 +261,6 @@
     clearTimeout(deleteTimer);
     isConfirmingDelete = false;
   }
-
-  function toggleReasoning(index: number) {
-    const isCurrentlyExpanded = reasoningExpanded[index] ?? true;
-    reasoningExpanded[index] = !isCurrentlyExpanded;
-  }
-
-  // Функция переключения состояния инструмента
-  function toggleTool(callId: string, currentlyOpen: boolean) {
-    // Явно сохраняем инвертированное состояние
-    expandedTools[callId] = !currentlyOpen;
-  }
 </script>
 
 <div class="message-wrapper {role}" class:is-generating={isTyping}>
@@ -287,26 +280,15 @@
         {:else}
           {#each messages as msg, i}
             {#if msg.reasoning && msg.reasoning.length > 0}
-              {@const isExpanded = reasoningExpanded[i] ?? true}
-              <div class="reasoning-container" class:expanded={isExpanded} class:chain-reasoning={i > 0}>
-                <button 
-                  class="reasoning-badge" 
-                  onclick={() => toggleReasoning(i)}
-                >
-                  <span class="brain-icon">💭</span>
-                  <span class="reasoning-preview">
-                    {#if isExpanded}{_i18n && m.bubble_reasoning_title()}{:else}{msg.reasoning}{/if}
-                  </span>
-                  <span class="chevron-icon" class:rotated={isExpanded}>{@html chevronDownIconRaw}</span>
-                </button>
-                
-                {#if isExpanded}
-                  <div transition:slide={{ duration: 200 }} class="reasoning-content">
-                    {msg.reasoning}
-                    {#if isTyping && !msg.text && i === messages.length - 1}<span class="typing-dot">...</span>{/if}
-                  </div>
-                {/if}
-              </div>
+              <ReasoningBlock 
+                reasoning={msg.reasoning}
+                currentLocale={currentLocale}
+                index={i}
+                {isTyping}
+                isLastInGroup={i === messages.length - 1}
+                hasNoText={!msg.text}
+                bind:reasoningExpanded
+              />
             {/if}
 
             {#if i === 0 && msg.attachments && msg.attachments.length > 0}
@@ -344,86 +326,13 @@
             {#if msg.tool_calls && msg.tool_calls.length > 0}
               <div class="tool-calls-container">
                 {#each msg.tool_calls as call}
-                  {@const result = getToolResult(call.id)}
-                  {@const isError = result?.tool_result?.isError}
-                  {@const isPending = call.approvalStatus === 'pending'}
-                  {@const isRejected = call.approvalStatus === 'rejected'}
-                  {@const isOpen = expandedTools[call.id] ?? isPending}
-
-                  <div class="tool-widget" class:needs-approval={isPending} class:is-rejected={isRejected}>
-                    <details class="main-details" open={isOpen}>
-                      <summary 
-                        class="tool-summary" 
-                        class:success={!!result && !isError} 
-                        class:error={isError || isRejected} 
-                        class:pending={isPending}
-                        onclick={(e) => { e.preventDefault(); toggleTool(call.id, isOpen); }}
-                      >
-                        <span class="icon">{isPending ? '❓' : '🛠'}</span>
-                        <span class="name">
-                          {#if isPending}
-                            {_i18n && m.bubble_tool_approval_request()}
-                          {:else if isRejected}
-                            {_i18n && m.bubble_tool_rejected_label()}
-                          {:else}
-                            {_i18n && m.bubble_tool_label()}
-                          {/if} 
-                          <strong>{call.name}</strong>
-                        </span>
-                        <span class="status-icon" class:rotated={isOpen}>{@html chevronDownIconRaw}</span>
-                      </summary>
-                      
-                      <div class="tool-details-content">
-                        <details class="sub-details" open={true}>
-                          <summary class="sub-summary">
-                            <span>{_i18n && m.bubble_tool_args()}</span>
-                            <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
-                          </summary>
-                          
-                          {#key (call.raw_arguments || JSON.stringify(call.arguments))}
-                            <pre class="language-json"><code>{
-                              // 1. Если есть сырая строка в процессе стриминга - показываем её
-                              call.raw_arguments || 
-                              // 2. Если стриминг завершен и объект распарсен - показываем красиво форматированный объект
-                              (Object.keys(call.arguments || {}).length > 0 
-                                ? JSON.stringify(call.arguments, null, 2) 
-                                : "{}")
-                            }</code></pre>
-                          {/key}
-                        </details>
-
-                        {#if isPending}
-                          <div class="approval-actions" transition:slide>
-                            <p class="approval-hint">{_i18n && m.bubble_tool_approval_hint()}</p>
-                            <div class="approval-buttons">
-                              <button class="approve-btn" onclick={() => onApproveTool?.(call.id, 'approved')}>
-                                {_i18n && m.bubble_tool_allow()}
-                              </button>
-                              <button class="reject-btn" onclick={() => onApproveTool?.(call.id, 'rejected')}>
-                                {_i18n && m.bubble_tool_deny()}
-                              </button>
-                            </div>
-                          </div>
-                        {:else if isRejected}
-                          <div class="tool-rejected-note">
-                             {_i18n && m.bubble_tool_rejected_note()}
-                          </div>
-                        {:else}
-                          <details class="sub-details">
-                            <summary class="sub-summary">
-                              <span>{_i18n && m.bubble_tool_response()}</span>
-                              <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
-                            </summary>
-                            {#if result}
-                              <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
-                            {:else}
-                              <div class="tool-loading">{_i18n && m.bubble_tool_executing()}</div>
-                            {/if}
-                          </details>
-                        {/if}
-                      </div>
-                    </details>
-                  </div>
+                  <ToolWidget 
+                    {call}
+                    result={getToolResult(call.id)}
+                    {currentLocale}
+                    bind:expandedTools
+                    {onApproveTool}
+                  />
                 {/each}
               </div>
             {/if}
@@ -519,23 +428,20 @@
   .user .message { background: #e3f2fd; color: #0d47a1; border-bottom-right-radius: 4px; }
   .assistant .message { background: #ffffff; color: #263238; border: 1px solid #eceff1; border-bottom-left-radius: 4px; }
   
-  /* Стиль при наличии ошибки */
   .assistant .message.has-error {
     border-color: #fecaca;
     background: #fffcfc;
   }
 
-  /* Когда редактируем, расширяем контейнер до 100% */
   .message-content.editing-mode {
     max-width: 100%;
     width: 100%;
   }
 
-  /* В режиме редактирования убираем ограничение ширины и меняем стиль пузырька */
   .editing-mode .message {
     width: 100%;
-    background: #ffffff !important; /* Белый фон для фокуса на тексте */
-    border: 1px solid #5865f2 !important; /* Акцентная рамка */
+    background: #ffffff !important;
+    border: 1px solid #5865f2 !important;
     box-shadow: 0 4px 12px rgba(88, 101, 242, 0.15);
     color: #1a1a1b !important;
   }
@@ -581,17 +487,15 @@
     transition: opacity 0.2s; 
     margin-top: 4px; 
     padding: 0 6px;
-    pointer-events: none; /* Отключаем клики, когда панель невидима */
+    pointer-events: none;
   }
   .message-actions.hidden { display: none !important; }
   
-  /* Показываем при наведении на сообщение */
   .message-wrapper:hover:not(.is-generating) .message-actions { 
     opacity: 1; 
     pointer-events: auto;
   }
 
-  /* ПРИНУДИТЕЛЬНАЯ ВИДИМОСТЬ: Показываем всегда, если редактируем или подтверждаем удаление */
   .message-actions.force-visible {
     opacity: 1 !important;
     pointer-events: auto !important;
@@ -599,24 +503,15 @@
 
   .action-btn {transition: all 0.2s ease; background: none; border: none; cursor: pointer; color: #b0bec5; }
   
-  /* Стили для кнопки удаления */
-  .action-btn.delete-btn.confirming {
-    color: #ef4444 !important; /* Красный цвет для подтверждения */
-    transform: scale(1.1);
-  }
-  
-  /* Добавляем поддержку цвета успеха для всех кнопок копирования */
   .action-btn.success,
   .prose :global(.copy-code-btn.success) {
     color: #10b981 !important;
   }
 
-  /* Класс для подтверждения деструктивных действий (удаление) */
   .action-btn.danger {
     color: #ef4444 !important;
   }
   
-  /* Для плавности иконок внутри пропса ?raw */
   .prose :global(.copy-code-btn svg) {
     display: block;
     width: 14px;
@@ -626,36 +521,32 @@
   .action-btn :global(svg) { 
     width: 14px;
     height: 14px;
-    display: block; /* Гарантирует правильное центрирование */
+    display: block;
   }
 
-  /* Стили для цитат */
   .prose :global(blockquote) {
     margin: 16px 0;
     padding: 8px 16px;
-    border-left: 4px solid #e5e7eb; /* Акцентная линия слева */
-    background-color: #f9fafb;     /* Легкий фон */
-    color: #4b5563;                /* Чуть более приглушенный цвет текста */
+    border-left: 4px solid #e5e7eb;
+    background-color: #f9fafb;
+    color: #4b5563;
     font-style: italic;
     border-radius: 4px;
   }
 
-  /* Стили для списков */
   .prose :global(ul), 
   .prose :global(ol) {
     margin: 12px 0;
-    padding-left: 24px; /* Отступ для маркеров */
+    padding-left: 24px;
     display: flex;
     flex-direction: column;
-    gap: 6px; /* Расстояние между пунктами списка */
+    gap: 6px;
   }
 
-  /* Стили для элементов списка */
   .prose :global(li) {
     line-height: 1.5;
   }
 
-  /* Если внутри списка есть еще один список, выделим его */
   .prose :global(li > ul),
   .prose :global(li > ol) {
     margin: 8px 0 8px 12px;
@@ -671,14 +562,14 @@
     margin: 0;
     font-family: inherit;
     font-size: inherit;
-    line-height: 1.55; /* Должно совпадать с .message */
+    line-height: 1.55;
     resize: none;
     outline: none;
     color: inherit;
     overflow: hidden;
-    box-sizing: border-box; /* Важно для точного расчета высоты */
-    min-height: 1.55em;    /* Высота одной строки */
-    white-space: pre-wrap; /* Улучшаем читаемость при редактировании длинных текстов */
+    box-sizing: border-box;
+    min-height: 1.55em;
+    white-space: pre-wrap;
     word-break: break-word;
   }
 
@@ -689,12 +580,6 @@
     margin-right: 4px;
     align-self: center;
     user-select: none;
-  }
-
-  /* Подсвечиваем кнопку подтверждения (галочку) красным в режиме удаления, 
-     чтобы акцентировать внимание на деструктивном действии */
-  .isConfirmingDelete .action-btn.success {
-    color: #ef4444 !important;
   }
 
   .status-note {
@@ -712,7 +597,6 @@
     animation: pulse-opacity 1.5s infinite ease-in-out;
   }
 
-/* Ограничиваем влияние только на таблицы внутри .prose */
   .prose :global(table) {
     border-collapse: collapse;
     width: 100%;
@@ -720,12 +604,10 @@
     background-color: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    /* Гарантируем, что таблица не вылезет за пределы пузырька */
     display: block;
     overflow-x: auto;
   }
 
-  /* Стили для ячеек заголовка */
   .prose :global(th) {
     background-color: #f8fafc;
     padding: 12px 16px;
@@ -738,7 +620,6 @@
     letter-spacing: 0.025em;
   }
 
-  /* Стили для обычных ячеек */
   .prose :global(td) {
     padding: 12px 16px;
     border-bottom: 1px solid #f1f5f9;
@@ -747,22 +628,18 @@
     line-height: 1.4;
   }
 
-  /* Убираем нижнюю границу у последней строки, чтобы не дублировать рамку таблицы */
   .prose :global(tr:last-child td) {
     border-bottom: none;
   }
 
-  /* Подсветка четных строк для читаемости (зебра) */
   .prose :global(tr:nth-child(even)) {
     background-color: #fbfcfe;
   }
 
-  /* Эффект наведения на строку */
   .prose :global(tr:hover) {
     background-color: #f1f5f9;
   }
 
-  /* Стили для инструментов MCP */
   .tool-calls-container {
     display: flex;
     flex-direction: column;
@@ -771,198 +648,12 @@
     width: 100%;
   }
 
-  .tool-widget {
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    background: #f8fafc; /* Светлый фон заголовка */
-    overflow: hidden;
-    transition: all 0.2s;
-  }
-
-  /* Оранжевое выделение, когда нужно подтверждение */
-  .tool-widget.needs-approval {
-    border-color: #f59e0b;
-    box-shadow: 0 0 0 1px #fef3c7;
-  }
-
-  .tool-widget.is-rejected {
-    border-color: #fca5a5;
-    opacity: 0.8;
-  }
-
-  .tool-summary {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    cursor: pointer;
-    list-style: none;
-    font-size: 0.85rem;
-    color: #475569;
-    user-select: none;
-    transition: background-color 0.2s, color 0.2s;
-  }
-
-  /* Состояния успеха и ошибки для шапки виджета */
-  .tool-summary.success {
-    background-color: #f0fdf4;
-    color: #166534;
-    border-bottom: 1px solid #dcfce7;
-  }
-
-  .tool-summary.error {
-    background-color: #fef2f2;
-    color: #991b1b;
-    border-bottom: 1px solid #fee2e2;
-  }
-
-  .tool-summary.pending {
-    background-color: #fffbeb;
-    color: #92400e;
-    border-bottom: 1px solid #fef3c7;
-  }
-  
-  .tool-summary::-webkit-details-marker { display: none; }
-
-  .tool-summary .status-icon {
-    margin-left: auto;
-    width: 14px;
-    height: 14px;
-    transition: transform 0.2s;
-    color: currentColor;
-    opacity: 0.5;
-    display: flex;
-    align-items: center;
-  }
-
-  .status-icon.rotated {
-    transform: rotate(180deg);
-  }
-
-  .tool-details-content {
-    padding: 0 10px 10px 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    border-top: 1px solid #f1f5f9;
-    background: #ffffff; /* Белый фон внутри контента */
-  }
-
-  /* Стили для текстовых ответов в цепочке (замена инлайновых стилей) */
   .chain-item-text {
     margin-top: 12px;
     border-top: 1px solid #f1f5f9;
     padding-top: 12px;
   }
 
-  .sub-details {
-    border: 1px solid #f1f5f9;
-    border-radius: 8px;
-    overflow: hidden;
-    background: #ffffff;
-  }
-
-  .sub-summary {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 6px 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #64748b;
-    cursor: pointer;
-    background: #fcfdfe;
-    list-style: none;
-  }
-  .sub-summary::-webkit-details-marker { display: none; }
-
-  .sub-status-icon {
-    width: 12px;
-    height: 12px;
-    transition: transform 0.2s;
-    color: #cbd5e1;
-    display: flex;
-    align-items: center;
-  }
-
-  .sub-details[open] .sub-status-icon {
-    transform: rotate(180deg);
-  }
-
-  /* Светлая тема для JSON-контента */
-  .tool-details-content :global(pre) {
-    margin: 0 !important;
-    padding: 12px !important;
-    font-size: 0.8rem !important;
-    background: #fafafa !important;
-    color: #334155 !important;
-    border-radius: 0;
-    max-height: 400px;
-    overflow-y: auto;
-    border-top: 1px solid #f1f5f9;
-  }
-
-  /* Стили для блока подтверждения */
-  .approval-actions {
-    padding: 12px;
-    background: #fffbeb;
-    border-radius: 8px;
-    margin-top: 4px;
-    border: 1px dashed #fcd34d;
-  }
-
-  .approval-hint {
-    font-size: 0.75rem;
-    color: #92400e;
-    margin-bottom: 10px !important;
-    font-weight: 500;
-  }
-
-  .approval-buttons {
-    display: flex;
-    gap: 8px;
-  }
-
-  .approve-btn, .reject-btn {
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    cursor: pointer;
-    border: none;
-    transition: all 0.2s;
-  }
-
-  .approve-btn { background: #059669; color: white; }
-  .approve-btn:hover { background: #047857; }
-  
-  .reject-btn { background: #dc2626; color: white; }
-  .reject-btn:hover { background: #b91c1c; }
-
-  .tool-rejected-note {
-    padding: 12px;
-    font-size: 0.8rem;
-    color: #b91c1c;
-    font-style: italic;
-    background: #fef2f2;
-    border-radius: 8px;
-    margin-top: 4px;
-  }
-
-  .tool-loading {
-    padding: 10px;
-    font-size: 0.75rem;
-    color: #94a3b8;
-    font-style: italic;
-    text-align: center;
-  }
-
-  .tool-summary :global(svg), .sub-summary :global(svg) { 
-    width: 100%; 
-    height: 100%; 
-  }
-
-  /* Стили для баннера ошибки */
   .error-banner {
     margin-top: 12px;
     padding: 12px;
@@ -991,78 +682,6 @@
     word-break: break-word;
   }
 
-  /* Стили для размышлений */
-  .reasoning-container {
-    margin-bottom: 12px;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    background: #f8fafc;
-    overflow: hidden;
-    max-width: 100%;
-  }
-
-  /* Дополнительный отступ для размышлений внутри цепочки */
-  .chain-reasoning {
-    margin-top: 12px;
-  }
-
-  .reasoning-badge {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 12px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #64748b;
-    font-size: 0.85rem;
-    transition: background-color 0.2s;
-  }
-
-  .reasoning-badge:hover {
-    background-color: #f1f5f9;
-  }
-
-  .reasoning-preview {
-    flex: 1;
-    text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-style: italic;
-    opacity: 0.7;
-  }
-
-  .reasoning-content {
-    padding: 12px;
-    font-size: 0.8rem;
-    color: #15181b;
-    background: #fbfbfb;
-    border-top: 1px solid #f1f5f9;
-    white-space: pre-wrap;
-
-    line-height: 1.5;
-  }
-
-  .chevron-icon {
-    width: 12px;
-    height: 12px;
-    transition: transform 0.2s;
-    opacity: 0.5;
-  }
-
-  .chevron-icon.rotated {
-    transform: rotate(180deg);
-  }
-
-  .typing-dot {
-    display: inline-block;
-    animation: blink 1.5s infinite;
-    margin-left: 2px;
-  }
-
-  /* Стили для новых вложений (аттачментов) */
   .message-attachments {
     display: flex;
     flex-wrap: wrap;
