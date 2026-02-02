@@ -474,6 +474,11 @@ export class ChatService {
                 onUpdateReasoning(fullReasoning);
               }
 
+              if (delta.reasoning) {
+                fullReasoning += delta.reasoning;
+                onUpdateReasoning(fullReasoning);
+              }
+
               if (delta.content) {
                 fullContent += delta.content;
                 onUpdateText(fullContent); 
