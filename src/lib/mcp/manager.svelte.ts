@@ -211,10 +211,10 @@ export class MCPServerInstance {
   isLoading = $state(false);
   tools = $state<MCPTool[]>([]);
   error = $state<string | null>(null);
+  protocolName = $state<string | null>(null); // Оригинальное name из serverInfo
 
   // Состояние для инструкций и метаданных сервера
   instructions = $state<string | null>(null);
-  serverTitle = $state<string | null>(null);
   
   // СОСТОЯНИЕ ДЛЯ ВИЗУАЛИЗАЦИИ ТАЙМЕРА
   retryProgress = $state(0); // 0..100%
@@ -270,17 +270,6 @@ export class MCPServerInstance {
     };
   }
 
-  getToolsForLLM() {
-    if (!this.enabled || !this.isConnected) return [];
-    
-    return this.tools
-      .filter(t => t.enabled)
-      .map(t => ({
-        name: `${this.name}__${t.name}`, 
-        description: t.description,
-        input_schema: t.inputSchema 
-      }));
-  }
 
   /**
    * Возвращает отформатированную секцию инструкций для системного промпта
@@ -288,8 +277,13 @@ export class MCPServerInstance {
   getSystemInstructions(): string | null {
     if (!this.enabled || !this.isConnected || !this.instructions) return null;
     
-    const title = this.serverTitle || this.name;
-    return `### SERVER: ${title}\n${this.instructions}`;
+    let header = `### SERVER: ${this.name}`;
+    
+    if (this.protocolName && this.protocolName !== this.name) {
+      header += ` (Implementation: ${this.protocolName})`;
+    }
+
+    return `${header}\n${this.instructions}`;
   }
 
   async callTool(toolName: string, arguments_?: any) {
@@ -353,7 +347,7 @@ export class MCPServerInstance {
       // Достаем информацию о сервере
       const serverInfo = clientAny.getServerInfo?.();
       if (serverInfo) {
-        this.serverTitle = serverInfo.name || null;
+        this.protocolName = serverInfo.name || null;
       }
 
       const response = await this.client.listTools();
@@ -482,7 +476,7 @@ export class MCPServerInstance {
     this.tools = [];
     this.client = null;
     this.instructions = null;
-    this.serverTitle = null;
+    this.protocolName = null;
     this.notify();
   }
 

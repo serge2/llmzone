@@ -31,23 +31,39 @@ export class ChatService {
       
       // Формируем список инструментов для API с дедупликацией имен
       const mcpTools = serverInstances
-        .filter(s => s.enabled)
+        .filter(s => s.enabled && s.isConnected)
         .flatMap(server => {
           return server.tools
             .filter(t => t.enabled)
             .map(tool => {
-              let baseName = `${tool.name}`;
-              // let baseName = `${server.name}___${tool.name}`; Some models can't use tools with complex names
+              // 1. Очистка имен от запрещенных символов
+              const sName = server.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+              const tName = tool.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+              
+              // 2. Формируем базовое имя в нижнем регистре
+              let baseName = `${sName}_${tName}`.toLowerCase();
+
+              // 3. Защита от длины 64 символа (оставляем запас под суффиксы типа _10)
+              if (baseName.length > 60) {
+                baseName = baseName.substring(0, 60);
+              }
+
               let uniqueName = baseName;
               let counter = 1;
 
-              // ЛОГИКА ДЕДУПЛИКАЦИИ: проверяем наличие ключа и добавляем цифровой суффикс
+              // 4. Логика дедупликации
               while (toolLookupMap.has(uniqueName)) {
-                uniqueName = `${baseName}${counter}`;
+                const suffix = `${counter}`;
+                // Если при добавлении суффикса вылетаем за 64, еще немного подрезаем базу
+                if ((baseName.length + suffix.length) > 64) {
+                  uniqueName = baseName.substring(0, 64 - suffix.length) + suffix;
+                } else {
+                  uniqueName = baseName + suffix;
+                }
                 counter++;
               }
 
-              // Сохраняем связь в мапу для последующего вызова
+              // 5. Финальная регистрация
               toolLookupMap.set(uniqueName, { 
                 server: server, 
                 originalName: tool.name 
