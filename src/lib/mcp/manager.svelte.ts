@@ -345,7 +345,6 @@ export class MCPServerInstance {
       // connect() возвращает Promise<void>, поэтому результат мы не присваиваем
       await this.client.connect(transport);
       
-      // ИСПОЛЬЗУЕМ ВСТРОЕННЫЕ МЕТОДЫ SDK (судя по вашим ошибкам TS, они там есть)
       const clientAny = this.client as any;
       
       // Достаем инструкции (тип возвращает string | undefined)
@@ -453,7 +452,8 @@ export class MCPServerInstance {
     if (!this.enabled || this.isLoading || !this.client) return;
 
     try {
-      await this.client.listTools();
+      // Используем ping вместо listTools для экономии ресурсов
+      await this.client.ping();
     } catch (e) {
       console.warn(`[MCP Heartbeat] Server ${this.name} lost connection`);
       this.isConnected = false;
