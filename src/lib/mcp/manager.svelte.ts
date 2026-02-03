@@ -211,6 +211,10 @@ export class MCPServerInstance {
   isLoading = $state(false);
   tools = $state<MCPTool[]>([]);
   error = $state<string | null>(null);
+
+  // Состояние для инструкций и метаданных сервера
+  instructions = $state<string | null>(null);
+  serverTitle = $state<string | null>(null);
   
   // СОСТОЯНИЕ ДЛЯ ВИЗУАЛИЗАЦИИ ТАЙМЕРА
   retryProgress = $state(0); // 0..100%
@@ -278,6 +282,16 @@ export class MCPServerInstance {
       }));
   }
 
+  /**
+   * Возвращает отформатированную секцию инструкций для системного промпта
+   */
+  getSystemInstructions(): string | null {
+    if (!this.enabled || !this.isConnected || !this.instructions) return null;
+    
+    const title = this.serverTitle || this.name;
+    return `### SERVER: ${title}\n${this.instructions}`;
+  }
+
   async callTool(toolName: string, arguments_?: any) {
     if (!this.client || !this.isConnected) {
       throw new Error(`Server ${this.name} is not connected`);
@@ -328,8 +342,21 @@ export class MCPServerInstance {
         { capabilities: {} }
       );
 
+      // connect() возвращает Promise<void>, поэтому результат мы не присваиваем
       await this.client.connect(transport);
       
+      // ИСПОЛЬЗУЕМ ВСТРОЕННЫЕ МЕТОДЫ SDK (судя по вашим ошибкам TS, они там есть)
+      const clientAny = this.client as any;
+      
+      // Достаем инструкции (тип возвращает string | undefined)
+      this.instructions = clientAny.getInstructions?.() || null;
+      
+      // Достаем информацию о сервере
+      const serverInfo = clientAny.getServerInfo?.();
+      if (serverInfo) {
+        this.serverTitle = serverInfo.name || null;
+      }
+
       const response = await this.client.listTools();
       
       this.tools = response.tools.map(t => {
@@ -390,7 +417,7 @@ export class MCPServerInstance {
       this.retryTimeLeft = Math.max(duration - elapsed, 0);
       
       if (progress >= 100) this.stopProgress();
-    }, 50); // Плавное обновление 20 раз в секунду
+    }, 200); // Обновление 5 раз в секунду
   }
 
   private stopProgress() {
@@ -454,6 +481,8 @@ export class MCPServerInstance {
     this.isConnected = false;
     this.tools = [];
     this.client = null;
+    this.instructions = null;
+    this.serverTitle = null;
     this.notify();
   }
 
@@ -474,6 +503,24 @@ export class MCPManager {
   instances = $state<MCPServerInstance[]>([]);
 
   constructor() {}
+
+  /**
+   * Собирает все инструкции от подключенных серверов в единый блок для LLM
+   */
+  getFullSystemInstructions(): string {
+    const activeInstructions = this.instances
+      .map(inst => inst.getSystemInstructions())
+      .filter(Boolean);
+
+    if (activeInstructions.length === 0) return "";
+
+    return (
+      "\n## MCP SERVERS ADDITIONAL INSTRUCTIONS\n" +
+      "The following MCP servers are connected and provide specific guidelines on how to use their tools effectively:\n\n" +
+      activeInstructions.join("\n\n") +
+      "\n"
+    );
+  }
   
   async initializeWorkspaceServers(workspaceId: string) {
     const workspaceServers = this.getForWorkspace(workspaceId);

@@ -1,7 +1,7 @@
 import { fetch } from '@tauri-apps/plugin-http'; // ВАЖНО: Используем нативный fetch Tauri для обхода CORS
 import { toastService } from '$lib/services/toastService.svelte';
 import type { Message, Chat, WorkspaceSettings, ToolCall } from '$lib/types';
-import type { MCPServerInstance } from '$lib/mcp/manager.svelte';
+import { type MCPServerInstance, mcpManager } from '$lib/mcp/manager.svelte';
 
 // Импорт локализации
 import * as m from '$paraglide/messages';
@@ -61,6 +61,14 @@ export class ChatService {
             });
         });
 
+      
+      // Собираем базовый промпт и инструкции MCP один раз перед началом генерации
+      let fullSystemPrompt = settings.systemPrompt || "";
+      const mcpInstructions = mcpManager.getFullSystemInstructions();
+      if (mcpInstructions) {
+        fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + mcpInstructions;
+      }
+      
       let iteration = 0;
       let isLooping = true;
 
@@ -94,6 +102,7 @@ export class ChatService {
             chat.history.slice(0, -1),
             settings, 
             mcpTools,
+            fullSystemPrompt, // Передаем заранее сформированный промпт
             (updatedText) => {
               if (currentAssistantMsgIdx !== null) {
                 chat.history[currentAssistantMsgIdx].text = updatedText;
@@ -297,14 +306,17 @@ export class ChatService {
     history: Message[], 
     settings: WorkspaceSettings, 
     tools: any[],
+    finalSystemPrompt: string, // Принимаем уже сформированный промпт
     onUpdateText: (fullText: string) => void,
     onUpdateReasoning: (fullReasoning: string) => void, // Колбэк для стриминга рассуждений
     onUpdateTools: (tools: any[]) => void, // Добавлен колбэк для стриминга инструментов
     abortSignal: AbortSignal
   ) {
     const apiMessages = [];
-    if (settings.systemPrompt) {
-      apiMessages.push({ role: 'system', content: settings.systemPrompt });
+    
+    // ПРИМЕНЕНИЕ СИСТЕМНОГО ПРОМПТА
+    if (finalSystemPrompt) {
+      apiMessages.push({ role: 'system', content: finalSystemPrompt });
     }
 
     for (const msg of history) {
