@@ -55,9 +55,16 @@
   "bubble_tool_rejected_note": "This tool execution was rejected by the user.",
   "bubble_tool_executing": "Executing request...",
   "bubble_error_title": "Interaction Error",
+
   "bubble_action_copy": "Copy message",
-  "bubble_action_regenerate": "Regenerate",
+  "bubble_action_regenerate": "Regenerate message",
+  "bubble_action_edit": "Edit message",
+  "bubble_action_delete": "Delete message",
   "bubble_action_confirm_delete": "Yes, delete",
+  "bubble_action_cancel_delete": "Cancel delete",
+  "bubble_action_save_edit": "Save changes",
+  "bubble_action_cancel_edit": "Cancel editing",
+  "bubble_action_delete_confirm_text": "Delete this message?",
 
   "inspector_tab_model": "Model",
   "inspector_tab_context": "Context",

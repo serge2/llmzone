@@ -55,9 +55,16 @@
   "bubble_tool_rejected_note": "Выполнение этого инструмента было отклонено пользователем.",
   "bubble_tool_executing": "Выполнение запроса...",
   "bubble_error_title": "Ошибка взаимодействия",
-  "bubble_action_copy": "Копировать всё сообщение",
-  "bubble_action_regenerate": "Перегенерировать",
+  
+  "bubble_action_copy": "Копировать сообщение",
+  "bubble_action_regenerate": "Перегенерировать сообщение",
+  "bubble_action_edit": "Редактировать сообщение",
+  "bubble_action_delete": "Удалить сообщение",
   "bubble_action_confirm_delete": "Да, удалить",
+  "bubble_action_cancel_delete": "Отменить удаление",
+  "bubble_action_save_edit": "Сохранить изменения",
+  "bubble_action_cancel_edit": "Отменить редактирование",
+  "bubble_action_delete_confirm_text": "Удалить это сообщение?",
 
   "inspector_tab_model": "Модель",
   "inspector_tab_context": "Контекст",
@@ -72,7 +79,7 @@
 
   "tab_context_system_prompt": "Системный промпт",
   "tab_context_system_prompt_placeholder": "Инструкции для модели...",
-  "tab_context_follow_first_message": "Закрепить первое сообщение в системном промпте для фокуса",
+  "tab_context_follow_first_message": "Закреплять первое сообщение в системном промпте для фокуса",
 
   "tab_tools_config_label": "Интеграции",
   "tab_tools_config_button": "Конфигурация",

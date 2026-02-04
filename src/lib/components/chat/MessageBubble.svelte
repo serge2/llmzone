@@ -357,18 +357,18 @@
       class:force-visible={isEditing || isConfirmingDelete}
     >
       {#if isEditing}
-        <button class="action-btn success" title={_i18n && m.sidebar_tooltip_save()} onclick={saveEdit}>
+        <button class="action-btn success" title={_i18n && m.bubble_action_save_edit()} onclick={saveEdit}>
           {@html checkIconRaw}
         </button>
-        <button class="action-btn delete-btn" title={_i18n && m.sidebar_tooltip_cancel()} onclick={cancelEdit}>
+        <button class="action-btn delete-btn" title={_i18n && m.bubble_action_cancel_edit()} onclick={cancelEdit}>
           {@html closeIconRaw}
         </button>
       {:else if isConfirmingDelete}
-        <span class="confirm-text">{_i18n && m.sidebar_delete_confirm()}</span>
+        <span class="confirm-text">{_i18n && m.bubble_action_delete_confirm_text()}</span>
         <button class="action-btn danger" title={_i18n && m.bubble_action_confirm_delete()} onclick={confirmDelete}>
           {@html checkIconRaw}
         </button>
-        <button class="action-btn" title={_i18n && m.sidebar_tooltip_cancel()} onclick={cancelDelete}>
+        <button class="action-btn" title={_i18n && m.bubble_action_cancel_delete()} onclick={cancelDelete}>
           {@html closeIconRaw}
         </button>
       {:else}
@@ -380,7 +380,7 @@
         {/if}
 
         {#if role === 'user'}
-          <button class="action-btn" title={_i18n && m.sidebar_menu_rename()} onclick={startEditing}>
+          <button class="action-btn" title={_i18n && m.bubble_action_edit()} onclick={startEditing}>
             {@html editIconRaw}
           </button>
         {/if}
@@ -401,7 +401,7 @@
         <button 
           class="action-btn delete-btn" 
           onclick={askDelete}
-          title={_i18n && m.sidebar_menu_delete()}
+          title={_i18n && m.bubble_action_delete()}
         >
           {@html trashIconRaw}
         </button>
