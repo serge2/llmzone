@@ -72,6 +72,7 @@
 
   "tab_context_system_prompt": "Системный промпт",
   "tab_context_system_prompt_placeholder": "Инструкции для модели...",
+  "tab_context_follow_first_message": "Закрепить первое сообщение в системном промпте для фокуса",
 
   "tab_tools_config_label": "Интеграции",
   "tab_tools_config_button": "Конфигурация",

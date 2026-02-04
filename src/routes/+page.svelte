@@ -247,6 +247,7 @@
           modelName: '',
           systemPrompt: '',
           temperature: 0.7,
+          followFirstMessage: false,
           lastActiveTab: 'model'
         },
         chats: [{ id: 'c-' + Date.now(), name: m.chat_new_name(), history: [], isGenerating: false }]
@@ -326,6 +327,7 @@
         modelName: '',
         systemPrompt: '',
         temperature: 0.7,
+        followFirstMessage: false,
         lastActiveTab: 'model'
       },
       chats: [{ 
@@ -528,7 +530,8 @@
         modelName: currentWorkspace.settings.modelName || globalConfig.modelName,
         systemPrompt: currentWorkspace.settings.systemPrompt,
         temperature: currentWorkspace.settings.temperature,
-        mcpStates: currentWorkspace.settings.mcpStates
+        mcpStates: currentWorkspace.settings.mcpStates,
+        followFirstMessage: currentWorkspace.settings.followFirstMessage
       };
 
       const chatSpecificServers = mcpManager.getForWorkspace(currentWorkspace.id);
@@ -580,7 +583,8 @@
       modelName: chatWorkspace.settings.modelName || globalConfig.modelName,
       systemPrompt: chatWorkspace.settings.systemPrompt,
       temperature: chatWorkspace.settings.temperature,
-      mcpStates: chatWorkspace.settings.mcpStates
+      mcpStates: chatWorkspace.settings.mcpStates,
+      followFirstMessage: chatWorkspace.settings.followFirstMessage
     };
 
     const chatToUpdateId = chatToUpdate.id;

@@ -37,6 +37,7 @@ export interface WorkspaceSettings {
   apiKey: string;
   modelName: string;
   systemPrompt: string;
+  followFirstMessage?: boolean;
   temperature: number;
   mcpConfig?: string;
   mcpStates?: Record<string, MCPServerState>;

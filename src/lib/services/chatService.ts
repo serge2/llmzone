@@ -84,6 +84,15 @@ export class ChatService {
       if (mcpInstructions) {
         fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + mcpInstructions;
       }
+
+      // ЛОГИКА ФОКУСА НА ПЕРВОМ СООБЩЕНИИ (Anchor first user message)
+      if (settings.followFirstMessage) {
+        const firstUserMsg = chat.history.find(m => m.role === 'user');
+        if (firstUserMsg && firstUserMsg.text) {
+          fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + 
+            `### PRIMARY GOAL / TASK FOCUS:\n${firstUserMsg.text}`;
+        }
+      }
       
       let iteration = 0;
       let isLooping = true;
@@ -335,6 +344,14 @@ export class ChatService {
       apiMessages.push({ role: 'system', content: finalSystemPrompt });
     }
 
+     // --- ДОБАВЬТЕ ЭТОТ БЛОК ДЛЯ ДЕБАГА ---
+    console.group("🚀 LLM REQUEST DEBUG");
+    console.log("Follow First Message Active:", settings.followFirstMessage);
+    console.log("Final System Prompt:", finalSystemPrompt);
+    console.log("Full Messages Array:", apiMessages.concat(history.map(m => ({ role: m.role, content: m.text }))));
+    console.groupEnd();
+    // -------------------------------------
+       
     for (const msg of history) {
       // Пропускаем пустые сообщения, которые могли остаться от прошлых итераций
       if (msg.role === 'assistant' && !msg.text && !msg.reasoning && (!msg.tool_calls || msg.tool_calls.length === 0)) continue;

@@ -72,6 +72,7 @@
 
   "tab_context_system_prompt": "System Prompt",
   "tab_context_system_prompt_placeholder": "Instructions for the model...",
+  "tab_context_follow_first_message": "Anchor first user message to system prompt for focus",
 
   "tab_tools_config_label": "Intergrations",
   "tab_tools_config_button": "Configuration",

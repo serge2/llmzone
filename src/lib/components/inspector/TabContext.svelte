@@ -28,6 +28,17 @@
       placeholder={_i18n && m.tab_context_system_prompt_placeholder()}
     ></textarea>
   </label>
+
+  <label class="checkbox-container">
+    <input 
+      type="checkbox" 
+      bind:checked={currentWorkspace.settings.followFirstMessage} 
+      onchange={onSettingsChange}
+    />
+    <span class="checkbox-text">
+      {_i18n && m.tab_context_follow_first_message()}
+    </span>
+  </label>
 </div>
 
 <style>
@@ -39,4 +50,24 @@
     border-radius: 6px; font-size: 0.9rem; font-family: inherit; resize: vertical;
   }
   textarea:focus { outline: none; border-color: #5865f2; box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.1); }
+
+  /* Стили для нового чекбокса */
+  .checkbox-container {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px !important;
+    cursor: pointer;
+    margin-top: -4px;
+  }
+  .checkbox-container input {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #5865f2;
+  }
+  .checkbox-text {
+    font-size: 0.85rem;
+    color: #374151;
+    user-select: none;
+  }
 </style>
