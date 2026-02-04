@@ -47,7 +47,8 @@
     onCopy,
     onDelete,
     onRegenerate,
-    onApproveTool // Обработчик подтверждения инструмента
+    onApproveTool, // Обработчик подтверждения инструмента
+    onExtendLimit // Обработчик продления лимита итераций
   }: {
     role: 'user' | 'assistant' | 'tool' | 'system',
     currentLocale: string,
@@ -60,7 +61,8 @@
     onCopy?: () => void,
     onDelete?: () => void,
     onRegenerate?: () => void,
-    onApproveTool?: (callId: string, status: 'approved' | 'rejected') => void // Типизация
+    onApproveTool?: (callId: string, status: 'approved' | 'rejected') => void, // Типизация
+    onExtendLimit?: () => void
   } = $props();
 
   // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ ПЕРЕВОДОВ
@@ -334,6 +336,19 @@
                     {onApproveTool}
                   />
                 {/each}
+              </div>
+            {/if}
+
+            {#if msg.role === 'assistant' && msg.requiresLimitExtension}
+              <div class="limit-extension-container" transition:slide>
+                <div class="limit-info">
+                  <span class="limit-icon">⏳</span>
+                  <p>{_i18n && m.chat_limit_reached_info()}</p>
+                </div>
+                <button class="extend-limit-btn" onclick={onExtendLimit}>
+                  {@html refreshIconRaw}
+                  {_i18n && m.chat_continue_button()}
+                </button>
               </div>
             {/if}
           {/each}
@@ -745,6 +760,63 @@
   .file-meta {
     font-size: 0.7rem;
     color: #64748b;
+  }
+
+  /* Стили для блока продления лимита */
+  .limit-extension-container {
+    margin-top: 16px;
+    padding: 16px;
+    background: #fff8f1;
+    border: 1px solid #ffedd5;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+
+  .limit-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #9a3412;
+    font-size: 0.9rem;
+  }
+
+  .limit-icon {
+    font-size: 1.2rem;
+  }
+
+  .extend-limit-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f97316;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .extend-limit-btn:hover {
+    background: #ea580c;
+  }
+
+  .extend-limit-btn :global(svg) {
+    width: 16px;
+    height: 16px;
+    /* Убираем заливку, если иконка контурная */
+    fill: none; 
+    /* Устанавливаем цвет линий равным цвету текста кнопки */
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   @keyframes pulse-opacity {

@@ -21,7 +21,8 @@
     onCopyMessage,
     onDeleteMessage,
     onRegenerateMessage,
-    onApproveTool 
+    onApproveTool,
+    onExtendLimit 
   } = $props<{
     history: Message[];
     currentLocale: string;
@@ -33,6 +34,7 @@
     onDeleteMessage: (index: number) => void;
     onRegenerateMessage: () => void;
     onApproveTool?: (callId: string, status: 'approved' | 'rejected') => void;
+    onExtendLimit: () => void;
   }>();
 
   // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ ПЕРЕВОДОВ
@@ -147,7 +149,7 @@
             onDelete={() => onDeleteMessage(group.startIndex)}
             onRegenerate={() => onRegenerateMessage()}
             onApproveTool={onApproveTool} 
-          />
+            onExtendLimit={onExtendLimit}  />
         {/each} 
       </div>
     {/if}

@@ -81,6 +81,7 @@ export interface Message {
   tool_result?: ToolResult; // Если это сообщение-ответ от инструмента
   attachments?: Attachment[]; // Универсальный массив вложений
   error?: string;
+  requiresLimitExtension?: boolean;
 }
 
 // ---------------------------------------

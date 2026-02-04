@@ -122,9 +122,23 @@ export class ChatService {
           });
           onUpdate();
 
+          // ПОДГОТОВКА ИСТОРИИ ДЛЯ ЗАПРОСА
+          const requestHistory = chat.history.slice(0, -1);
+
+          // ИНЪЕКЦИЯ ПРЕДУПРЕЖДЕНИЯ ПРИ ПРИБЛИЖЕНИИ К ЛИМИТУ
+          if (iteration === this.MAX_ITERATIONS) {
+            requestHistory.push({
+              id: 'system-limit-warning',
+              role: 'user',
+              text: "[SYSTEM MESSAGE]: You have reached the maximum limit of tool execution steps. " + 
+                    "You MUST now provide a final response to the user based on the data you already have. " + 
+                    "Do not call any more tools."
+            });
+          }
+
           // 2. Делаем запрос к LM Studio со стримингом
           const responseData = await this.fetchLLMResponse(
-            chat.history.slice(0, -1),
+            requestHistory,
             settings, 
             mcpTools,
             fullSystemPrompt, // Передаем заранее сформированный промпт
@@ -169,6 +183,14 @@ export class ChatService {
 
           if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
             
+            // --- ПРОВЕРКА ЛИМИТА ПЕРЕД ВЫПОЛНЕНИЕМ НОВЫХ ВЫЗОВОВ ---
+            if (iteration >= this.MAX_ITERATIONS) {
+              console.warn("ChatService: Достигнут лимит итераций. Требуется подтверждение пользователя.");
+              assistantMsg.requiresLimitExtension = true; // Флаг для UI: показать кнопку "Продолжить"
+              isLooping = false;
+              break; 
+            }
+
             // --- ЛОГИКА ПОДТВЕРЖДЕНИЯ (Human-in-the-loop) ---
             let needsUserApproval = false;
 
@@ -284,10 +306,6 @@ export class ChatService {
             isLooping = false;
           }
         }
-      }
-
-      if (iteration >= this.MAX_ITERATIONS) {
-        console.warn("ChatService: Достигнут лимит итераций");
       }
 
     } catch (error: any) {

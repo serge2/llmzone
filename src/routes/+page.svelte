@@ -453,6 +453,9 @@
     }
 
     if (userMsgIndex !== -1) {
+      // Сбрасываем любые флаги продолжения перед регенерацией
+      history.forEach(msg => msg.requiresLimitExtension = false);
+
       // Сохраняем текст последнего вопроса
       const lastUserText = history[userMsgIndex].text;
       const lastAttachments = history[userMsgIndex].attachments; // Сохраняем вложения
@@ -561,6 +564,24 @@
     }
   }
 
+  /**
+   * Продолжает генерацию, если она была прервана лимитом итераций.
+   * Мы просто сбрасываем флаг и вызываем sendMessage без новых сообщений пользователя.
+   */
+  async function handleExtendLimit() {
+    if (!currentChat || !currentWorkspace) return;
+
+    // Находим последнее сообщение с флагом и убираем его
+    const lastMsg = currentChat.history[currentChat.history.length - 1];
+    if (lastMsg && lastMsg.requiresLimitExtension) {
+      lastMsg.requiresLimitExtension = false;
+    }
+
+    // Вызываем sendMessage. 
+    // Так как переменная message пуста, сервис просто подхватит историю и пойдет на новый цикл.
+    await sendMessage();
+  }
+
   // --- Основная логика отправки (теперь через ChatService с поддержкой MCP) ---
   async function sendMessage(attachments: Attachment[] = []) { // Обновлено: принимает аттачи
     if (!currentChat || !currentWorkspace) return;
@@ -568,6 +589,11 @@
     if (currentChat.isGenerating) {
       stopGeneration(currentChat.id);
       return;
+    }
+
+    // Сбрасываем флаги продолжения лимита, если отправляется новое сообщение от пользователя
+    if (message.trim() || attachments.length > 0) {
+      currentChat.history.forEach(msg => msg.requiresLimitExtension = false);
     }
 
     const chatToUpdate = currentChat;
@@ -735,6 +761,7 @@
           onDeleteMessage={handleDeleteMessage}
           onRegenerateMessage={handleRegenerateMessage}
           onApproveTool={handleApproveTool} 
+          onExtendLimit={handleExtendLimit}
         />
       </div>
 
@@ -831,7 +858,7 @@
   }
 
   .custom-menu button:hover {
-    background: #f3f4f6;
+    background: hsl(220, 14%, 96%);
     color: #111827;
   }
 </style>

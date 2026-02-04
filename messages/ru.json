@@ -119,5 +119,7 @@
   "chat_toast_conn_error": "Ошибка связи: {message}",
   "chat_tool_image_received": "Изображение получено.",
   "chat_tool_image_msg_prefix": "Вот изображение(я), которое вернул инструмент:",
-  "chat_error_api": "Ошибка API ({status}): {message}"
+  "chat_error_api": "Ошибка API ({status}): {message}",
+  "chat_limit_reached_info": "Достигнут лимит шагов. Модели может потребоваться продолжение для завершения задачи.",
+  "chat_continue_button": "Продолжить генерацию"
 }
