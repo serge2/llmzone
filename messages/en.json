@@ -41,8 +41,6 @@
 
   "bubble_copy_code": "Copy code",
   "bubble_reasoning_title": "Reasoning",
-  "bubble_ai_thinking": "AI is thinking...",
-  "bubble_ai_working": "AI is working...",
   "bubble_generation_stopped": "Generation stopped",
   "bubble_tool_label": "Tool:",
   "bubble_tool_approval_request": "Approval request:",
@@ -55,6 +53,10 @@
   "bubble_tool_rejected_note": "This tool execution was rejected by the user.",
   "bubble_tool_executing": "Executing request...",
   "bubble_error_title": "Interaction Error",
+  
+  "bubble_status_thinking": "AI is processing prompt...",
+  "bubble_status_typing": "AI is typing...",
+  "bubble_status_tools": "AI is waiting for tool result...",
 
   "bubble_action_copy": "Copy message",
   "bubble_action_regenerate": "Regenerate message",

@@ -126,16 +126,17 @@ export class ChatService {
           // ПОДГОТОВКА ИСТОРИИ ДЛЯ ЗАПРОСА
           const requestHistory = chat.history.slice(0, -1);
 
-          // ИНЪЕКЦИЯ ПРЕДУПРЕЖДЕНИЯ ПРИ ПРИБЛИЖЕНИИ К ЛИМИТУ
-          if (iteration === this.MAX_ITERATIONS) {
-            requestHistory.push({
-              id: 'system-limit-warning',
-              role: 'user',
-              text: "[SYSTEM MESSAGE]: You have reached the maximum limit of tool execution steps. " + 
-                    "You MUST now provide a final response to the user based on the data you already have. " + 
-                    "Do not call any more tools."
-            });
-          }
+          // // ИНЪЕКЦИЯ ПРЕДУПРЕЖДЕНИЯ ПРИ ПРИБЛИЖЕНИИ К ЛИМИТУ
+          // if (iteration === this.MAX_ITERATIONS) {
+          //   requestHistory.push({
+          //     id: 'system-limit-warning',
+          //     role: 'user',
+          //     text: "[SYSTEM NOTE]: You are approaching the sequential tools execution limit." +
+          //           "Please review your progress and give me the report. If you have enough information, provide a final response now. " +
+          //           "If you absolutely must continue, call ONLY the most essential tools needed to complete the task. " +
+          //           "Prioritize summarizing what you have already found."
+          //   });
+          // }
 
           // 2. Делаем запрос к LM Studio со стримингом
           const responseData = await this.fetchLLMResponse(

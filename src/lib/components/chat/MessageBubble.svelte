@@ -1,4 +1,3 @@
-<!-- MessageBubble.svelte -->
 <script lang="ts">
   import { marked } from 'marked';
   import Prism from 'prismjs';
@@ -42,6 +41,7 @@
     error, // Добавили проп ошибки
     isLastMessage = false,
     isTyping = false,
+    status = null, // Новый проп статуса генерации
     fullHistory = [], 
     messages = [], // Теперь принимаем всю группу целиком
     onEdit,
@@ -56,6 +56,7 @@
     error?: string, // Типизация ошибки
     isLastMessage?: boolean,
     isTyping?: boolean,
+    status?: 'thinking' | 'typing' | 'executing_tools' | null, // Типизация статуса
     fullHistory?: Message[],
     messages?: Message[], // Список связанных сообщений в группе
     onEdit?: (newText: string) => void,
@@ -323,9 +324,7 @@
                 {@html parseMarkdown(msg.text)}
               </div>
             {:else if role === 'assistant' && i === messages.length - 1 && (!msg.tool_calls || msg.tool_calls.length === 0) && !msg.reasoning && msg.role !== 'tool'}
-               {#if isTyping}
-                <span class="thinking-text">{_i18n && m.bubble_ai_thinking()}</span>
-              {:else}
+               {#if !isTyping}
                 <span class="thinking-text" style="animation: none; opacity: 0.6;">{_i18n && m.bubble_generation_stopped()}</span>
               {/if}
             {/if}
@@ -429,8 +428,21 @@
       {/if}
     </div>
 
-    {#if isTyping && messages.some(m => m.text || (m.tool_calls && m.tool_calls.length > 0))}
-      <div class="status-note">{_i18n && m.bubble_ai_working()}</div>
+    {#if isTyping && status}
+      <div class="status-indicator" transition:slide={{ axis: 'y', duration: 200 }}>
+        <div class="status-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <span class="status-text">
+          {#if status === 'thinking'}
+            {_i18n && m.bubble_status_thinking()}
+          {:else if status === 'typing'}
+            {_i18n && m.bubble_status_typing()}
+          {:else if status === 'executing_tools'}
+            {_i18n && m.bubble_status_tools()}
+          {/if}
+        </span>
+      </div>
     {/if}
   </div>
 </div>
@@ -441,7 +453,7 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
   .message-wrapper.user { justify-content: flex-end; }
-  .message-content { display: flex; flex-direction: column; gap: 6px; max-width: 90%; }
+  .message-content { display: flex; flex-direction: column; gap: 6px; max-width: 90%; position: relative; }
   
   .message { padding: 14px 18px; border-radius: 16px; line-height: 1.55; font-size: 0.95rem; }
 
@@ -602,19 +614,50 @@
     user-select: none;
   }
 
-  .status-note {
-    font-size: 0.7rem;
+  /* Новый индикатор статуса */
+  .status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+    padding-left: 8px;
     color: #94a3b8;
-    margin-top: 2px;
-    padding-left: 6px;
-    animation: blink 1.5s infinite;
+  }
+
+  .status-text {
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+
+  .status-dots {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    height: 12px;
+  }
+
+  .status-dots span {
+    width: 4px;
+    height: 4px;
+    background-color: currentColor;
+    border-radius: 50%;
+    display: inline-block;
+    animation: dot-pulse 1.4s infinite ease-in-out both;
+  }
+
+  .status-dots span:nth-child(1) { animation-delay: -0.32s; }
+  .status-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+  @keyframes dot-pulse {
+    0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+    40% { transform: scale(1); opacity: 1; }
   }
 
   .thinking-text {
     color: #94a3b8;
     font-style: italic;
     font-size: 0.9rem;
-    animation: pulse-opacity 1.5s infinite ease-in-out;
   }
 
   .prose :global(table) {

@@ -1,3 +1,4 @@
+// types.ts
 export type InspectorTab = 'context' | 'model' | 'tools' ;
 
 export interface Attachment {

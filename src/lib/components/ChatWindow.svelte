@@ -43,6 +43,29 @@
   // Ссылка на компонент ввода для вызова метода focus()
   let inputComponent = $state<ReturnType<typeof ChatInput>>();
 
+  // --- ЛОГИКА ОПРЕДЕЛЕНИЯ СТАТУСА ГЕНЕРАЦИИ ---
+  const generationStatus = $derived.by(() => {
+    if (!isGenerating) return null;
+    
+    const lastMsg = history[history.length - 1];
+    if (!lastMsg) return 'thinking';
+
+    // 1. Проверяем, есть ли вызовы инструментов, которые еще не получили ответа
+    const hasPendingTools = lastMsg.tool_calls?.some((call: any) => 
+      !history.find((h: Message) => h.role === 'tool' && h.tool_result?.tool_call_id === call.id)
+    );
+
+    if (hasPendingTools) return 'executing_tools';
+
+    // 2. Если текст или рассуждения уже начали поступать — значит, идет печать
+    if (lastMsg.text || (lastMsg.reasoning && lastMsg.reasoning.length > 0)) {
+      return 'typing';
+    }
+
+    // 3. По умолчанию (запрос ушел, ответа еще нет) — стадия раздумий
+    return 'thinking';
+  });
+
   // Группировка сообщений
   let displayGroups = $derived.by(() => {
     const groups: { role: 'user' | 'assistant' | 'system'; messages: Message[]; startIndex: number }[] = [];
@@ -140,6 +163,7 @@
             messages={group.messages}
             isLastMessage={group.startIndex + group.messages.length >= history.length}
             isTyping={isGenerating && (group.startIndex + group.messages.length >= history.length)}
+            status={group.startIndex + group.messages.length >= history.length ? generationStatus : null}
             fullHistory={history} 
             onEdit={(newText) => onEditMessage(group.startIndex, newText)}
             onCopy={() => {
