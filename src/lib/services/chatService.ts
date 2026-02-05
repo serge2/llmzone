@@ -1,3 +1,4 @@
+// chatService.ts
 import { fetch } from '@tauri-apps/plugin-http'; // ВАЖНО: Используем нативный fetch Tauri для обхода CORS
 import { toastService } from '$lib/services/toastService.svelte';
 import type { Message, Chat, WorkspaceSettings, ToolCall } from '$lib/types';
@@ -236,29 +237,27 @@ export class ChatService {
             for (const call of assistantMsg.tool_calls as ToolCall[]) {
               if (abortSignal.aborted) break;
 
-              // Пропускаем, если этот вызов отклонен пользователем
+              // 1. ПЕРВООЧЕРЕДНАЯ ПРОВЕРКА: Пропускаем, если этот вызов уже имеет результат в истории
+              const existingResult = chat.history.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === call.id);
+              if (existingResult) continue;
+
+              // 2. ОБРАБОТКА ОТКАЗА: Если результата нет, но статус "rejected"
               if (call.approvalStatus === 'rejected') {
                 // Добавляем сообщение об отказе, чтобы модель знала об этом
-                const alreadyHasResult = chat.history.some(m => m.role === 'tool' && m.tool_result?.tool_call_id === call.id);
-                if (!alreadyHasResult) {
-                  chat.history.push({
-                    id: crypto.randomUUID(), // Исправлено: добавлен уникальный ID
-                    role: 'tool',
-                    text: m.chat_tool_rejected_by_user(),
-                    tool_result: {
-                      tool_call_id: call.id,
-                      content: m.chat_tool_error_rejected(),
-                      isError: true
-                    }
-                  });
-                }
+                chat.history.push({
+                  id: crypto.randomUUID(),
+                  role: 'tool',
+                  text: '',
+                  tool_result: {
+                    tool_call_id: call.id,
+                    content: m.chat_tool_error_rejected(),
+                    isError: true
+                  }
+                });
                 continue;
               }
 
-              // Пропускаем, если этот вызов уже имеет результат в истории (чтобы не дублировать при продолжении)
-              const alreadyHasResult = chat.history.some(m => m.role === 'tool' && m.tool_result?.tool_call_id === call.id);
-              if (alreadyHasResult) continue;
-
+              // 3. ВЫПОЛНЕНИЕ: Если мы здесь, значит результата нет и вызов одобрен
               try {
                 // ПОИСК ОРИГИНАЛЬНОГО ИНСТРУМЕНТА ПО УНИКАЛЬНОМУ ИМЕНИ
                 const toolBinding = toolLookupMap.get(call.name);
@@ -270,22 +269,25 @@ export class ChatService {
                 // Вызов через оригинальный сервер и оригинальное имя функции
                 const result = await toolBinding.server.callTool(toolBinding.originalName, call.arguments);
                 
-                // Снова используем push вместо пересоздания всего массива
+                // ВНИМАНИЕ: MCP результат может сам содержать флаг isError
+                const hasErrorInside = (result as any).isError === true;
+
                 chat.history.push({
-                  id: crypto.randomUUID(), // Исправлено: добавлен уникальный ID
+                  id: crypto.randomUUID(),
                   role: 'tool',
-                  text: JSON.stringify(result),
+                  text: '',
                   tool_result: {
                     tool_call_id: call.id,
                     content: JSON.stringify(result, null, 2),
-                    isError: false
+                    isError: hasErrorInside
                   }
                 });
               } catch (err: any) {
+                // ГЛОБАЛЬНАЯ ОБРАБОТКА ОШИБОК ИНСТРУМЕНТА (Сеть, отсутствие функции и т.д.)
                 chat.history.push({
-                  id: crypto.randomUUID(), // Исправлено: добавлен уникальный ID
+                  id: crypto.randomUUID(),
                   role: 'tool',
-                  text: `Error: ${err.message}`,
+                  text: '', 
                   tool_result: {
                     tool_call_id: call.id,
                     content: `Error: ${err.message}`,
@@ -395,8 +397,6 @@ export class ChatService {
               image_url: { url: attr.base64 } // attr.base64 уже содержит "data:image/...;base64,..."
             });
           }
-          // Другие типы вложений (PDF/Текст) пока можно игнорировать или 
-          // внедрять их содержимое как текст в будущем.
         }
         openAIMsg.content = content;
       } else {
@@ -519,7 +519,6 @@ export class ChatService {
         const lines = chunk.split('\n');
 
         for (const line of lines) {
-          // Дополнительная проверка внутри цикла обработки строк
           if (abortSignal.aborted) break;
 
           const trimmed = line.trim();
@@ -578,9 +577,7 @@ export class ChatService {
                 onUpdateTools(currentTools);
               }
             } catch (e) {
-              // Игнорируем неполные чанки
               console.warn("Ошибка парсинга чанка:", e);
-              console.warn("Line:", line);
             }
           }
         }

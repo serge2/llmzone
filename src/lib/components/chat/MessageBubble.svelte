@@ -1,3 +1,4 @@
+<!-- MessageBubble.svelte -->
 <script lang="ts">
   import { marked } from 'marked';
   import Prism from 'prismjs';
@@ -185,7 +186,11 @@
       // Собираем текст из всех сообщений в группе
       let fullText = "";
       messages.forEach(m => {
-        if (m.text) fullText += (fullText ? "\n\n" : "") + m.text;
+        if (m.role === 'tool' && m.tool_result?.content) {
+          fullText += (fullText ? "\n\n" : "") + "[Result]: " + m.tool_result.content;
+        } else if (m.text) {
+          fullText += (fullText ? "\n\n" : "") + m.text;
+        }
       });
 
       await navigator.clipboard.writeText(fullText);

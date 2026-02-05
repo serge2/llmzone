@@ -1,3 +1,4 @@
+<!-- ToolWidget.svelte -->
 <script lang="ts">
   import { slide } from 'svelte/transition';
   import type { Message, ToolCall } from '$lib/types';
@@ -65,10 +66,9 @@
         
         {#key (call.raw_arguments || JSON.stringify(call.arguments))}
           <pre class="language-json"><code>{
-            call.raw_arguments || 
-            (Object.keys(call.arguments || {}).length > 0 
+            (call.arguments && Object.keys(call.arguments).length > 0) 
               ? JSON.stringify(call.arguments, null, 2) 
-              : "{}")
+              : (call.raw_arguments || "{}")
           }</code></pre>
         {/key}
       </details>
@@ -96,7 +96,7 @@
             <span class="sub-status-icon">{@html chevronDownIconRaw}</span>
           </summary>
           {#if result}
-            <pre class="language-json"><code>{result.tool_result?.content || result.text}</code></pre>
+            <pre class="language-json"><code>{result.tool_result?.content || ''}</code></pre>
           {:else}
             <div class="tool-loading">{_i18n && m.bubble_tool_executing()}</div>
           {/if}
