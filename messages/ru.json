@@ -82,6 +82,8 @@
   "tab_context_system_prompt": "Системный промпт",
   "tab_context_system_prompt_placeholder": "Инструкции для модели...",
   "tab_context_follow_first_message": "Закреплять первое сообщение в системном промпте для фокуса",
+  "tab_context_limit_tools_calls": "Ограничить последовательные вызовы инструментов",
+  "tab_context_max_iterations": "Максимум вызовов до подтверждения",
 
   "tab_tools_config_label": "Интеграции",
   "tab_tools_config_button": "Конфигурация",

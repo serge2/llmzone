@@ -8,7 +8,7 @@ import { type MCPServerInstance, mcpManager } from '$lib/mcp/manager.svelte';
 import * as m from '$paraglide/messages';
 
 export class ChatService {
-  private MAX_ITERATIONS = 10; // Защита от бесконечных циклов
+  private DEFAULT_MAX_ITERATIONS = 10; // Дефолтное значение, если не указано иное
 
   /**
    * Основной метод отправки сообщения с поддержкой цикла инструментов
@@ -95,10 +95,16 @@ export class ChatService {
         }
       }
       
+      // --- ОПРЕДЕЛЕНИЕ ЛИМИТА ИТЕРАЦИЙ ---
+      const limitEnabled = settings.toolsLoopLimitEnabled ?? true;
+      const maxIterations = limitEnabled 
+        ? (settings.toolsMaxIterations ?? this.DEFAULT_MAX_ITERATIONS) 
+        : Infinity; // Без ограничений, если тогл выключен
+
       let iteration = 0;
       let isLooping = true;
 
-      while (isLooping && iteration < this.MAX_ITERATIONS) {
+      while (isLooping && iteration <= maxIterations) {
         // ПРОВЕРКА ПРЕРЫВАНИЯ: Останавливаем цикл, если получен сигнал
         if (abortSignal.aborted) break;
 
@@ -125,18 +131,6 @@ export class ChatService {
 
           // ПОДГОТОВКА ИСТОРИИ ДЛЯ ЗАПРОСА
           const requestHistory = chat.history.slice(0, -1);
-
-          // // ИНЪЕКЦИЯ ПРЕДУПРЕЖДЕНИЯ ПРИ ПРИБЛИЖЕНИИ К ЛИМИТУ
-          // if (iteration === this.MAX_ITERATIONS) {
-          //   requestHistory.push({
-          //     id: 'system-limit-warning',
-          //     role: 'user',
-          //     text: "[SYSTEM NOTE]: You are approaching the sequential tools execution limit." +
-          //           "Please review your progress and give me the report. If you have enough information, provide a final response now. " +
-          //           "If you absolutely must continue, call ONLY the most essential tools needed to complete the task. " +
-          //           "Prioritize summarizing what you have already found."
-          //   });
-          // }
 
           // 2. Делаем запрос к LM Studio со стримингом
           const responseData = await this.fetchLLMResponse(
@@ -186,7 +180,7 @@ export class ChatService {
           if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
             
             // --- ПРОВЕРКА ЛИМИТА ПЕРЕД ВЫПОЛНЕНИЕМ НОВЫХ ВЫЗОВОВ ---
-            if (iteration >= this.MAX_ITERATIONS) {
+            if (iteration > maxIterations) {
               console.warn("ChatService: Достигнут лимит итераций. Требуется подтверждение пользователя.");
               assistantMsg.requiresLimitExtension = true; // Флаг для UI: показать кнопку "Продолжить"
               isLooping = false;

@@ -1,3 +1,4 @@
+<!-- ChatWindow.svelte -->
 <script lang="ts">
   import type { Message, Attachment } from '$lib/types';
   import MessageBubble from './chat/MessageBubble.svelte';
@@ -49,6 +50,10 @@
     
     const lastMsg = history[history.length - 1];
     if (!lastMsg) return 'thinking';
+
+    // Если сообщение требует расширения лимита, ИИ фактически уже не "генерирует" активный процесс
+    // Это важно, чтобы UI не показывал бесконечную анимацию выполнения, когда всё стоит на паузе
+    if (lastMsg.requiresLimitExtension) return null;
 
     // 1. Проверяем, есть ли вызовы инструментов, которые еще не получили ответа
     const hasPendingTools = lastMsg.tool_calls?.some((call: any) => 
@@ -141,6 +146,19 @@
       scrollToBottom();
     }
   });
+
+  // Следим за флагом лимита: когда он появляется в последнем сообщении, 
+  // нужно принудительно прокрутить вниз, так как высота сообщения увеличилась
+  $effect(() => {
+    const lastMessage = history[history.length - 1];
+    if (lastMessage?.requiresLimitExtension) {
+      // Используем небольшую задержку, чтобы анимация slide успела начаться/отработать
+      setTimeout(() => {
+        scrollToBottom(true);
+      }, 500);
+    }
+  });
+  
 </script>
 
 <section class="chat-column">

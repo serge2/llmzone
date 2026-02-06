@@ -42,6 +42,8 @@ export interface WorkspaceSettings {
   temperature: number;
   mcpConfig?: string;
   mcpStates?: Record<string, MCPServerState>;
+  toolsLoopLimitEnabled?: boolean;
+  toolsMaxIterations?: number;
 }
 
 export interface Chat {

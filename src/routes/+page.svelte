@@ -1,3 +1,4 @@
+<!-- +page.svelte -->
 <script lang="ts">
   import { fetch } from '@tauri-apps/plugin-http';
   import { onMount, untrack } from 'svelte';
@@ -248,7 +249,9 @@
           systemPrompt: '',
           temperature: 0.7,
           followFirstMessage: false,
-          lastActiveTab: 'model'
+          lastActiveTab: 'model',
+          toolsLoopLimitEnabled: true,
+          toolsMaxIterations: 10,
         },
         chats: [{ id: 'c-' + Date.now(), name: m.chat_new_name(), history: [], isGenerating: false }]
       };
@@ -328,7 +331,9 @@
         systemPrompt: '',
         temperature: 0.7,
         followFirstMessage: false,
-        lastActiveTab: 'model'
+        lastActiveTab: 'model',
+        toolsLoopLimitEnabled: true,
+        toolsMaxIterations: 10,
       },
       chats: [{ 
         id: newChatId, 
@@ -534,7 +539,9 @@
         systemPrompt: currentWorkspace.settings.systemPrompt,
         temperature: currentWorkspace.settings.temperature,
         mcpStates: currentWorkspace.settings.mcpStates,
-        followFirstMessage: currentWorkspace.settings.followFirstMessage
+        followFirstMessage: currentWorkspace.settings.followFirstMessage,
+        toolsLoopLimitEnabled: currentWorkspace.settings.toolsLoopLimitEnabled,
+        toolsMaxIterations: currentWorkspace.settings.toolsMaxIterations
       };
 
       const chatSpecificServers = mcpManager.getForWorkspace(currentWorkspace.id);
@@ -580,6 +587,11 @@
     // Вызываем sendMessage. 
     // Так как переменная message пуста, сервис просто подхватит историю и пойдет на новый цикл.
     await sendMessage();
+
+    // Принудительно скроллим вниз после запуска
+    // tick().then(() => {
+    //   chatWindowComponent?.scrollToBottom(true);
+    // }); 
   }
 
   // --- Основная логика отправки (теперь через ChatService с поддержкой MCP) ---
@@ -610,7 +622,9 @@
       systemPrompt: chatWorkspace.settings.systemPrompt,
       temperature: chatWorkspace.settings.temperature,
       mcpStates: chatWorkspace.settings.mcpStates,
-      followFirstMessage: chatWorkspace.settings.followFirstMessage
+      followFirstMessage: chatWorkspace.settings.followFirstMessage,
+      toolsLoopLimitEnabled: chatWorkspace.settings.toolsLoopLimitEnabled,
+      toolsMaxIterations: chatWorkspace.settings.toolsMaxIterations
     };
 
     const chatToUpdateId = chatToUpdate.id;
