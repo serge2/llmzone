@@ -1,3 +1,4 @@
+<!-- src/lib/components/Sidebar.svelte -->
 <script lang="ts">
   import { tick } from 'svelte';
   import { slide } from 'svelte/transition';
@@ -349,6 +350,11 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+
+  /* Исправление для системных скроллбаров при открытии настроек */
+  :global(body:has(.settings-overlay)) .tree {
+    display: none !important;
   }
 
   .chat-item-wrapper {

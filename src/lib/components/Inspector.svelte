@@ -1,3 +1,4 @@
+<!-- src/lib/components/Inspector.svelte -->
 <script lang="ts">
   import type { Workspace, GlobalConfig, InspectorTab } from '$lib/types';
   import TabModel from './inspector/TabModel.svelte';
@@ -115,5 +116,11 @@
   }
 
   .content { padding: 16px; overflow-y: auto; flex: 1; }
+
+  /* Скрыть контент (и скроллбары), когда открыто окно настроек */
+  :global(body:has(.settings-overlay)) .content {
+    display: none !important;
+  }
+
   .empty-text { color: #9ca3af; text-align: center; margin-top: 20px; font-size: 0.9rem; }
 </style>

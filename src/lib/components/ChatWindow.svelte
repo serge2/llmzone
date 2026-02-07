@@ -235,6 +235,11 @@
     flex-direction: column;
   }
 
+  /* Исправление для системных скроллбаров при открытии настроек */
+  :global(body:has(.settings-overlay)) .messages-container {
+    display: none !important;
+  }
+
   .welcome-screen {
     flex: 1;
     display: flex;
