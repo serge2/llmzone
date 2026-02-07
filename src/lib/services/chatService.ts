@@ -499,19 +499,22 @@ export class ChatService {
     let fullContent = "";
     let fullReasoning = "";
     let toolCallsRaw: any[] = [];
+    let streamBuffer = ""; // БУФЕР ДЛЯ НЕПОЛНЫХ СТРОК
 
     if (reader) {
       while (true) {
         if (abortSignal.aborted) {
-          await reader.cancel(); // Сообщаем потоку, что мы больше не читаем
+          await reader.cancel(); 
           break;
         }
 
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
+        // Накопление данных в буфер
+        streamBuffer += decoder.decode(value, { stream: true });
+        const lines = streamBuffer.split('\n');
+        streamBuffer = lines.pop() || "";
 
         for (const line of lines) {
           if (abortSignal.aborted) break;
@@ -520,18 +523,28 @@ export class ChatService {
           if (!trimmed || trimmed === 'data: [DONE]') continue;
           
           if (trimmed.startsWith('data: ')) {
+            const jsonStr = trimmed.slice(6);
             try {
-              const data = JSON.parse(trimmed.slice(6));
-              const delta = data.choices[0]?.delta;
+              const data = JSON.parse(jsonStr);
+
+              // ПРОВЕРКА НА ОШИБКУ ОТ СЕРВЕРА
+              if (data.error) {
+                console.error("❌ API вернуло ошибку в стриме:", data.error);
+                throw new Error(`API Error: ${data.error.message || JSON.stringify(data.error)}`);
+              }
+
+              // БЕЗОПАСНОЕ ИЗВЛЕЧЕНИЕ DELTA
+              const choice = data.choices?.[0];
+              if (!choice) continue;
+
+              const delta = choice.delta;
               if (!delta) continue;
 
               // Обработка рассуждений (Reasoning Content)
               if (delta.reasoning_content) {
                 fullReasoning += delta.reasoning_content;
                 onUpdateReasoning(fullReasoning);
-              }
-
-              if (delta.reasoning) {
+              } else if (delta.reasoning) {
                 fullReasoning += delta.reasoning;
                 onUpdateReasoning(fullReasoning);
               }
@@ -572,7 +585,11 @@ export class ChatService {
                 onUpdateTools(currentTools);
               }
             } catch (e) {
-              console.warn("Ошибка парсинга чанка:", e);
+                console.group("🚨 Ошибка парсинга чанка");
+                console.error("Ошибка:", e);
+                console.log("Сырая строка (line):", line);
+                console.log("Отрезанный JSON:", jsonStr);
+                console.groupEnd();
             }
           }
         }
