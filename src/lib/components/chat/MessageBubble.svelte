@@ -1,3 +1,4 @@
+<!-- MessageBubble.svelte -->
 <script lang="ts">
   import { marked } from 'marked';
   import Prism from 'prismjs';
