@@ -1,3 +1,4 @@
+// src/lib/mcp/manager.svelte.ts
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { Command } from "@tauri-apps/plugin-shell";
@@ -74,7 +75,11 @@ class TauriHttpTransport implements Transport {
   onerror?: (error: Error) => void;
   onmessage?: (message: any) => void;
 
-  constructor(private url: string, private headers: Record<string, string> = {}) {
+  constructor(
+    private url: string, 
+    private headers: Record<string, string> = {},
+    private getTimeout: () => number // Геттер для получения актуального таймаута (в секундах)
+  ) {
     this.cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
   }
 
@@ -85,6 +90,13 @@ class TauriHttpTransport implements Transport {
   async send(message: any) {
     const isInitializedNotification = (message as any).method === 'notifications/initialized';
     
+    // Создаем контроллер таймаута для конкретного запроса. 
+    // Получаем секунды и переводим в мс для setTimeout и логирования
+    const timeoutSec = this.getTimeout();
+    const timeoutMs = timeoutSec * 1000;
+    const timeoutController = new AbortController();
+    const timerId = setTimeout(() => timeoutController.abort(), timeoutMs);
+
     try {
       const response = await tauriFetch(this.cleanUrl, {
         method: 'POST',
@@ -95,8 +107,12 @@ class TauriHttpTransport implements Transport {
           'Accept': 'application/json, text/event-stream'
         },
         body: JSON.stringify(message),
-        signal: this.closeController.signal
+        // Объединяем сигнал закрытия транспорта и сигнал таймаута
+        signal: AbortSignal.any([this.closeController.signal, timeoutController.signal])
       });
+
+      // Очищаем таймер при получении ответа
+      clearTimeout(timerId);
 
       // Извлекаем ID сессии, если сервер его прислал
       const sid = response.headers.get('mcp-session-id');
@@ -127,7 +143,12 @@ class TauriHttpTransport implements Transport {
         }
       }
     } catch (e: any) {
-      if (e.name !== 'AbortError' && this.onerror) this.onerror(e);
+      clearTimeout(timerId);
+      if (e.name === 'AbortError' && !this.closeController.signal.aborted) {
+        if (this.onerror) this.onerror(new Error(`MCP Request timed out after ${timeoutSec}s`));
+      } else if (e.name !== 'AbortError' && this.onerror) {
+        this.onerror(e);
+      }
       if (!isInitializedNotification) throw e;
     }
   }
@@ -320,7 +341,12 @@ export class MCPServerInstance {
       let transport: Transport;
 
       if (this.config.url) {
-        transport = new TauriHttpTransport(this.config.url, this.headers);
+        // Передаем динамический геттер таймаута из синглтона менеджера
+        transport = new TauriHttpTransport(
+          this.config.url, 
+          this.headers,
+          () => mcpManager.globalTimeout
+        );
       } else if (this.config.command) {
         transport = new TauriStdioTransport(
           this.config.command,
@@ -495,6 +521,8 @@ export class MCPServerInstance {
  */
 export class MCPManager {
   instances = $state<MCPServerInstance[]>([]);
+  // Глобальное значение таймаута (в СЕКУНДАХ для синхронизации с UI и конфигом)
+  globalTimeout = $state(300); 
 
   constructor() {}
 
@@ -516,7 +544,18 @@ export class MCPManager {
     );
   }
   
-  async initializeWorkspaceServers(workspaceId: string) {
+  async initializeWorkspaceServers(workspaceOrId: any) {
+    let workspaceId: string;
+
+    // Универсальная обработка: принимаем и ID (строку), и объект воркспейса
+    if (typeof workspaceOrId === 'string') {
+      workspaceId = workspaceOrId;
+    } else {
+      workspaceId = workspaceOrId.id;
+      // Если передали объект, сразу синхронизируем таймаут из его настроек
+      this.globalTimeout = workspaceOrId.settings?.mcpTimeout || 300;
+    }
+
     const workspaceServers = this.getForWorkspace(workspaceId);
     
     // Запускаем подключения параллельно
@@ -569,3 +608,4 @@ export class MCPManager {
 
 // Экспорт синглтона
 export const mcpManager = new MCPManager();
+``

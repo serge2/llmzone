@@ -98,6 +98,11 @@
   "tab_tools_cancel": "Отмена",
   "tab_tools_apply_button": "Применить изменения",
   "tab_tools_saved_status": "Сохранено!",
+  "mcp_settings_widget_title": "Настройки MCP",
+  "mcp_settings_timeout_label": "Таймаут запросов",
+  "mcp_settings_timeout_hint": "Максимальное время ожидания ответа от MCP сервера",
+  
+  "common_seconds_short": "сек",
 
   "mcp_widget_restart_title": "Переподключиться",
   "mcp_widget_tools_title": "Доступные инструменты:",

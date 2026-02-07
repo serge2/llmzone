@@ -1,4 +1,3 @@
-<!-- +page.svelte -->
 <script lang="ts">
   import { fetch } from '@tauri-apps/plugin-http';
   import { onMount, untrack } from 'svelte';
@@ -115,7 +114,11 @@
     if (selectedWorkspaceId) {
       mcpServers = mcpManager.getForWorkspace(selectedWorkspaceId);
       // НОВОЕ: Инициируем подключение разрешенных серверов при входе в воркспейс
-      await mcpManager.initializeWorkspaceServers(selectedWorkspaceId);
+      // ПЕРЕДАЕМ ОБЪЕКТ, чтобы менеджер считал mcpTimeout
+      const ws = workspaces.find(w => w.id === selectedWorkspaceId);
+      if (ws) {
+        await mcpManager.initializeWorkspaceServers(ws);
+      }
     }
   }
 
@@ -233,6 +236,7 @@
       }
 
       // --- Инициализируем MCP серверы сразу после загрузки воркспейсов ---
+      // ВАЖНО: Вызываем syncMCPServers, который корректно инициирует всё через объекты
       await syncMCPServers();
 
     } else {
@@ -252,6 +256,7 @@
           lastActiveTab: 'model',
           toolsLoopLimitEnabled: true,
           toolsMaxIterations: 10,
+          mcpTimeout: 300 // Дефолтное значение
         },
         chats: [{ id: 'c-' + Date.now(), name: m.chat_new_name(), history: [], isGenerating: false }]
       };
@@ -334,6 +339,7 @@
         lastActiveTab: 'model',
         toolsLoopLimitEnabled: true,
         toolsMaxIterations: 10,
+        mcpTimeout: 300
       },
       chats: [{ 
         id: newChatId, 

@@ -98,6 +98,11 @@
   "tab_tools_cancel": "Cancel",
   "tab_tools_apply_button": "Apply Changes",
   "tab_tools_saved_status": "Saved!",
+  "mcp_settings_widget_title": "MCP Settings",
+  "mcp_settings_timeout_label": "Request Timeout",
+  "mcp_settings_timeout_hint": "Maximum time to wait for a response from the MCP server",
+  
+  "common_seconds_short": "sec",
 
   "mcp_widget_restart_title": "Reconnect",
   "mcp_widget_tools_title": "Available tools:",

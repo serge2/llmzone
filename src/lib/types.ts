@@ -41,6 +41,7 @@ export interface WorkspaceSettings {
   followFirstMessage?: boolean;
   temperature: number;
   mcpConfig?: string;
+  mcpTimeout?: number;
   mcpStates?: Record<string, MCPServerState>;
   toolsLoopLimitEnabled?: boolean;
   toolsMaxIterations?: number;
