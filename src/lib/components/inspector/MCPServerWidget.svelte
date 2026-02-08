@@ -77,13 +77,15 @@
   class:has-error={!!server.error}
 >
   <div class="card-main">
-    <button 
-      class="expand-btn" 
-      class:is-expanded={server.isExpanded}
-      onclick={toggleExpanded}
-    >
-      {@html ChevronIcon}
-    </button>
+    <label class="switch">
+      <input 
+        type="checkbox" 
+        checked={server.enabled} 
+        onchange={() => server.toggle()}
+        disabled={server.isLoading}
+      >
+      <span class="slider"></span>
+    </label>
     
     <div class="type-icon-wrapper">
       <div class="type-icon" title={isLocal ? "Local Process" : "Remote SSE"}>
@@ -134,15 +136,15 @@
         </div>
       </button>
 
-      <label class="switch">
-        <input 
-          type="checkbox" 
-          checked={server.enabled} 
-          onchange={() => server.toggle()}
-          disabled={server.isLoading}
-        >
-        <span class="slider"></span>
-      </label>
+      <button 
+        class="expand-btn" 
+        class:is-expanded={server.isExpanded}
+        onclick={toggleExpanded}
+      >
+        {@html ChevronIcon}
+      </button>
+
+      
     </div>
   </div>
 
