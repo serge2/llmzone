@@ -1,3 +1,4 @@
+<!-- src/lib/components/inspector/TabContext.svelte -->
 <script lang="ts">
   import type { Workspace } from '$lib/types';
   import { fade } from 'svelte/transition';
@@ -38,6 +39,17 @@
     />
     <span class="checkbox-text">
       {_i18n && m.tab_context_follow_first_message()}
+    </span>
+  </label>
+
+  <label class="checkbox-container">
+    <input 
+      type="checkbox" 
+      bind:checked={currentWorkspace.settings.includeMcpInstructions} 
+      onchange={onSettingsChange}
+    />
+    <span class="checkbox-text">
+      {_i18n && (m.tab_context_include_mcp_instructions ? m.tab_context_include_mcp_instructions() : "Include MCP instructions in prompt")}
     </span>
   </label>
 

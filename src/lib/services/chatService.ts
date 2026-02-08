@@ -79,16 +79,20 @@ export class ChatService {
         });
 
       
-      // 1. Пытаемся достать workspaceId из переданных инстансов
-      const wsId = serverInstances.length > 0 ? serverInstances[0].workspaceId : null;
-
-      // 2. Формируем промпт
+      // 1. Формируем промпт
       let fullSystemPrompt = settings.systemPrompt || "";
 
-      if (wsId) {
-        const mcpInstructions = mcpManager.getFullSystemInstructions(wsId);
-        if (mcpInstructions) {
-          fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + mcpInstructions;
+      // 2. Добавляем инструкции MCP только если галочка ВКЛЮЧЕНА (по умолчанию true)
+      const shouldIncludeMcp = settings.includeMcpInstructions ?? true;
+
+      if (shouldIncludeMcp) {
+        // Пытаемся достать workspaceId из переданных инстансов
+        const wsId = serverInstances.length > 0 ? serverInstances[0].workspaceId : null;
+        if (wsId) {
+          const mcpInstructions = mcpManager.getFullSystemInstructions(wsId);
+          if (mcpInstructions) {
+            fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + mcpInstructions;
+          }
         }
       }
 
@@ -368,6 +372,7 @@ export class ChatService {
      // --- ДОБАВЬТЕ ЭТОТ БЛОК ДЛЯ ДЕБАГА ---
     console.group("🚀 LLM REQUEST DEBUG");
     console.log("Follow First Message Active:", settings.followFirstMessage);
+    console.log("Include MCP Instructions:", settings.includeMcpInstructions);
     console.log("Final System Prompt:", finalSystemPrompt);
     console.log("Full Messages Array:", apiMessages.concat(history.map(m => ({ role: m.role, content: m.text }))));
     console.groupEnd();

@@ -260,6 +260,7 @@
           systemPrompt: '',
           temperature: 0.7,
           followFirstMessage: false,
+          includeMcpInstructions: true,
           lastActiveTab: 'model',
           toolsLoopLimitEnabled: true,
           toolsMaxIterations: 10,
@@ -344,6 +345,7 @@
         systemPrompt: '',
         temperature: 0.7,
         followFirstMessage: false,
+        includeMcpInstructions: true,
         lastActiveTab: 'model',
         toolsLoopLimitEnabled: true,
         toolsMaxIterations: 10,
@@ -575,6 +577,7 @@
         temperature: currentWorkspace.settings.temperature,
         mcpStates: currentWorkspace.settings.mcpStates,
         followFirstMessage: currentWorkspace.settings.followFirstMessage,
+        includeMcpInstructions: currentWorkspace.settings.includeMcpInstructions,
         toolsLoopLimitEnabled: currentWorkspace.settings.toolsLoopLimitEnabled,
         toolsMaxIterations: currentWorkspace.settings.toolsMaxIterations
       };
@@ -658,6 +661,7 @@
       temperature: chatWorkspace.settings.temperature,
       mcpStates: chatWorkspace.settings.mcpStates,
       followFirstMessage: chatWorkspace.settings.followFirstMessage,
+      includeMcpInstructions: chatWorkspace.settings.includeMcpInstructions,
       toolsLoopLimitEnabled: chatWorkspace.settings.toolsLoopLimitEnabled,
       toolsMaxIterations: chatWorkspace.settings.toolsMaxIterations
     };

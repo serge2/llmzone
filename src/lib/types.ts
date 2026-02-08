@@ -39,6 +39,7 @@ export interface WorkspaceSettings {
   modelName: string;
   systemPrompt: string;
   followFirstMessage?: boolean;
+  includeMcpInstructions?: boolean;
   temperature: number;
   mcpConfig?: string;
   mcpTimeout?: number;
