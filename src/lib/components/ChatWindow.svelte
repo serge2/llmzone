@@ -1,4 +1,3 @@
-<!-- ChatWindow.svelte -->
 <script lang="ts">
   import type { Message, Attachment } from '$lib/types';
   import MessageBubble from './chat/MessageBubble.svelte';
@@ -15,7 +14,8 @@
   let { 
     history, 
     currentLocale, 
-    isGenerating, 
+    isGenerating,
+    isLoading = false, // НОВОЕ: состояние загрузки истории с диска
     message = $bindable(),
     onSendMessage,
     onEditMessage,
@@ -28,6 +28,7 @@
     history: Message[];
     currentLocale: string;
     isGenerating: boolean;
+    isLoading?: boolean; // Типизация нового пропа
     message: string;
     onSendMessage: (attachments?: Attachment[]) => void;
     onEditMessage: (index: number, newText: string) => void;
@@ -167,33 +168,40 @@
     bind:this={chatContainer} 
     onscroll={handleScroll}
   >
-    {#if history.length === 0}
-      <div class="welcome-screen">
-        <div class="welcome-logo">{@html CpuIcon}</div>
-        <h2 class="welcome-text">{_i18n && m.chat_welcome_submessage()}</h2>
+    {#if isLoading}
+      <div class="welcome-screen loading-state">
+        <div class="spinner"></div>
+        <p>{_i18n && m.chat_loading()}...</p> 
       </div>
     {:else}
-      <div class="messages-list">
-        {#each displayGroups as group (group.startIndex)}
-          <MessageBubble 
-            currentLocale={currentLocale}
-            role={group.role}
-            messages={group.messages}
-            isLastMessage={group.startIndex + group.messages.length >= history.length}
-            isTyping={isGenerating && (group.startIndex + group.messages.length >= history.length)}
-            status={group.startIndex + group.messages.length >= history.length ? generationStatus : null}
-            fullHistory={history} 
-            onEdit={(newText) => onEditMessage(group.startIndex, newText)}
-            onCopy={() => {
-              const fullText = group.messages.map(m => m.text).filter(Boolean).join('\n\n');
-              onCopyMessage(fullText);
-            }}
-            onDelete={() => onDeleteMessage(group.startIndex)}
-            onRegenerate={() => onRegenerateMessage()}
-            onApproveTool={onApproveTool} 
-            onExtendLimit={onExtendLimit}  />
-        {/each} 
-      </div>
+      {#if history.length === 0}
+        <div class="welcome-screen">
+          <div class="welcome-logo">{@html CpuIcon}</div>
+          <h2 class="welcome-text">{_i18n && m.chat_welcome_submessage()}</h2>
+        </div>
+      {:else}
+        <div class="messages-list">
+          {#each displayGroups as group (group.startIndex)}
+            <MessageBubble 
+              currentLocale={currentLocale}
+              role={group.role}
+              messages={group.messages}
+              isLastMessage={group.startIndex + group.messages.length >= history.length}
+              isTyping={isGenerating && (group.startIndex + group.messages.length >= history.length)}
+              status={group.startIndex + group.messages.length >= history.length ? generationStatus : null}
+              fullHistory={history} 
+              onEdit={(newText) => onEditMessage(group.startIndex, newText)}
+              onCopy={() => {
+                const fullText = group.messages.map(m => m.text).filter(Boolean).join('\n\n');
+                onCopyMessage(fullText);
+              }}
+              onDelete={() => onDeleteMessage(group.startIndex)}
+              onRegenerate={() => onRegenerateMessage()}
+              onApproveTool={onApproveTool} 
+              onExtendLimit={onExtendLimit}  />
+          {/each} 
+        </div>
+      {/if}
     {/if}
 
     {#if showScrollButton}
@@ -210,7 +218,7 @@
   <ChatInput 
     bind:this={inputComponent}
     {currentLocale}
-    {isGenerating}
+    isGenerating={isGenerating || isLoading}
     bind:message={message}
     onSendMessage={onSendMessage}
   />
@@ -248,6 +256,25 @@
     justify-content: center;
     gap: 20px;
     opacity: 0.8;
+  }
+
+  .loading-state {
+    color: #6b7280;
+    font-size: 0.9rem;
+  }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #f3f4f6;
+    border-top: 3px solid #5865f2;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 
   .welcome-logo {

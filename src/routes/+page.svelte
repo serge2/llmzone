@@ -5,7 +5,13 @@
   import { loadConfig, saveConfig } from '$lib/config';
   import type { Workspace, Chat, Message, AppSettings, GlobalConfig, Attachment } from '$lib/types'; // Добавлен импорт Attachment
   // Обновленные импорты для работы с раздельными чатами
-  import { loadChatsForWorkspace, saveChatsForWorkspace, deleteWorkspaceFolder } from '$lib/storage/chatStorage';
+  import { 
+    loadChatsForWorkspace, 
+    saveChatsForWorkspace, 
+    deleteWorkspaceFolder,
+    loadChatHistory,    // НОВОЕ: импорт для ленивой загрузки
+    deleteChatFolder    // НОВОЕ: импорт для удаления папки чата
+  } from '$lib/storage/chatStorage';
   import Inspector from '$lib/components/Inspector.svelte';
   
   import Sidebar from '$lib/components/Sidebar.svelte';
@@ -28,6 +34,7 @@
   let workspaces = $state<Workspace[]>([]);
   let selectedWorkspaceId = $state<string>('');
   let selectedChatId = $state<string>('');
+  let isHistoryLoading = $state(false); // НОВОЕ: состояние загрузки истории
   
   // Глобальные настройки
   let globalConfig = $state<GlobalConfig>({
@@ -215,11 +222,7 @@
           },
           chats: (savedChats || []).map(c => ({
             ...c,
-            // МИГРАЦИЯ: Восстанавливаем ID для старых сообщений, чтобы они отображались
-            history: (c.history || []).map(msg => ({
-              ...msg,
-              id: msg.id || crypto.randomUUID()
-            })),
+            history: [], // Изначально история пуста (ленивая загрузка)
             isGenerating: false
           }))
         };
@@ -232,7 +235,9 @@
       
       const activeWs = workspaces.find(w => w.id === selectedWorkspaceId);
       if (activeWs && activeWs.chats.length > 0) {
-        selectedChatId = activeWs.chats[0].id;
+        const firstChat = activeWs.chats[0];
+        // Подгружаем историю для первого чата
+        await selectChat(firstChat.id, selectedWorkspaceId);
       } else if (activeWs) {
         selectedChatId = '';
       }
@@ -311,10 +316,11 @@
   }
 
   async function persistChats() {
-    // НОВОЕ: Сохраняем чаты каждого воркспейса в его персональный каталог
+    // НОВОЕ: Сохраняем чаты каждого воркспейса в его персональный каталог через новую структуру
     for (const ws of workspaces) {
-      const chatsToSave = ws.chats.map(({ isGenerating, ...c }) => c);
-      await saveChatsForWorkspace(ws.id, chatsToSave as any);
+      // Подготавливаем чаты: в метод сохранения передаем все чаты для обновления метаданных, 
+      // история будет сохранена только для тех чатов, где она загружена и не пуста.
+      await saveChatsForWorkspace(ws.id, $state.snapshot(ws.chats) as any);
     }
   }
 
@@ -410,9 +416,30 @@
     persistChats();
   }
 
-  function selectChat(chatId: string, wsId: string) {
+  async function selectChat(chatId: string, wsId: string) {
     selectedWorkspaceId = wsId;
     selectedChatId = chatId;
+
+    // НОВОЕ: Ленивая загрузка истории при выборе чата с индикацией
+    const ws = workspaces.find(w => w.id === wsId);
+    const chat = ws?.chats.find(c => c.id === chatId);
+    
+    if (chat && chat.history.length === 0) {
+      isHistoryLoading = true;
+      try {
+        const savedHistory = await loadChatHistory(wsId, chatId);
+        if (savedHistory.length > 0) {
+          chat.history = savedHistory.map(msg => ({
+            ...msg,
+            id: msg.id || crypto.randomUUID()
+          }));
+          workspaces = [...workspaces];
+        }
+      } finally {
+        isHistoryLoading = false;
+      }
+    }
+
     chatWindowComponent?.scrollToBottom();
     persistConfig();
   }
@@ -708,6 +735,10 @@
   async function handleDeleteChat(chatId: string) {
     if (!currentWorkspace) return;
     stopGeneration(chatId);
+    
+    // НОВОЕ: Удаляем физическую папку чата
+    await deleteChatFolder(currentWorkspace.id, chatId);
+
     currentWorkspace.chats = currentWorkspace.chats.filter(c => c.id !== chatId);
     if (selectedChatId === chatId) {
       selectedChatId = currentWorkspace.chats[0]?.id || '';
@@ -741,7 +772,7 @@
         selectedWorkspaceId = id;
         const ws = workspaces.find(w => w.id === id);
         if (ws?.chats.length) {
-          selectedChatId = ws.chats[0].id;
+          selectChat(ws.chats[0].id, id); // Используем selectChat для подгрузки истории
         } else {
           selectedChatId = '';
         }
@@ -776,7 +807,8 @@
           bind:this={chatWindowComponent}
           currentLocale={currentLocaleState}
           history={currentChat?.history || []}
-          isGenerating={currentChat?.isGenerating || false} 
+          isGenerating={currentChat?.isGenerating || false}
+          isLoading={isHistoryLoading} 
           bind:message
           onSendMessage={sendMessage}
           onEditMessage={handleEditMessage}

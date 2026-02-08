@@ -44,6 +44,7 @@
   "chat_send_message": "Отправить сообщение",
   "chat_stop_generating": "Остановить генерацию",
   "chat_footer_note": "AI может ошибаться. Проверяйте важную информацию.",
+  "chat_loading": "Загрузка сообщений...",
 
   "bubble_copy_code": "Копировать код",
   "bubble_reasoning_title": "Рассуждения",
