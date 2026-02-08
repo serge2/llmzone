@@ -1,5 +1,9 @@
 {
   "$schema": "https://inlang.com/schema/plugin-message-format",
+
+ 
+ 
+
   "settings_title": "Глобальные настройки",
   "settings_back": "← Назад к чатам",
   "settings_label_language": "Язык интерфейса",
@@ -20,11 +24,13 @@
   "sidebar_menu_delete": "Удалить",
   "sidebar_tooltip_save": "Сохранить",
   "sidebar_tooltip_cancel": "Отмена",
-  "sidebar_toggle_aria": "Скрыть/показать боковую панель",
   
+  "sidebar_toggle_aria": "Скрыть/показать левую панель",
+  "inspector_toggle_aria": "Скрыть/показать правую панель", 
+
   "chat_new_name": "Новый чат",
   "workspace_first_name": "Основное пространство",
-  "workspace_new_name": "Рабочее пространство",
+  "workspace_new_name": "Новое пространство",
   "workspace_add_button": "Новое пространство",
   "delete_workspace_confirm": "Удалить рабочее пространство \"{name}\" и все его данные?",
 

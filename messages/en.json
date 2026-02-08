@@ -20,12 +20,14 @@
   "sidebar_menu_delete": "Delete",
   "sidebar_tooltip_save": "Save",
   "sidebar_tooltip_cancel": "Cancel",
-  "sidebar_toggle_aria": "Toggle sidebar",
+  
+  "sidebar_toggle_aria": "Toggle left bar",
+  "inspector_toggle_aria": "Toggle right bar",
   
   "chat_new_name": "New Chat",
   "workspace_first_name": "Main Workspace",
   "workspace_new_name": "Workspace",
-  "workspace_add_button": "New Workspace",
+  "workspace_add_button": "New workspace",
   "delete_workspace_confirm": "Delete workspace \"{name}\" and all its data?",
 
   "menu_open_link": "Open in Browser",

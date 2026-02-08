@@ -1,3 +1,4 @@
+<!-- src/routes/+page.svelte -->
 <script lang="ts">
   import { fetch } from '@tauri-apps/plugin-http';
   import { onMount, untrack } from 'svelte';
@@ -46,6 +47,7 @@
 
   let selectedTab = $state<'chats' | 'settings'>('chats');
   let sidebarVisible = $state(true);
+  let inspectorVisible = $state(true); // Состояние видимости правой панели
   let searchActive = $state(false);
   let chatSearch = $state('');
   
@@ -734,6 +736,7 @@
       {selectedWorkspaceId}
       currentChatName={headerChatName}
       bind:sidebarVisible={sidebarVisible}
+      bind:inspectorVisible={inspectorVisible} 
       onSelectWorkspace={(id: string) => {
         selectedWorkspaceId = id;
         const ws = workspaces.find(w => w.id === id);
@@ -785,16 +788,18 @@
         />
       </div>
 
-      <Inspector 
-        bind:currentWorkspace={workspaces[workspaces.findIndex(w => w.id === selectedWorkspaceId)]} 
-        {globalConfig} 
-        currentLocale={currentLocaleState}
-        bind:serverInstances={mcpServers}
-        onSettingsChange={() => {
-          syncMCPServers();
-          persistConfig();
-        }} 
-      />
+      {#if inspectorVisible}
+        <Inspector 
+          bind:currentWorkspace={workspaces[workspaces.findIndex(w => w.id === selectedWorkspaceId)]} 
+          {globalConfig} 
+          currentLocale={currentLocaleState}
+          bind:serverInstances={mcpServers}
+          onSettingsChange={() => {
+            syncMCPServers();
+            persistConfig();
+          }} 
+        />
+      {/if}
     </div>
 
   {#if menuState.visible}

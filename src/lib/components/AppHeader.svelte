@@ -1,3 +1,4 @@
+<!-- src/lib/components/AppHeader.svelte -->
 <script lang="ts">
   import { slide } from 'svelte/transition';
   import type { Workspace } from '$lib/types';
@@ -7,7 +8,8 @@
   import * as m from '$paraglide/messages';
 
   // Иконки
-  import MenuIcon from '$lib/assets/icons/menu.svg?raw';
+  import SidebarLeftIcon from '$lib/assets/icons/sidebar-left.svg?raw';
+  import SidebarRightIcon from '$lib/assets/icons/sidebar-right.svg?raw';
   import ChevronDownIcon from '$lib/assets/icons/chevron-down.svg?raw';
   import PlusIcon from '$lib/assets/icons/plus.svg?raw';
   import EditIcon from '$lib/assets/icons/edit.svg?raw';
@@ -21,6 +23,7 @@
     selectedWorkspaceId,
     currentChatName,
     sidebarVisible = $bindable(),
+    inspectorVisible = $bindable(), // Новое: привязка видимости правой панели
     onSelectWorkspace,
     onCreateWorkspace,
     onRenameWorkspace,
@@ -31,6 +34,7 @@
     selectedWorkspaceId: string,
     currentChatName: string,
     sidebarVisible: boolean,
+    inspectorVisible: boolean, // Типизация
     onSelectWorkspace: (id: string) => void,
     onCreateWorkspace: () => void,
     onRenameWorkspace: (id: string, name: string) => void,
@@ -81,10 +85,12 @@
 <header class="app-header">
   <button 
     class="sidebar-toggle" 
+    class:active={sidebarVisible}
     onclick={(e) => { e.stopPropagation(); sidebarVisible = !sidebarVisible; }} 
     aria-label={_i18n && m.sidebar_toggle_aria()}
+    title={_i18n && m.sidebar_toggle_aria()}
   >
-    {@html MenuIcon}
+    {@html SidebarLeftIcon}
   </button>
 
   <div class="workspace-selector">
@@ -171,6 +177,18 @@
     <span class="sep">/</span>
     <span class="chat-name">{currentChatName}</span>
   </div>
+
+  <div class="header-spacer"></div>
+
+  <button 
+    class="sidebar-toggle" 
+    class:active={inspectorVisible}
+    onclick={(e) => { e.stopPropagation(); inspectorVisible = !inspectorVisible; }} 
+    aria-label={_i18n && m.inspector_toggle_aria()}
+    title={_i18n && m.inspector_toggle_aria()}
+  >
+    {@html SidebarRightIcon}
+  </button>
 </header>
 
 <style>
@@ -185,6 +203,10 @@
     z-index: 100;
   }
 
+  .header-spacer {
+    flex: 1;
+  }
+
   .sidebar-toggle {
     background: none;
     border: none;
@@ -193,9 +215,11 @@
     cursor: pointer;
     color: #6b7280;
     display: flex;
+    transition: all 0.2s;
   }
 
   .sidebar-toggle:hover { background: #f3f4f6; }
+  .sidebar-toggle.active { color: #5865f2; background: rgba(88, 101, 242, 0.05); }
   .sidebar-toggle :global(svg) { width: 20px; height: 20px; }
 
   .workspace-selector {
