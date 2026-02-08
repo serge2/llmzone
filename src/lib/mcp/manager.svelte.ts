@@ -527,10 +527,12 @@ export class MCPManager {
   constructor() {}
 
   /**
-   * Собирает все инструкции от подключенных серверов в единый блок для LLM
+   * Собирает все инструкции от подключенных серверов КОНКРЕТНОГО воркспейса
    */
-  getFullSystemInstructions(): string {
+  getFullSystemInstructions(workspaceId: string): string {
+    // Фильтруем инстансы строго по воркспейсу
     const activeInstructions = this.instances
+      .filter(inst => inst.workspaceId === workspaceId) // Добавили фильтрацию!
       .map(inst => inst.getSystemInstructions())
       .filter(Boolean);
 

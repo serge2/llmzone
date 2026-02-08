@@ -79,11 +79,17 @@ export class ChatService {
         });
 
       
-      // Собираем базовый промпт и инструкции MCP один раз перед началом генерации
+      // 1. Пытаемся достать workspaceId из переданных инстансов
+      const wsId = serverInstances.length > 0 ? serverInstances[0].workspaceId : null;
+
+      // 2. Формируем промпт
       let fullSystemPrompt = settings.systemPrompt || "";
-      const mcpInstructions = mcpManager.getFullSystemInstructions();
-      if (mcpInstructions) {
-        fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + mcpInstructions;
+
+      if (wsId) {
+        const mcpInstructions = mcpManager.getFullSystemInstructions(wsId);
+        if (mcpInstructions) {
+          fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + mcpInstructions;
+        }
       }
 
       // ЛОГИКА ФОКУСА НА ПЕРВОМ СООБЩЕНИИ (Anchor first user message)
