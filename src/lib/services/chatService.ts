@@ -11,6 +11,71 @@ export class ChatService {
   private DEFAULT_MAX_ITERATIONS = 10; // Дефолтное значение, если не указано иное
 
   /**
+   * Метод для интеллектуальной генерации названия чата
+   */
+  async generate_chat_title(chat: Chat, settings: WorkspaceSettings): Promise<string | 'SKIP'> {
+    console.log("[ChatService] Attempting to generate title for chat:", chat.id);
+    
+    const base_url = settings.apiUrl.replace(/\/+$/, '');
+    const full_url = `${base_url}/v1/chat/completions`;
+
+    // Берем только содержательные сообщения для анализа (первые 3)
+    const analysis_history = chat.history
+      .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && msg.text)
+      .slice(0, 3)
+      .map(msg => ({ role: msg.role, content: msg.text }));
+
+    if (analysis_history.length < 1) {
+      console.log("[ChatService] Not enough history for title generation");
+      return 'SKIP';
+    }
+
+    const system_prompt = `Analyze the conversation. If a specific topic has been established, provide a concise (2-4 words) title for this chat. 
+  The title MUST be in the same language the user is speaking.
+  If the conversation is just greetings, empty talk, or hasn't started a real topic yet, respond ONLY with the word "SKIP".
+  Do not use quotes, bold text, or punctuation.`;
+
+    try {
+      const response = await fetch(full_url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${settings.apiKey || 'noauth'}`
+        },
+        body: JSON.stringify({
+          model: settings.modelName,
+          messages: [
+            { role: 'system', content: system_prompt },
+            ...analysis_history
+          ],
+          temperature: 0.1,
+          max_tokens: 25
+        })
+      });
+
+      if (!response.ok) {
+        console.error("[ChatService] Title generation API error:", response.status);
+        return 'SKIP';
+      }
+      
+      const data = await response.json();
+      const result = data.choices?.[0]?.message?.content?.trim();
+
+      console.log("[ChatService] Model title suggestion:", result);
+
+      if (!result || result.toUpperCase().includes('SKIP')) {
+        console.log("[ChatService] Model decided to SKIP renaming");
+        return 'SKIP';
+      }
+      
+      return result.replace(/["']/g, '');
+    } catch (e) {
+      console.error("[ChatService] Title generation exception:", e);
+      return 'SKIP';
+    }
+  }
+
+  /**
    * Основной метод отправки сообщения с поддержкой цикла инструментов
    */
  async send(
@@ -317,6 +382,26 @@ export class ChatService {
             isLooping = false;
           }
         }
+      }
+
+      // --- АВТОМАТИЧЕСКОЕ ПЕРЕИМЕНОВАНИЕ ---
+      console.log("[ChatService] Checking auto-rename conditions:", {
+        enabled: settings.autoRenameEnabled,
+        isUntitled: chat.is_untitled,
+        aborted: abortSignal.aborted
+      });
+
+      if (settings.autoRenameEnabled && chat.is_untitled && !abortSignal.aborted) {
+        this.generate_chat_title(chat, settings).then(new_title => {
+          if (new_title !== 'SKIP') {
+            console.log("[ChatService] Applying new title:", new_title);
+            chat.name = new_title;
+            chat.is_untitled = false;
+            onUpdate();
+          }
+        }).catch(err => {
+          console.error("[ChatService] Async rename error:", err);
+        });
       }
 
     } catch (error: any) {

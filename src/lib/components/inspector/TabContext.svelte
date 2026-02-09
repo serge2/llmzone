@@ -32,9 +32,9 @@
   </label>
 
   <label class="checkbox-container">
-    <input 
-      type="checkbox" 
-      bind:checked={currentWorkspace.settings.followFirstMessage} 
+    <input
+      type="checkbox"
+      bind:checked={currentWorkspace.settings.followFirstMessage}
       onchange={onSettingsChange}
     />
     <span class="checkbox-text">
@@ -81,6 +81,17 @@
       </label>
     </div>
   {/if}
+
+  <label class="checkbox-container">
+    <input 
+      type="checkbox" 
+      bind:checked={currentWorkspace.settings.autoRenameEnabled} 
+      onchange={onSettingsChange}
+    />
+    <span class="checkbox-text">
+      {_i18n && m.tab_context_auto_name()}
+    </span>
+  </label>
 </div>
 
 <style>

@@ -218,12 +218,14 @@
           ...ws,
           settings: {
             lastActiveTab: 'model',
+            autoRenameEnabled: true, // Дефолт для существующих воркспейсов без флага
             ...ws.settings
           },
           chats: (savedChats || []).map(c => ({
             ...c,
             history: [], // Изначально история пуста (ленивая загрузка)
-            isGenerating: false
+            isGenerating: false,
+            is_untitled: c.is_untitled || false
           }))
         };
       }));
@@ -264,9 +266,16 @@
           lastActiveTab: 'model',
           toolsLoopLimitEnabled: true,
           toolsMaxIterations: 10,
-          mcpTimeout: 300 // Дефолтное значение
+          mcpTimeout: 300,
+          autoRenameEnabled: true
         },
-        chats: [{ id: 'c-' + Date.now(), name: m.chat_new_name(), history: [], isGenerating: false }]
+        chats: [{ 
+          id: 'c-' + Date.now(), 
+          name: m.chat_new_name(), 
+          history: [], 
+          isGenerating: false,
+          is_untitled: true
+        }]
       };
       
       workspaces = [defaultWs];
@@ -349,13 +358,15 @@
         lastActiveTab: 'model',
         toolsLoopLimitEnabled: true,
         toolsMaxIterations: 10,
-        mcpTimeout: 300
+        mcpTimeout: 300,
+        autoRenameEnabled: true
       },
       chats: [{ 
         id: newChatId, 
         name: m.chat_new_name(), 
         history: [], 
-        isGenerating: false 
+        isGenerating: false,
+        is_untitled: true
       }] 
     };
     // Добавляем новый воркспейс в начало списка
@@ -411,7 +422,8 @@
       id: 'c-' + Date.now(), 
       name: m.chat_new_name(), 
       history: [], 
-      isGenerating: false 
+      isGenerating: false,
+      is_untitled: true
     };
     currentWorkspace.chats = [newChat, ...currentWorkspace.chats];
     selectedChatId = newChat.id;
@@ -579,7 +591,8 @@
         followFirstMessage: currentWorkspace.settings.followFirstMessage,
         includeMcpInstructions: currentWorkspace.settings.includeMcpInstructions,
         toolsLoopLimitEnabled: currentWorkspace.settings.toolsLoopLimitEnabled,
-        toolsMaxIterations: currentWorkspace.settings.toolsMaxIterations
+        toolsMaxIterations: currentWorkspace.settings.toolsMaxIterations,
+        autoRenameEnabled: currentWorkspace.settings.autoRenameEnabled
       };
 
       const chatSpecificServers = mcpManager.getForWorkspace(currentWorkspace.id);
@@ -663,7 +676,8 @@
       followFirstMessage: chatWorkspace.settings.followFirstMessage,
       includeMcpInstructions: chatWorkspace.settings.includeMcpInstructions,
       toolsLoopLimitEnabled: chatWorkspace.settings.toolsLoopLimitEnabled,
-      toolsMaxIterations: chatWorkspace.settings.toolsMaxIterations
+      toolsMaxIterations: chatWorkspace.settings.toolsMaxIterations,
+      autoRenameEnabled: chatWorkspace.settings.autoRenameEnabled
     };
 
     const chatToUpdateId = chatToUpdate.id;
@@ -699,7 +713,7 @@
         await chatWindowComponent?.scrollToBottom();
     }
 
-    // Получаем специфичные для воркспейса этого чата инстансы серверов
+    // Получаем специфичные для воркспейса этого чата инстанво серверов
     const chatSpecificServers = mcpManager.getForWorkspace(chatWorkspace.id);
 
     try {
@@ -731,6 +745,7 @@
     const chat = currentWorkspace.chats.find(c => c.id === chatId);
     if (chat) {
       chat.name = newName;
+      chat.is_untitled = false;
       workspaces = [...workspaces];
       persistChats();
     }

@@ -88,6 +88,7 @@
   "tab_context_limit_tools_calls": "Limit consecutive tool calls",
   "tab_context_max_iterations": "Max iterations before approval",
   "tab_context_include_mcp_instructions": "Include MCP instructions to system prompt",
+  "tab_context_auto_name": "Auto-rename chats using AI",
 
   "tab_tools_config_label": "Intergrations",
   "tab_tools_config_button": "Configuration",

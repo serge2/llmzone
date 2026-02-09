@@ -1,3 +1,4 @@
+<!-- src/lib/components/inspector/TabTools.svelte -->
 <script lang="ts">
   import { fade, fly, slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';

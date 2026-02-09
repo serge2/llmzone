@@ -46,6 +46,7 @@ export interface WorkspaceSettings {
   mcpStates?: Record<string, MCPServerState>;
   toolsLoopLimitEnabled?: boolean;
   toolsMaxIterations?: number;
+  autoRenameEnabled?: boolean;
 }
 
 export interface Chat {
@@ -53,6 +54,7 @@ export interface Chat {
   name: string;
   history: Message[];
   isGenerating?: boolean;
+  is_untitled?: boolean;
 }
 
 export interface Workspace {
