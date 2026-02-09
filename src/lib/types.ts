@@ -87,6 +87,11 @@ export interface Message {
   attachments?: Attachment[]; // Универсальный массив вложений
   error?: string;
   requiresLimitExtension?: boolean;
+  usage?: {   // Информация об использованных токенах из последнего ответа LLM ('assistant')
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }
 
 // ---------------------------------------

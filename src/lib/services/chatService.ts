@@ -179,6 +179,10 @@ export class ChatService {
             chat.history[currentAssistantMsgIdx].text = responseData.content;
             chat.history[currentAssistantMsgIdx].reasoning = responseData.reasoning;
             chat.history[currentAssistantMsgIdx].tool_calls = responseData.tool_calls || [];
+            // Сохраняем данные об использовании токенов в сообщение
+            if (responseData.usage) {
+              chat.history[currentAssistantMsgIdx].usage = responseData.usage;
+            }
             onUpdate();
           }
         }
@@ -473,7 +477,8 @@ export class ChatService {
       model: settings.modelName,
       messages: apiMessages,
       temperature: settings.temperature,
-      stream: true 
+      stream: true,
+      stream_options: { "include_usage": true } // ОБЯЗАТЕЛЬНО для получения токенов в стриме
     };
 
     if (tools && tools.length > 0) {
@@ -511,6 +516,7 @@ export class ChatService {
     let fullReasoning = "";
     let toolCallsRaw: any[] = [];
     let streamBuffer = ""; // БУФЕР ДЛЯ НЕПОЛНЫХ СТРОК
+    let finalUsage: any = null; // Объявляем переменную для хранения usage
 
     if (reader) {
       while (true) {
@@ -542,6 +548,11 @@ export class ChatService {
               if (data.error) {
                 console.error("❌ API вернуло ошибку в стриме:", data.error);
                 throw new Error(`API Error: ${data.error.message || JSON.stringify(data.error)}`);
+              }
+
+              // ПЕРЕХВАТ ДАННЫХ ОБ ИСПОЛЬЗОВАНИИ (usage)
+              if (data.usage) {
+                finalUsage = data.usage;
               }
 
               // БЕЗОПАСНОЕ ИЗВЛЕЧЕНИЕ DELTA
@@ -614,7 +625,8 @@ export class ChatService {
         id: tc.id,
         name: tc.name,
         arguments: JSON.parse(tc.arguments || '{}')
-      })) : undefined
+      })) : undefined,
+      usage: finalUsage // Возвращаем собранные данные usage
     };
   }
 }

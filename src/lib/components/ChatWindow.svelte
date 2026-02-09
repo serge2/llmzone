@@ -1,3 +1,4 @@
+<!-- src/lib/components/ChatWindow.svelte -->
 <script lang="ts">
   import type { Message, Attachment } from '$lib/types';
   import MessageBubble from './chat/MessageBubble.svelte';
@@ -70,6 +71,18 @@
 
     // 3. По умолчанию (запрос ушел, ответа еще нет) — стадия раздумий
     return 'thinking';
+  });
+
+  // ВЫЧИСЛЕНИЕ ПОСЛЕДНЕГО ИСПОЛЬЗОВАНИЯ ТОКЕНОВ
+  const lastTokenUsage = $derived.by(() => {
+    if (history.length === 0) return null;
+    // Ищем с конца последнее сообщение ассистента, у которого есть поле usage
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === 'assistant' && history[i].usage) {
+        return history[i].usage;
+      }
+    }
+    return null;
   });
 
   // Группировка сообщений
@@ -220,6 +233,7 @@
     {currentLocale}
     isGenerating={isGenerating || isLoading}
     bind:message={message}
+    usage={lastTokenUsage}
     onSendMessage={onSendMessage}
   />
 </section>

@@ -1,7 +1,9 @@
+<!-- src/lib/components/chat/ChatInput.svelte -->
 <script lang="ts">
   import type { Attachment } from '$lib/types';
   import * as m from '$paraglide/messages';
   import { tick } from 'svelte';
+  import { fade } from 'svelte/transition'; // Добавлено для плавности
 
   // Импорт иконок
   import ArrowUpIcon from '$lib/assets/icons/arrow-up.svg?raw';
@@ -13,11 +15,13 @@
     currentLocale,
     isGenerating,
     message = $bindable(),
+    usage = null, // НОВОЕ: Данные об использовании токенов из последнего ответа
     onSendMessage
   }: {
     currentLocale: string,
     isGenerating: boolean,
     message: string,
+    usage: any | null,
     onSendMessage: (attachments?: Attachment[]) => void
   } = $props();
 
@@ -163,6 +167,18 @@
       {/if}
     </button>
   </div>
+
+  {#if usage && usage.total_tokens}
+    <div class="usage-stats" transition:fade={{ duration: 200 }}>
+      <span class="tokens-pill">
+        <span class="token-count"><b>{usage.total_tokens}</b> tokens</span>
+        {#if usage.prompt_tokens}
+          <span class="tokens-details">({usage.prompt_tokens} in / {usage.completion_tokens} out)</span>
+        {/if}
+      </span>
+    </div>
+  {/if}
+
   <div class="footer-note">{_i18n && m.chat_footer_note()}</div>
 </div>
 
@@ -297,6 +313,35 @@
   .input-wrapper button:hover:not(:disabled):not(.attach-btn) { transform: scale(1.05); background: #000; }
   .input-wrapper button:disabled { background: #e5e7eb; color: #a1a1aa; cursor: not-allowed; }
   .input-wrapper button.stop-btn { background: #e5e7eb; color: #ef4444;}
+
+  /* Стили для счетчика токенов */
+  .usage-stats {
+    display: flex;
+    justify-content: center;
+    margin-top: 8px;
+    margin-bottom: -4px;
+  }
+
+  .tokens-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f3f4f6;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.65rem;
+    color: #6b7280;
+    border: 1px solid #e5e7eb;
+  }
+
+  .token-count b {
+    color: #374151;
+  }
+
+  .tokens-details {
+    color: #9ca3af;
+  }
 
   .footer-note { text-align: center; font-size: 0.7rem; color: #9ca3af; margin-top: 8px; }
 </style>
