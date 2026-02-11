@@ -256,7 +256,8 @@
         name: m.workspace_first_name(),
         icon: '🏠',
         settings: {
-          apiUrl: '', // Пусто, чтобы использовался глобальный
+          providerType: 'openai',
+          apiUrl: '',
           apiKey: '',
           modelName: '',
           systemPrompt: '',
@@ -348,6 +349,7 @@
       name: m.workspace_new_name() + ' ' + (workspaces.length + 1), 
       icon: '📁',
       settings: {
+        providerType: 'openai',
         apiUrl: '',
         apiKey: '',
         modelName: '',
@@ -585,6 +587,7 @@
         apiUrl: currentWorkspace.settings.apiUrl || globalConfig.apiUrl,
         apiKey: currentWorkspace.settings.apiKey || globalConfig.apiKey,
         modelName: currentWorkspace.settings.modelName || globalConfig.modelName,
+        providerType: currentWorkspace.settings.providerType,
         systemPrompt: currentWorkspace.settings.systemPrompt,
         temperature: currentWorkspace.settings.temperature,
         mcpStates: currentWorkspace.settings.mcpStates,
@@ -670,6 +673,7 @@
       apiUrl: chatWorkspace.settings.apiUrl || globalConfig.apiUrl,
       apiKey: chatWorkspace.settings.apiKey || globalConfig.apiKey,
       modelName: chatWorkspace.settings.modelName || globalConfig.modelName,
+      providerType: chatWorkspace.settings.providerType,
       systemPrompt: chatWorkspace.settings.systemPrompt,
       temperature: chatWorkspace.settings.temperature,
       mcpStates: chatWorkspace.settings.mcpStates,

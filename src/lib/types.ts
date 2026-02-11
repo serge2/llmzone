@@ -1,6 +1,9 @@
 // types.ts
 export type InspectorTab = 'context' | 'model' | 'tools' ;
 
+// Добавляем типы поддерживаемых провайдеров
+export type ProviderType = 'openai' | 'lm-studio' | 'openrouter' | 'anthropic' | 'custom';
+
 export interface Attachment {
   id: string;              // Уникальный ID (UUID)
   name: string;            // Оригинальное имя файла (например, "report.pdf")
@@ -47,6 +50,7 @@ export interface WorkspaceSettings {
   toolsLoopLimitEnabled?: boolean;
   toolsMaxIterations?: number;
   autoRenameEnabled?: boolean;
+  providerType?: ProviderType; // НОВОЕ: Тип провайдера для адаптации API
 }
 
 export interface Chat {

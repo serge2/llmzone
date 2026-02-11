@@ -80,6 +80,12 @@
   "inspector_tab_tools": "Инструменты",
   "inspector_empty_state": "Выберите воркспейс для настройки",
 
+  "tab_model_provider_type": "Провайдер / Протокол",
+  "tab_model_provider_openai": "OpenAI Compatible",
+  "tab_model_provider_lm_studio": "LM Studio (v1 Native)",
+  "tab_model_provider_openrouter": "OpenRouter",
+  "tab_model_provider_anthropic": "Anthropic",
+  "tab_model_provider_custom": "Свой вариант",
   "tab_model_api_url": "API URL",
   "tab_model_name": "Название модели",
   "tab_model_api_key": "API Key",

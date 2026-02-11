@@ -1,3 +1,4 @@
+<!-- src/lib/components/inspector/TabModel.svelte -->
 <script lang="ts">
   import type { Workspace, GlobalConfig } from '$lib/types';
 
@@ -18,9 +19,44 @@
 
   // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ ПЕРЕВОДОВ
   const _i18n = $derived(currentLocale);
+
+  // Список доступных провайдеров с поддержкой локализации
+  const providers = $derived([
+    { id: 'openai', name: m.tab_model_provider_openai() },
+    { id: 'lm-studio', name: m.tab_model_provider_lm_studio() },
+    { id: 'openrouter', name: m.tab_model_provider_openrouter() },
+    // { id: 'anthropic', name: m.tab_model_provider_anthropic() },
+    // { id: 'custom', name: m.tab_model_provider_custom() },
+  ]);
+
+  // Логика быстрой настройки при смене провайдера
+  function handleProviderChange(e: Event) {
+    const val = (e.target as HTMLSelectElement).value;
+    
+    // Автоматическая подстановка URL для популярных сервисов, если поле пустое
+    // if (val === 'openrouter' && !currentWorkspace.settings.apiUrl) {
+    //   currentWorkspace.settings.apiUrl = 'https://openrouter.ai/api/';
+    // } else if (val === 'lm-studio' && (!currentWorkspace.settings.apiUrl {
+    //   currentWorkspace.settings.apiUrl = 'http://localhost:1234/';
+    // }
+    
+    onSettingsChange();
+  }
 </script>
 
 <div class="settings-group">
+  <label>
+    <span class="label-text">{_i18n && m.tab_model_provider_type()}</span>
+    <select 
+      bind:value={currentWorkspace.settings.providerType} 
+      onchange={handleProviderChange}
+    >
+      {#each providers as provider}
+        <option value={provider.id}>{provider.name}</option>
+      {/each}
+    </select>
+  </label>
+
   <label>
     <span class="label-text">{_i18n && m.tab_model_api_url()}</span>
     <input 
@@ -63,7 +99,8 @@
   .settings-group { display: flex; flex-direction: column; gap: 16px; width: 100%; }
   .settings-group label { display: flex; flex-direction: column; gap: 6px; width: 100%; }
   .label-text { font-size: 0.75rem; font-weight: 700; color: #4b5563; text-transform: uppercase; }
-  input {
+  
+  input, select {
     width: 100%; 
     box-sizing: border-box; /* ГАРАНТИРУЕТ ЧТО PADDING НЕ РАЗДУВАЕТ ШИРИНУ */
     padding: 8px 10px; 
@@ -71,8 +108,14 @@
     border-radius: 6px; 
     font-size: 0.9rem; 
     font-family: inherit;
+    background-color: white;
   }
-  input:focus { outline: none; border-color: #5865f2; box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.1); }
+  
+  input:focus, select:focus { 
+    outline: none; 
+    border-color: #5865f2; 
+    box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.1); 
+  }
   
   /* Исправляем ширину слайдера, чтобы он не прыгал */
   input[type="range"] {

@@ -1,14 +1,24 @@
-// chatService.ts
+// src/lib/services/chatService.ts
 import { fetch } from '@tauri-apps/plugin-http'; // ВАЖНО: Используем нативный fetch Tauri для обхода CORS
 import { toastService } from '$lib/services/toastService.svelte';
 import type { Message, Chat, WorkspaceSettings, ToolCall } from '$lib/types';
 import { type MCPServerInstance, mcpManager } from '$lib/mcp/manager.svelte';
+import { ProviderFactory } from './adapters/factory'; // ДОБАВЛЕН ИМПОРТ ФАБРИКИ
+import type { ChatAdapter } from './adapters/interface';
 
 // Импорт локализации
 import * as m from '$paraglide/messages';
 
 export class ChatService {
-  private DEFAULT_MAX_ITERATIONS = 10; // Дефолтное значение, если не указано иное
+  private DEFAULT_MAX_ITERATIONS = 10;
+
+  /**
+   * Вспомогательный метод для выбора адаптера через фабрику
+   */
+  private getAdapter(providerType: string | undefined): ChatAdapter {
+    // Используем централизованную фабрику для получения экземпляра адаптера
+    return ProviderFactory.getAdapter(providerType as any);
+  }
 
   /**
    * Метод для интеллектуальной генерации названия чата
@@ -16,19 +26,15 @@ export class ChatService {
   async generate_chat_title(chat: Chat, settings: WorkspaceSettings): Promise<string | 'SKIP'> {
     console.log("[ChatService] Attempting to generate title for chat:", chat.id);
     
-    const base_url = settings.apiUrl.replace(/\/+$/, '');
-    const full_url = `${base_url}/v1/chat/completions`;
+    const adapter = this.getAdapter(settings.providerType);
+    const full_url = adapter.getEndpoint(settings.apiUrl);
 
-    // Берем только содержательные сообщения для анализа (первые 3)
     const analysis_history = chat.history
       .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && msg.text)
       .slice(0, 3)
       .map(msg => ({ role: msg.role, content: msg.text }));
 
-    if (analysis_history.length < 1) {
-      console.log("[ChatService] Not enough history for title generation");
-      return 'SKIP';
-    }
+    if (analysis_history.length < 1) return 'SKIP';
 
     const system_prompt = `Analyze the conversation. If a specific topic has been established, provide a concise (2-4 words) title for this chat. 
   The title MUST be in the same language the user is speaking.
@@ -38,10 +44,7 @@ export class ChatService {
     try {
       const response = await fetch(full_url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${settings.apiKey || 'noauth'}`
-        },
+        headers: adapter.getHeaders(settings),
         body: JSON.stringify({
           model: settings.modelName,
           messages: [
@@ -49,28 +52,19 @@ export class ChatService {
             ...analysis_history
           ],
           temperature: 0.1,
-          max_tokens: 25
+          max_tokens: 25,
+          stream: false // Для заголовка стрим не нужен
         })
       });
 
-      if (!response.ok) {
-        console.error("[ChatService] Title generation API error:", response.status);
-        return 'SKIP';
-      }
-      
+      if (!response.ok) return 'SKIP';
       const data = await response.json();
+      
       const result = data.choices?.[0]?.message?.content?.trim();
 
-      console.log("[ChatService] Model title suggestion:", result);
-
-      if (!result || result.toUpperCase().includes('SKIP')) {
-        console.log("[ChatService] Model decided to SKIP renaming");
-        return 'SKIP';
-      }
-      
+      if (!result || result.toUpperCase().includes('SKIP')) return 'SKIP';
       return result.replace(/["']/g, '');
     } catch (e) {
-      console.error("[ChatService] Title generation exception:", e);
       return 'SKIP';
     }
   }
@@ -78,7 +72,7 @@ export class ChatService {
   /**
    * Основной метод отправки сообщения с поддержкой цикла инструментов
    */
- async send(
+  async send(
     chat: Chat, 
     settings: WorkspaceSettings,
     serverInstances: MCPServerInstance[], 
@@ -88,115 +82,68 @@ export class ChatService {
     if (chat.isGenerating) return;
     chat.isGenerating = true;
 
-    // Храним индекс сообщения текущей итерации
+    const adapter = this.getAdapter(settings.providerType);
     let currentAssistantMsgIdx: number | null = null;
+    let streamingMessageId: string | null = null; // Фиксация активного сообщения для предотвращения дублей
+    
+    // Переменная для хранения контекста адаптера между итерациями и стримом
+    let requestContext: any = null;
 
     try {
-      // КАРТА ДЛЯ ОБРАТНОГО ПОИСКА: "уникальное_имя" => { инстанс_сервера, оригинальное_имя_функции }
-      const toolLookupMap = new Map<string, { server: MCPServerInstance; originalName: string }>();
-      
-      // Формируем список инструментов для API с дедупликацией имен
-      const mcpTools = serverInstances
-        .filter(s => s.enabled && s.isConnected)
-        .flatMap(server => {
-          return server.tools
-            .filter(t => t.enabled)
-            .map(tool => {
-              // 1. Очистка имен от запрещенных символов
-              const sName = server.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-              const tName = tool.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-              
-              // 2. Формируем базовое имя в нижнем регистре
-              let baseName = `${sName}_${tName}`.toLowerCase();
-
-              // 3. Защита от длины 64 символа (оставляем запас под суффиксы типа _10)
-              if (baseName.length > 60) {
-                baseName = baseName.substring(0, 60);
-              }
-
-              let uniqueName = baseName;
-              let counter = 1;
-
-              // 4. Логика дедупликации
-              while (toolLookupMap.has(uniqueName)) {
-                const suffix = `${counter}`;
-                // Если при добавлении суффикса вылетаем за 64, еще немного подрезаем базу
-                if ((baseName.length + suffix.length) > 64) {
-                  uniqueName = baseName.substring(0, 64 - suffix.length) + suffix;
-                } else {
-                  uniqueName = baseName + suffix;
-                }
-                counter++;
-              }
-
-              // 5. Финальная регистрация
-              toolLookupMap.set(uniqueName, { 
-                server: server, 
-                originalName: tool.name 
-              });
-
-              return {
-                name: uniqueName,
-                description: tool.description,
-                input_schema: tool.inputSchema
-              };
-            });
-        });
-
-      
-      // 1. Формируем промпт
+      // ПРИМЕНЕНИЕ СИСТЕМНОГО ПРОМПТА И ИНСТРУКЦИЙ
       let fullSystemPrompt = settings.systemPrompt || "";
-
-      // 2. Добавляем инструкции MCP только если галочка ВКЛЮЧЕНА (по умолчанию true)
       const shouldIncludeMcp = settings.includeMcpInstructions ?? true;
 
       if (shouldIncludeMcp) {
-        // Пытаемся достать workspaceId из переданных инстансов
         const wsId = serverInstances.length > 0 ? serverInstances[0].workspaceId : null;
         if (wsId) {
           const mcpInstructions = mcpManager.getFullSystemInstructions(wsId);
-          if (mcpInstructions) {
-            fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + mcpInstructions;
-          }
+          if (mcpInstructions) fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + mcpInstructions;
         }
       }
 
-      // ЛОГИКА ФОКУСА НА ПЕРВОМ СООБЩЕНИИ (Anchor first user message)
       if (settings.followFirstMessage) {
         const firstUserMsg = chat.history.find(m => m.role === 'user');
-        if (firstUserMsg && firstUserMsg.text) {
-          fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + 
-            `### PRIMARY GOAL / TASK FOCUS:\n${firstUserMsg.text}`;
+        if (firstUserMsg?.text) {
+          fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + `### PRIMARY GOAL:\n${firstUserMsg.text}`;
         }
       }
       
-      // --- ОПРЕДЕЛЕНИЕ ЛИМИТА ИТЕРАЦИЙ ---
-      const limitEnabled = settings.toolsLoopLimitEnabled ?? true;
-      const maxIterations = limitEnabled 
+      const maxIterations = (settings.toolsLoopLimitEnabled ?? true) 
         ? (settings.toolsMaxIterations ?? this.DEFAULT_MAX_ITERATIONS) 
-        : Infinity; // Без ограничений, если тогл выключен
+        : Infinity;
 
       let iteration = 0;
       let isLooping = true;
 
       while (isLooping && iteration <= maxIterations) {
-        // ПРОВЕРКА ПРЕРЫВАНИЯ: Останавливаем цикл, если получен сигнал
         if (abortSignal.aborted) break;
-
         iteration++;
 
-        // Проверяем, есть ли уже в последнем сообщении инструменты, ожидающие выполнения или подтверждения
+        // Проверяем наличие инструментов, ожидающих подтверждения (для режима OpenAI)
         const lastMsg = chat.history[chat.history.length - 1];
         const hasExistingCalls = lastMsg?.role === 'assistant' && lastMsg.tool_calls && lastMsg.tool_calls.length > 0;
 
         if (hasExistingCalls) {
-          // Если мы зашли в send, а инструменты уже есть — значит мы продолжаем после паузы (напр. после аппрува)
           currentAssistantMsgIdx = chat.history.length - 1;
+          streamingMessageId = lastMsg.id;
+          
+          if (!requestContext) {
+            const prep = adapter.preparePayload(
+              chat.history.slice(0, -1), 
+              settings, 
+              serverInstances,
+              fullSystemPrompt
+            );
+            requestContext = prep.context;
+          }
         } else {
-          // Стандартный путь: создаем новое сообщение для ответа ассистента
+          // Новая итерация - сбрасываем ID стриминга
+          streamingMessageId = crypto.randomUUID();
           currentAssistantMsgIdx = chat.history.length;
+          
           chat.history.push({
-            id: crypto.randomUUID(), // Исправлено: добавлен уникальный ID
+            id: streamingMessageId,
             role: 'assistant',
             text: '', 
             reasoning: '', 
@@ -204,514 +151,251 @@ export class ChatService {
           });
           onUpdate();
 
-          // ПОДГОТОВКА ИСТОРИИ ДЛЯ ЗАПРОСА
-          const requestHistory = chat.history.slice(0, -1);
-
-          // 2. Делаем запрос к LM Studio со стримингом
-          const responseData = await this.fetchLLMResponse(
-            requestHistory,
+          // 1. ПОДГОТОВКА PAYLOAD ЧЕРЕЗ АДАПТЕР
+          const { payload, context } = adapter.preparePayload(
+            chat.history.slice(0, -1), 
             settings, 
-            mcpTools,
-            fullSystemPrompt, // Передаем заранее сформированный промпт
-            (updatedText) => {
-              if (currentAssistantMsgIdx !== null) {
-                chat.history[currentAssistantMsgIdx].text = updatedText;
-                onUpdate();
-              }
-            },
-            (updatedReasoning) => {
-              if (currentAssistantMsgIdx !== null) {
-                chat.history[currentAssistantMsgIdx].reasoning = updatedReasoning;
-                onUpdate();
-              }
-            },
-            (updatedTools) => {
-              if (currentAssistantMsgIdx !== null) {
-                chat.history[currentAssistantMsgIdx].tool_calls = updatedTools;
-                onUpdate();
-              }
-            },
-            abortSignal
+            serverInstances,
+            fullSystemPrompt
           );
+          
+          requestContext = context;
+
+          // 2. ЗАПРОС К API
+          const response = await fetch(adapter.getEndpoint(settings.apiUrl), {
+            method: 'POST',
+            headers: adapter.getHeaders(settings),
+            body: JSON.stringify(payload),
+            signal: abortSignal
+          });
+
+          if (!response.ok) {
+            const errorData = await response.text();
+            throw new Error(m.chat_error_api({ status: response.status.toString(), message: errorData }));
+          }
+
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+          let streamBuffer = "";
+
+          if (reader) {
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done || abortSignal.aborted) break;
+
+                streamBuffer += decoder.decode(value, { stream: true });
+                const lines = streamBuffer.split('\n');
+                streamBuffer = lines.pop() || "";
+
+                for (const line of lines) {
+                  const trimmed = line.trim();
+                  if (!trimmed) continue;
+
+                  try {
+                    const chunk = adapter.parseStreamChunk(trimmed, requestContext);
+                    
+                    // Находим текущее сообщение строго по ID
+                    let assistantMsg = chat.history.find(m => m.id === streamingMessageId);
+
+                    // --- ОБРАБОТКА СПЕЦИФИЧНЫХ СИГНАЛОВ АВТОНОМНОГО АДАПТЕРА ---
+
+                    if (chunk.toolResult) {
+                      if (assistantMsg) {
+                        const call = assistantMsg.tool_calls?.find(c => c.id === chunk.toolResult?.tool_call_id);
+                        if (call) {
+                          call.approvalStatus = chunk.toolResult.isError ? 'rejected' : 'approved';
+                        }
+                      }
+
+                      chat.history.push({
+                        id: crypto.randomUUID(),
+                        role: 'tool',
+                        text: '',
+                        tool_result: chunk.toolResult
+                      });
+                      // После результата в автономном режиме сбрасываем привязку, если придет новое сообщение
+                      streamingMessageId = null;
+                    }
+
+                    if (chunk.isNewMessage) {
+                      streamingMessageId = crypto.randomUUID();
+                      chat.history.push({
+                        id: streamingMessageId,
+                        role: 'assistant',
+                        text: '',
+                        reasoning: '',
+                        tool_calls: []
+                      });
+                      assistantMsg = chat.history[chat.history.length - 1];
+                    }
+
+                    // --- ОБРАБОТКА КОНТЕНТА ---
+                    if (chunk.content || chunk.reasoning || chunk.toolCalls) {
+                      
+                      if (!assistantMsg || assistantMsg.role !== 'assistant') {
+                        // Если сообщения нет (например после toolResult), создаем новое
+                        streamingMessageId = crypto.randomUUID();
+                        chat.history.push({ id: streamingMessageId, role: 'assistant', text: '', reasoning: '', tool_calls: [] });
+                        assistantMsg = chat.history[chat.history.length - 1];
+                      }
+
+                      if (chunk.content) assistantMsg.text += chunk.content;
+                      if (chunk.reasoning) assistantMsg.reasoning += chunk.reasoning;
+                      
+                      // МЯГКОЕ ОБНОВЛЕНИЕ ТУЛОВ (МЕРДЖ)
+                      if (chunk.toolCalls) {
+                        const updatedCalls = [...(assistantMsg.tool_calls || [])];
+                        
+                        chunk.toolCalls.forEach(newCall => {
+                          const foundIdx = updatedCalls.findIndex(c => c.id === newCall.id);
+                          
+                          if (foundIdx !== -1) {
+                            updatedCalls[foundIdx] = {
+                              ...updatedCalls[foundIdx],
+                              ...newCall,
+                              name: newCall.name || updatedCalls[foundIdx].name,
+                              arguments: newCall.arguments ?? updatedCalls[foundIdx].arguments
+                            };
+                          } else {
+                            updatedCalls.push({ ...newCall });
+                          }
+                        });
+                        
+                        assistantMsg.tool_calls = updatedCalls;
+                      }
+
+                      if (chunk.usage) assistantMsg.usage = chunk.usage;
+                      
+                      const chunkAny = chunk as any;
+                      if (chunkAny.response_id) {
+                        (assistantMsg as any).response_id = chunkAny.response_id;
+                      }
+                    }
+
+                    onUpdate();
+
+                    if (chunk.isDone) break;
+                  } catch (e) {
+                    console.error("[ChatService] Error parsing stream line:", e);
+                    continue; // Пропускаем битую строку и не вешаем сервис
+                  }
+                }
+              }
+            } finally {
+              // ВАЖНО: Освобождаем reader в любом случае (успех или ошибка)
+              reader.releaseLock();
+            }
+          }
 
           if (abortSignal.aborted) break;
-
-          if (!responseData || (!responseData.content && !responseData.reasoning && (!responseData.tool_calls || responseData.tool_calls.length === 0))) {
-            throw new Error(m.chat_error_empty_response());
-          }
-          
-          if (currentAssistantMsgIdx !== null) {
-            chat.history[currentAssistantMsgIdx].text = responseData.content;
-            chat.history[currentAssistantMsgIdx].reasoning = responseData.reasoning;
-            chat.history[currentAssistantMsgIdx].tool_calls = responseData.tool_calls || [];
-            // Сохраняем данные об использовании токенов в сообщение
-            if (responseData.usage) {
-              chat.history[currentAssistantMsgIdx].usage = responseData.usage;
-            }
-            onUpdate();
-          }
         }
 
-        // 3. Обработка инструментов
-        if (currentAssistantMsgIdx !== null) {
-          const assistantMsg = chat.history[currentAssistantMsgIdx];
-
-          if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
-            
-            // --- ПРОВЕРКА ЛИМИТА ПЕРЕД ВЫПОЛНЕНИЕМ НОВЫХ ВЫЗОВОВ ---
-            if (iteration > maxIterations) {
-              console.warn("ChatService: Достигнут лимит итераций. Требуется подтверждение пользователя.");
-              assistantMsg.requiresLimitExtension = true; // Флаг для UI: показать кнопку "Продолжить"
-              isLooping = false;
-              break; 
-            }
-
-            // --- ЛОГИКА ПОДТВЕРЖДЕНИЯ (Human-in-the-loop) ---
-            let needsUserApproval = false;
-
-            for (const call of assistantMsg.tool_calls as ToolCall[]) {
-              // Явно приводим к ToolCall, чтобы избежать ошибки "no overlap"
-              const currentStatus = call.approvalStatus as ToolCall['approvalStatus'];
-
-              // Если статус уже окончательный, пропускаем проверку
-              if (currentStatus === 'approved' || currentStatus === 'rejected') continue;
-
-              const toolBinding = toolLookupMap.get(call.name);
-              if (toolBinding) {
-                const server = toolBinding.server;
-                const toolDef = server.tools.find(t => t.name === toolBinding.originalName);
-                
-                // Проверяем: требует ли сервер или конкретный инструмент подтверждения
-                const isAutoApprove = server.autoApproveAll || toolDef?.alwaysAllow;
-                
-                if (!isAutoApprove) {
-                  // Если статус еще не задан, помечаем как ожидающий
-                  if (!call.approvalStatus) {
-                    call.approvalStatus = 'pending';
-                  }
-                  
-                  // Если статус всё еще не 'approved', значит нужно вмешательство пользователя
-                  if (call.approvalStatus !== 'approved') {
-                    needsUserApproval = true;
-                  }
-                } else {
-                  call.approvalStatus = 'approved';
-                }
-              }
-            }
-
-            // Если нашли хоть один инструмент, требующий подтверждения — ставим на паузу
-            if (needsUserApproval) {
-              chat.isGenerating = false;
-              onUpdate();
-              return; // Выход из метода send. Цикл прерван до реакции пользователя.
-            }
-
-            // --- ВЫПОЛНЕНИЕ ИНСТРУМЕНТОВ ---
-            for (const call of assistantMsg.tool_calls as ToolCall[]) {
-              if (abortSignal.aborted) break;
-
-              // 1. ПЕРВООЧЕРЕДНАЯ ПРОВЕРКА: Пропускаем, если этот вызов уже имеет результат в истории
-              const existingResult = chat.history.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === call.id);
-              if (existingResult) continue;
-
-              // 2. ОБРАБОТКА ОТКАЗА: Если результата нет, но статус "rejected"
-              if (call.approvalStatus === 'rejected') {
-                // Добавляем сообщение об отказе, чтобы модель знала об этом
-                chat.history.push({
-                  id: crypto.randomUUID(),
-                  role: 'tool',
-                  text: '',
-                  tool_result: {
-                    tool_call_id: call.id,
-                    content: m.chat_tool_error_rejected(),
-                    isError: true
-                  }
-                });
-                continue;
-              }
-
-              // 3. ВЫПОЛНЕНИЕ: Если мы здесь, значит результата нет и вызов одобрен
-              try {
-                // ПОИСК ОРИГИНАЛЬНОГО ИНСТРУМЕНТА ПО УНИКАЛЬНОМУ ИМЕНИ
-                const toolBinding = toolLookupMap.get(call.name);
-
-                if (!toolBinding) {
-                  throw new Error(m.chat_error_tool_not_found({ name: call.name }));
-                }
-
-                // Вызов через оригинальный сервер и оригинальное имя функции
-                const result = await toolBinding.server.callTool(toolBinding.originalName, call.arguments);
-                
-                // ВНИМАНИЕ: MCP результат может сам содержать флаг isError
-                const hasErrorInside = (result as any).isError === true;
-
-                chat.history.push({
-                  id: crypto.randomUUID(),
-                  role: 'tool',
-                  text: '',
-                  tool_result: {
-                    tool_call_id: call.id,
-                    content: JSON.stringify(result, null, 2),
-                    isError: hasErrorInside
-                  }
-                });
-              } catch (err: any) {
-                // ГЛОБАЛЬНАЯ ОБРАБОТКА ОШИБОК ИНСТРУМЕНТА (Сеть, отсутствие функции и т.д.)
-                chat.history.push({
-                  id: crypto.randomUUID(),
-                  role: 'tool',
-                  text: '', 
-                  tool_result: {
-                    tool_call_id: call.id,
-                    content: `Error: ${err.message}`,
-                    isError: true
-                  }
-                });
-              }
-            }
-            onUpdate();
-            // Сбрасываем индекс перед следующей итерацией (будет создан новый ассистент)
-            currentAssistantMsgIdx = null; 
-            
-            // Если во время выполнения инструментов был нажат стоп — выходим из внешнего цикла
-            if (abortSignal.aborted) {
-              isLooping = false;
-            }
-          } else {
+        // 3. ОБРАБОТКА ИНСТРУМЕНТОВ (ДИРИЖИРОВАНИЕ)
+        const currentAssistantMsg = chat.history.find(m => m.id === streamingMessageId);
+        const assistantMsg = currentAssistantMsg || chat.history[chat.history.length - 1];
+        
+        if (adapter.isAutonomous) {
             isLooping = false;
+            break;
+        }
+
+        if (assistantMsg && assistantMsg.role === 'assistant' && assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
+          if (iteration > maxIterations) {
+            assistantMsg.requiresLimitExtension = true;
+            isLooping = false;
+            break; 
           }
+
+          let needsUserApproval = false;
+          for (const call of assistantMsg.tool_calls as ToolCall[]) {
+            if (call.approvalStatus === 'approved' || call.approvalStatus === 'rejected') continue;
+            
+            const toolBinding = requestContext?.toolLookupMap?.get(call.name);
+            if (toolBinding) {
+              const isAuto = toolBinding.server.autoApproveAll || 
+                           toolBinding.server.tools.find((t: any) => t.name === toolBinding.originalName)?.alwaysAllow;
+              
+              if (!isAuto) {
+                call.approvalStatus = 'pending';
+                needsUserApproval = true;
+              } else {
+                call.approvalStatus = 'approved';
+              }
+            }
+          }
+
+          if (needsUserApproval) {
+            chat.isGenerating = false;
+            onUpdate();
+            return; 
+          }
+
+          for (const call of assistantMsg.tool_calls as ToolCall[]) {
+            if (abortSignal.aborted) break;
+            const existingResult = chat.history.find(m => m.role === 'tool' && m.tool_result?.tool_call_id === call.id);
+            if (existingResult) continue;
+
+            if (call.approvalStatus === 'rejected') {
+              chat.history.push({
+                id: crypto.randomUUID(),
+                role: 'tool',
+                text: '',
+                tool_result: { tool_call_id: call.id, content: m.chat_tool_error_rejected(), isError: true }
+              });
+              continue;
+            }
+
+            try {
+              const toolBinding = requestContext?.toolLookupMap?.get(call.name);
+              if (!toolBinding) throw new Error(m.chat_error_tool_not_found({ name: call.name }));
+
+              const result = await toolBinding.server.callTool(toolBinding.originalName, call.arguments);
+              
+              chat.history.push({
+                id: crypto.randomUUID(),
+                role: 'tool',
+                text: '',
+                tool_result: { 
+                    tool_call_id: call.id, 
+                    content: JSON.stringify(result, null, 2), 
+                    isError: (result as any).isError === true 
+                }
+              });
+            } catch (err: any) {
+              chat.history.push({
+                id: crypto.randomUUID(),
+                role: 'tool',
+                text: '', 
+                tool_result: { tool_call_id: call.id, content: `Error: ${err.message}`, isError: true }
+              });
+            }
+          }
+          onUpdate();
+        } else {
+          isLooping = false;
         }
       }
-
-      // --- АВТОМАТИЧЕСКОЕ ПЕРЕИМЕНОВАНИЕ ---
-      console.log("[ChatService] Checking auto-rename conditions:", {
-        enabled: settings.autoRenameEnabled,
-        isUntitled: chat.is_untitled,
-        aborted: abortSignal.aborted
-      });
 
       if (settings.autoRenameEnabled && chat.is_untitled && !abortSignal.aborted) {
         this.generate_chat_title(chat, settings).then(new_title => {
           if (new_title !== 'SKIP') {
-            console.log("[ChatService] Applying new title:", new_title);
             chat.name = new_title;
             chat.is_untitled = false;
             onUpdate();
           }
-        }).catch(err => {
-          console.error("[ChatService] Async rename error:", err);
         });
       }
 
     } catch (error: any) {
-      const isAbort = error.name === 'AbortError' || abortSignal.aborted;
-      
-      if (isAbort) {
-        console.log("Генерация прервана пользователем");
-        toastService.show(m.chat_toast_aborted(), "info");
-      } else {
-        console.error("Chat Error:", error);
+      if (error.name !== 'AbortError' && !abortSignal.aborted) {
         toastService.show(m.chat_toast_conn_error({ message: error.message }), "error");
-      }
-
-      // ЛОГИКА ОЧИСТКИ ИНТЕРФЕЙСА:
-      if (currentAssistantMsgIdx !== null) {
-        const assistantMsg = chat.history[currentAssistantMsgIdx];
-
-        // Если сообщение пустое (ошибка случилась до получения текста) — удаляем его
-        const hasNoText = !assistantMsg.text || assistantMsg.text.trim() === '';
-        const hasNoReasoning = !assistantMsg.reasoning || assistantMsg.reasoning.trim() === '';
-        const hasNoTools = !assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0;
-
-        if (hasNoText && hasNoReasoning && hasNoTools) {
-          // Используем splice для удаления элемента — Svelte 5 это увидит
-          chat.history.splice(currentAssistantMsgIdx, 1);
-        } else if (!isAbort) {
-          assistantMsg.error = error.message;
-        }
+        const lastMsg = chat.history[chat.history.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant') lastMsg.error = error.message;
       }
     } finally {
       chat.isGenerating = false;
       onUpdate();
     }
-  }
-
-
-  /**
-   * Внутренний метод для работы с API LM Studio (OpenAI Compatible) со стримингом
-   */
-  private async fetchLLMResponse(
-    history: Message[], 
-    settings: WorkspaceSettings, 
-    tools: any[],
-    finalSystemPrompt: string, // Принимаем уже сформированный промпт
-    onUpdateText: (fullText: string) => void,
-    onUpdateReasoning: (fullReasoning: string) => void, // Колбэк для стриминга рассуждений
-    onUpdateTools: (tools: any[]) => void, // Добавлен колбэк для стриминга инструментов
-    abortSignal: AbortSignal
-  ) {
-    const apiMessages = [];
-    
-    // ПРИМЕНЕНИЕ СИСТЕМНОГО ПРОМПТА
-    if (finalSystemPrompt) {
-      apiMessages.push({ role: 'system', content: finalSystemPrompt });
-    }
-
-     // --- ДОБАВЬТЕ ЭТОТ БЛОК ДЛЯ ДЕБАГА ---
-    console.group("🚀 LLM REQUEST DEBUG");
-    console.log("Follow First Message Active:", settings.followFirstMessage);
-    console.log("Include MCP Instructions:", settings.includeMcpInstructions);
-    console.log("Final System Prompt:", finalSystemPrompt);
-    console.log("Full Messages Array:", apiMessages.concat(history.map(m => ({ role: m.role, content: m.text }))));
-    console.groupEnd();
-    // -------------------------------------
-       
-    for (const msg of history) {
-      // Пропускаем пустые сообщения, которые могли остаться от прошлых итераций
-      if (msg.role === 'assistant' && !msg.text && !msg.reasoning && (!msg.tool_calls || msg.tool_calls.length === 0)) continue;
-
-      const openAIMsg: any = {
-        role: msg.role
-      };
-
-      // ЛОГИКА ВЛОЖЕНИЙ И МУЛЬТИМОДАЛЬНОСТИ
-      if (msg.role === 'user' && msg.attachments && msg.attachments.some(a => a.type === 'image')) {
-        const content: any[] = [];
-
-        // Добавляем текстовую часть, если она есть
-        if (msg.text) {
-          content.push({ type: 'text', text: msg.text });
-        }
-
-        // Добавляем изображения
-        for (const attr of msg.attachments) {
-          if (attr.type === 'image' && attr.base64) {
-            content.push({
-              type: 'image_url',
-              image_url: { url: attr.base64 } // attr.base64 уже содержит "data:image/...;base64,..."
-            });
-          }
-        }
-        openAIMsg.content = content;
-      } else {
-        openAIMsg.content = msg.text || null;
-      }
-
-      // Добавляем reasoning если он есть (некоторые API поддерживают передачу обратно в историю)
-      if (msg.reasoning) {
-        openAIMsg.reasoning_content = msg.reasoning;
-      }
-
-      if (msg.tool_calls && msg.tool_calls.length > 0) {
-        openAIMsg.tool_calls = msg.tool_calls.map(tc => ({
-          id: tc.id,
-          type: 'function',
-          function: { name: tc.name, arguments: JSON.stringify(tc.arguments) }
-        }));
-      }
-
-      // ЛОГИКА ДЛЯ ИНСТРУМЕНТА И КАРТИНКИ
-      if (msg.role === 'tool' && msg.tool_result) {
-        openAIMsg.tool_call_id = msg.tool_result.tool_call_id;
-        
-        try {
-          // 1. Парсим строку из content, которая содержит { "content": [...] }
-          const outerData = JSON.parse(msg.tool_result.content);
-
-          // 2. Ищем объект с типом 'image' внутри массива content
-          const imageItem = Array.isArray(outerData.content) 
-            ? outerData.content.find((item: any) => item.type === 'image')
-            : null;
-          
-          if (imageItem && imageItem.data) {
-            // Отправляем текстовое подтверждение в роль tool
-            openAIMsg.content = m.chat_tool_image_received();
-            apiMessages.push(openAIMsg);
-
-            // 3. Добавляем сообщение от пользователя с картинкой для ЛЛМ
-            let imagesRecords : any = [];
-            for (const record of outerData.content) {
-              if (record.type === 'image') {
-                imagesRecords = [...imagesRecords, {
-                  type: 'image_url', image_url: { url: `data:${record.mimeType};base64,${record.data}`}
-                }]
-              }
-            };
-
-            apiMessages.push({
-              role: 'user',
-              content: [
-                { type: 'text', text: m.chat_tool_image_msg_prefix() },
-                ...imagesRecords
-              ]
-            });
-            continue; 
-          }
-        } catch (e) {/*Если это не JSON или структура не совпала — идем по обычному пути*/}
-        openAIMsg.content = msg.tool_result.content;
-      }
-
-      apiMessages.push(openAIMsg);
-    }
-
-    const baseUrl = settings.apiUrl.replace(/\/+$/, '');
-    const fullUrl = `${baseUrl}/v1/chat/completions`;
-
-    const requestBody: any = {
-      model: settings.modelName,
-      messages: apiMessages,
-      temperature: settings.temperature,
-      stream: true,
-      stream_options: { "include_usage": true } // ОБЯЗАТЕЛЬНО для получения токенов в стриме
-    };
-
-    if (tools && tools.length > 0) {
-      requestBody.tools = tools.map(t => ({
-        type: 'function',
-        function: {
-          name: t.name,
-          description: t.description || '',
-          parameters: t.input_schema 
-        }
-      }));
-      requestBody.tool_choice = 'auto';
-    }
-
-    const response = await fetch(fullUrl, {
-      method: 'POST',
-      signal: abortSignal, // <-- ВАЖНО: Привязываем сигнал к Tauri Fetch
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-        'Authorization': `Bearer ${settings.apiKey || 'noauth'}`
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(m.chat_error_api({ status: response.status.toString(), message: errorData }));
-    }
-
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    
-    let fullContent = "";
-    let fullReasoning = "";
-    let toolCallsRaw: any[] = [];
-    let streamBuffer = ""; // БУФЕР ДЛЯ НЕПОЛНЫХ СТРОК
-    let finalUsage: any = null; // Объявляем переменную для хранения usage
-
-    if (reader) {
-      while (true) {
-        if (abortSignal.aborted) {
-          await reader.cancel(); 
-          break;
-        }
-
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        // Накопление данных в буфер
-        streamBuffer += decoder.decode(value, { stream: true });
-        const lines = streamBuffer.split('\n');
-        streamBuffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (abortSignal.aborted) break;
-
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === 'data: [DONE]') continue;
-          
-          if (trimmed.startsWith('data: ')) {
-            const jsonStr = trimmed.slice(6);
-            try {
-              const data = JSON.parse(jsonStr);
-
-              // ПРОВЕРКА НА ОШИБКУ ОТ СЕРВЕРА
-              if (data.error) {
-                console.error("❌ API вернуло ошибку в стриме:", data.error);
-                throw new Error(`API Error: ${data.error.message || JSON.stringify(data.error)}`);
-              }
-
-              // ПЕРЕХВАТ ДАННЫХ ОБ ИСПОЛЬЗОВАНИИ (usage)
-              if (data.usage) {
-                finalUsage = data.usage;
-              }
-
-              // БЕЗОПАСНОЕ ИЗВЛЕЧЕНИЕ DELTA
-              const choice = data.choices?.[0];
-              if (!choice) continue;
-
-              const delta = choice.delta;
-              if (!delta) continue;
-
-              // Обработка рассуждений (Reasoning Content)
-              if (delta.reasoning_content) {
-                fullReasoning += delta.reasoning_content;
-                onUpdateReasoning(fullReasoning);
-              } else if (delta.reasoning) {
-                fullReasoning += delta.reasoning;
-                onUpdateReasoning(fullReasoning);
-              }
-
-              if (delta.content) {
-                fullContent += delta.content;
-                onUpdateText(fullContent); 
-              }
-
-              if (delta.tool_calls) {
-                for (const tc of delta.tool_calls) {
-                  const idx = tc.index;
-                  if (!toolCallsRaw[idx]) {
-                    toolCallsRaw[idx] = { id: '', name: '', arguments: '' };
-                  }
-                  if (tc.id) toolCallsRaw[idx].id = tc.id;
-                  if (tc.function?.name) toolCallsRaw[idx].name += tc.function.name;
-                  if (tc.function?.arguments) toolCallsRaw[idx].arguments += tc.function.arguments;
-                }
-
-                // ВАЖНО: Мгновенно обновляем UI при получении чанков инструментов
-                const currentTools = toolCallsRaw.map(tc => {
-                    let parsedArgs = {};
-                    try {
-                        // Пытаемся парсить аргументы только если они выглядят как полный JSON
-                        if (tc.arguments.trim().endsWith('}')) {
-                            parsedArgs = JSON.parse(tc.arguments);
-                        }
-                    } catch (e) { /* Игнорируем ошибки парсинга неполного JSON в процессе стриминга */ }
-                    
-                    return {
-                        id: tc.id,
-                        name: tc.name,
-                        arguments: parsedArgs,
-                        raw_arguments: tc.arguments // ПЕРЕДАЕМ СЫРУЮ СТРОКУ
-                    };
-                });
-                onUpdateTools(currentTools);
-              }
-            } catch (e) {
-                console.group("🚨 Ошибка парсинга чанка");
-                console.error("Ошибка:", e);
-                console.log("Сырая строка (line):", line);
-                console.log("Отрезанный JSON:", jsonStr);
-                console.groupEnd();
-            }
-          }
-        }
-      }
-    }
-
-    return {
-      content: fullContent,
-      reasoning: fullReasoning,
-      tool_calls: toolCallsRaw.length > 0 ? toolCallsRaw.map(tc => ({
-        id: tc.id,
-        name: tc.name,
-        arguments: JSON.parse(tc.arguments || '{}')
-      })) : undefined,
-      usage: finalUsage // Возвращаем собранные данные usage
-    };
   }
 }

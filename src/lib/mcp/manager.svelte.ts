@@ -88,6 +88,7 @@ class TauriHttpTransport implements Transport {
   }
 
   async send(message: any) {
+    // console.log("send:", JSON.stringify(message, null, 2));
     const isInitializedNotification = (message as any).method === 'notifications/initialized';
     
     // Создаем контроллер таймаута для конкретного запроса. 

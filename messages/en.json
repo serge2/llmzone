@@ -76,6 +76,12 @@
   "inspector_tab_tools": "Tools",
   "inspector_empty_state": "Select a workspace to configure",
 
+  "tab_model_provider_type": "Provider / Protocol",
+  "tab_model_provider_openai": "OpenAI v1 Compatible",
+  "tab_model_provider_lm_studio": "LM Studio (v1 Native)",
+  "tab_model_provider_openrouter": "OpenRouter",
+  "tab_model_provider_anthropic": "Anthropic",
+  "tab_model_provider_custom": "Custom / Generic",
   "tab_model_api_url": "API URL",
   "tab_model_name": "Model Name",
   "tab_model_api_key": "API Key",
