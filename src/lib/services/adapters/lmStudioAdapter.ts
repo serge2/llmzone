@@ -1,4 +1,5 @@
 // src/lib/services/adapters/lmStudioAdapter.ts
+import { fetch } from '@tauri-apps/plugin-http';
 import type { Message, WorkspaceSettings, ToolCall } from '$lib/types';
 import type { ChatAdapter, StreamChunkResult } from './interface';
 
@@ -56,9 +57,11 @@ export class LmStudioAdapter implements ChatAdapter {
     serverInstances?: any[], 
     finalSystemPrompt?: string
   ): { payload: any; context: any } {
+    console.log("preparePayload massages:", messages);
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
     const lastAssistantWithId = [...messages].reverse().find(m => (m as any).response_id);
-
+    console.log("preparePayload previous_respose_id:", lastAssistantWithId? lastAssistantWithId.response_id || null : undefined);
+ 
     const payload: any = {
       model: settings.modelName,
       input: lastUserMsg?.text || "",
@@ -83,8 +86,8 @@ export class LmStudioAdapter implements ChatAdapter {
       }
     }
 
-    if (lastAssistantWithId && (lastAssistantWithId as any).response_id) {
-      payload.previous_response_id = (lastAssistantWithId as any).response_id;
+    if (lastAssistantWithId && lastAssistantWithId.response_id) {
+      payload.previous_response_id = lastAssistantWithId.response_id;
     }
 
     return { 
@@ -207,7 +210,8 @@ export class LmStudioAdapter implements ChatAdapter {
         case 'chat.end':
           const endResult: StreamChunkResult = { isDone: true };
           if (event.result?.response_id) {
-            (endResult as any).response_id = event.result.response_id;
+            endResult.responseId = event.result.response_id;
+            console.log("chat.end response_id:", event.result.response_id);
           }
           if (event.result?.stats) {
             endResult.usage = {
@@ -226,5 +230,59 @@ export class LmStudioAdapter implements ChatAdapter {
     }
 
     return {};
+  }
+
+  /**
+   * Генерация названия чата для LM Studio.
+   */
+  async generateChatTitle(history: Message[], settings: WorkspaceSettings): Promise<string | 'SKIP'> {
+    const analysis_history = history
+      .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && msg.text);
+
+    if (analysis_history.length < 1) return 'SKIP';
+
+    const promptContext = analysis_history
+      .map(m => `${m.role.toUpperCase()}: ${m.text}`)
+      .join('\n\n');
+
+    // Инструкция по аналогии с OpenAI версией
+    const prompt_trigger = `
+[TASK: PROVIDE A CHAT TITLE]
+1. Analyze the conversation above.
+2. Provide a concise title (2-4 words) in the user's language.
+3. If there is no specific topic yet (only greetings or empty talk), respond ONLY with the word "SKIP".
+4. Do not use quotes, bold text, or punctuation.
+5. Respond ONLY with the title or SKIP.`;
+
+    const payload = {
+      model: settings.modelName,
+      input: `CONVERSATION LOG:\n${promptContext}\n\n${prompt_trigger}`,
+      system_prompt: "You are a helpful assistant that categorizes and titles conversations.",
+      temperature: 0.1,
+      stream: false,
+      store: false 
+    };
+
+    try {
+      const response = await fetch(this.getEndpoint(settings.apiUrl), {
+        method: 'POST',
+        headers: this.getHeaders(settings),
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) return 'SKIP';
+      const data = await response.json();
+      const message = data.output.find((item: any) => item.type === 'message');
+      const rawResult = message?.content || "SKIP";
+      const result = rawResult.split('\n')[0].trim().replace(/["']/g, '').replace(/[.!?]$/, '');
+
+      if (result.toUpperCase().includes('SKIP')) return 'SKIP';
+      
+      console.log("[LmStudioAdapter] Generated title:", result);
+      return result;
+    } catch (e) {
+      console.error("[LmStudioAdapter] Failed to generate title:", e);
+      return 'SKIP';
+    }
   }
 }

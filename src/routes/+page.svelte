@@ -609,7 +609,8 @@
             workspaces = [...workspaces];
             chatWindowComponent?.scrollToBottom();
           },
-          abortControllers[currentChat.id].signal
+          abortControllers[currentChat.id].signal,
+          (newName) => handleRenameChat(currentChat.id, newName)
         );
       } catch (err) {
         console.error("Error resuming after tool approval:", err);
@@ -733,7 +734,8 @@
               chatWindowComponent?.scrollToBottom();
           }
         },
-        controller.signal
+        controller.signal,
+        (newName) => handleRenameChat(chatToUpdateId, newName)
       );
     } catch (err: any) {
       console.error("SendMessage Error:", err);

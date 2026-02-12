@@ -21,50 +21,19 @@ export class ChatService {
   }
 
   /**
-   * Метод для интеллектуальной генерации названия чата
+   * Метод для интеллектуальной генерации названия чата через адаптер
    */
   async generate_chat_title(chat: Chat, settings: WorkspaceSettings): Promise<string | 'SKIP'> {
     console.log("[ChatService] Attempting to generate title for chat:", chat.id);
     
-    const adapter = this.getAdapter(settings.providerType);
-    const full_url = adapter.getEndpoint(settings.apiUrl);
-
-    const analysis_history = chat.history
-      .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && msg.text)
-      .slice(0, 3)
-      .map(msg => ({ role: msg.role, content: msg.text }));
-
-    if (analysis_history.length < 1) return 'SKIP';
-
-    const system_prompt = `Analyze the conversation. If a specific topic has been established, provide a concise (2-4 words) title for this chat. 
-  The title MUST be in the same language the user is speaking.
-  If the conversation is just greetings, empty talk, or hasn't started a real topic yet, respond ONLY with the word "SKIP".
-  Do not use quotes, bold text, or punctuation.`;
-
     try {
-      const response = await fetch(full_url, {
-        method: 'POST',
-        headers: adapter.getHeaders(settings),
-        body: JSON.stringify({
-          model: settings.modelName,
-          messages: [
-            { role: 'system', content: system_prompt },
-            ...analysis_history
-          ],
-          temperature: 0.1,
-          max_tokens: 25,
-          stream: false // Для заголовка стрим не нужен
-        })
-      });
-
-      if (!response.ok) return 'SKIP';
-      const data = await response.json();
+      const adapter = this.getAdapter(settings.providerType);
       
-      const result = data.choices?.[0]?.message?.content?.trim();
-
-      if (!result || result.toUpperCase().includes('SKIP')) return 'SKIP';
-      return result.replace(/["']/g, '');
+      // Делегируем генерацию названия адаптеру, так как у каждого провайдера
+      // (LM Studio, OpenAI, OpenRouter) свои нюансы работы с контекстом и эндпоинтами.
+      return await adapter.generateChatTitle(chat.history, settings);
     } catch (e) {
+      console.error("[ChatService] Title generation failed:", e);
       return 'SKIP';
     }
   }
@@ -77,7 +46,8 @@ export class ChatService {
     settings: WorkspaceSettings,
     serverInstances: MCPServerInstance[], 
     onUpdate: () => void,
-    abortSignal: AbortSignal
+    abortSignal: AbortSignal,
+    onRename: (newName: string) => void
   ) {
     if (chat.isGenerating) return;
     chat.isGenerating = true;
@@ -194,11 +164,21 @@ export class ChatService {
 
                   try {
                     const chunk = adapter.parseStreamChunk(trimmed, requestContext);
+                    console.log("Chunk:", chunk);
                     
                     // Находим текущее сообщение строго по ID
                     let assistantMsg = chat.history.find(m => m.id === streamingMessageId);
 
                     // --- ОБРАБОТКА СПЕЦИФИЧНЫХ СИГНАЛОВ АВТОНОМНОГО АДАПТЕРА ---
+                    if (chunk.isDone) {
+                      if (assistantMsg) {
+                        if (chunk.usage) assistantMsg.usage = chunk.usage;
+                        if (chunk.responseId) {
+                          assistantMsg.response_id = chunk.responseId;
+                          console.log("Saved response_id:", assistantMsg.response_id)
+                        }
+                      }
+                    }
 
                     if (chunk.toolResult) {
                       if (assistantMsg) {
@@ -243,6 +223,7 @@ export class ChatService {
                       if (chunk.content) assistantMsg.text += chunk.content;
                       if (chunk.reasoning) assistantMsg.reasoning += chunk.reasoning;
                       
+                      
                       // МЯГКОЕ ОБНОВЛЕНИЕ ТУЛОВ (МЕРДЖ)
                       if (chunk.toolCalls) {
                         const updatedCalls = [...(assistantMsg.tool_calls || [])];
@@ -264,14 +245,9 @@ export class ChatService {
                         
                         assistantMsg.tool_calls = updatedCalls;
                       }
-
-                      if (chunk.usage) assistantMsg.usage = chunk.usage;
-                      
-                      const chunkAny = chunk as any;
-                      if (chunkAny.response_id) {
-                        (assistantMsg as any).response_id = chunkAny.response_id;
-                      }
                     }
+
+                    
 
                     onUpdate();
 
@@ -377,12 +353,12 @@ export class ChatService {
         }
       }
 
+      // ЛОГИКА АВТОМАТИЧЕСКОГО ПЕРЕИМЕНОВАНИЯ
       if (settings.autoRenameEnabled && chat.is_untitled && !abortSignal.aborted) {
         this.generate_chat_title(chat, settings).then(new_title => {
-          if (new_title !== 'SKIP') {
-            chat.name = new_title;
-            chat.is_untitled = false;
-            onUpdate();
+          if (new_title && new_title !== 'SKIP') {
+            console.log("[ChatService] New title suggested:", new_title);
+            onRename(new_title);
           }
         });
       }

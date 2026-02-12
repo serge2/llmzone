@@ -5,6 +5,7 @@ export interface StreamChunkResult {
   content?: string;
   reasoning?: string;
   toolCalls?: ToolCall[];
+  responseId?: string;
   usage?: {
     prompt_tokens: number;
     completion_tokens: number;
@@ -31,4 +32,13 @@ export interface ChatAdapter {
     finalSystemPrompt?: string
   ): { payload: any; context: any };
   parseStreamChunk(line: string, context: any): StreamChunkResult;
+
+  /**
+   * Специфичный для провайдера метод генерации названия чата.
+   * Адаптер сам решает, как упаковать историю и какой эндпоинт вызвать.
+   */
+  generateChatTitle(
+    history: Message[], 
+    settings: WorkspaceSettings
+  ): Promise<string | 'SKIP'>;
 }

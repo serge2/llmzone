@@ -1,4 +1,5 @@
 // src/lib/services/adapters/openRouterAdapter.ts
+import { fetch } from '@tauri-apps/plugin-http';
 import type { ChatAdapter, StreamChunkResult } from './interface';
 import type { Message, WorkspaceSettings } from '$lib/types';
 
@@ -73,7 +74,9 @@ export class OpenRouterAdapter implements ChatAdapter {
                 : String(m.tool_result?.content || "") 
             };
           }
+          
           const msg: any = { role: m.role, content: m.text || "" };
+
           if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
             msg.tool_calls = m.tool_calls.map((tc: any) => ({
               id: tc.id,
@@ -173,6 +176,60 @@ export class OpenRouterAdapter implements ChatAdapter {
       return result;
     } catch (e) {
       return {};
+    }
+  }
+
+  /**
+   * Генерация названия чата через OpenRouter.
+   * Инструкция передается в конце истории для повышения стабильности.
+   */
+  async generateChatTitle(history: Message[], settings: WorkspaceSettings): Promise<string | 'SKIP'> {
+    const analysis_history = history
+      .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && msg.text)
+      .map(msg => ({ role: msg.role, content: msg.text }));
+
+    if (analysis_history.length < 1) return 'SKIP';
+
+    // Инструкция вынесена в отдельное User-сообщение в конце
+    const prompt_trigger = `
+[TASK: PROVIDE A CHAT TITLE]
+1. Analyze the conversation above.
+2. Provide a concise title (2-4 words) in the user's language.
+3. If there is no specific topic yet (only greetings or empty talk), respond ONLY with the word "SKIP".
+4. Do not use quotes, bold text, or punctuation.
+5. Respond ONLY with the title or SKIP.`;
+
+    try {
+      const response = await fetch(this.getEndpoint(settings.apiUrl), {
+        method: 'POST',
+        headers: this.getHeaders(settings),
+        body: JSON.stringify({
+          model: settings.modelName,
+          messages: [
+            { role: 'system', content: "You are a helpful assistant that categorizes and titles conversations." },
+            ...analysis_history,
+            { role: 'user', content: prompt_trigger }
+          ],
+          temperature: 0.1,
+          stream: false
+        })
+      });
+
+      if (!response.ok) return 'SKIP';
+      const data = await response.json();
+      console.log("[OpenRouterAdapter] Name proposition response:", data);
+      
+      // Очистка контента от возможного мусора (переносы строк, лишние символы)
+      const rawResult = data.choices?.[0]?.message?.content || "";
+      const result = rawResult.split('\n')[0].trim();
+
+      if (!result || result.toUpperCase().includes('SKIP')) return 'SKIP';
+      
+      // Удаляем кавычки, если модель их все же добавила
+      return result.replace(/["']/g, '');
+    } catch (e) {
+      console.error("[OpenRouterAdapter] Failed to generate title:", e);
+      return 'SKIP';
     }
   }
 }
