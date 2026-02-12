@@ -96,10 +96,31 @@ export class OpenRouterAdapter implements ChatAdapter {
       include_reasoning: true 
     };
 
+    // Опциональные параметры — добавляем только если они заданы пользователем
+    if (settings.topP !== undefined) payload.top_p = settings.topP;
+    if (settings.seed !== undefined) payload.seed = settings.seed;
+    if (settings.maxCompletionTokens !== undefined) payload.max_completion_tokens = settings.maxCompletionTokens;
+    if (settings.frequencyPenalty !== undefined) payload.frequency_penalty = settings.frequencyPenalty;
+    if (settings.presencePenalty !== undefined) payload.presence_penalty = settings.presencePenalty;
+
+    // Поддержка reasoning_effort для моделей OpenAI через OpenRouter
+    if (settings.reasoningEffort && settings.reasoningEffort !== 'none') {
+      payload.reasoning_effort = settings.reasoningEffort;
+      
+      // Для моделей серии o1/o3 убираем несовместимые параметры
+      const isOModel = settings.modelName.includes('openai/o1') || settings.modelName.includes('openai/o3');
+      if (isOModel) {
+        delete payload.temperature;
+        delete payload.top_p;
+      }
+    }
+
     if (tools.length > 0) {
       payload.tools = tools;
       payload.tool_choice = 'auto';
     }
+
+    console.log("Prepared OpenRouter payload:", payload);
 
     return { payload, context: { toolLookupMap, currentToolCalls: [] } };
   }

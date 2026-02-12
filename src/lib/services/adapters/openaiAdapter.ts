@@ -78,8 +78,28 @@ export class OpenAIAdapter implements ChatAdapter {
       temperature: settings.temperature
     };
 
+    // Опциональные параметры — добавляем только если они заданы пользователем
+    if (settings.topP !== undefined) payload.top_p = settings.topP;
+    if (settings.seed !== undefined) payload.seed = settings.seed;
+    if (settings.maxCompletionTokens !== undefined) payload.max_completion_tokens = settings.maxCompletionTokens;
+    if (settings.frequencyPenalty !== undefined) payload.frequency_penalty = settings.frequencyPenalty;
+    if (settings.presencePenalty !== undefined) payload.presence_penalty = settings.presencePenalty;
+
+    // Параметры рассуждений для моделей OpenAI (o1, o3-mini)
+    if (settings.reasoningEffort && settings.reasoningEffort !== 'none') {
+      payload.reasoning_effort = settings.reasoningEffort;
+      
+      // Специфика OpenAI: модели o1/o3 не принимают temperature и top_p при включенном рассуждении
+      const isOModel = settings.modelName.startsWith('o1') || settings.modelName.startsWith('o3');
+      if (isOModel) {
+        delete payload.temperature;
+        delete payload.top_p;
+      }
+    }
+
     if (tools.length > 0) payload.tools = tools;
 
+    console.log("Prepared OpenAI payload:", payload);
     return { payload, context: { toolLookupMap, currentToolCalls: [] } };
   }
 

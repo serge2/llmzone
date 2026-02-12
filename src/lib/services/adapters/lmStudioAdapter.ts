@@ -71,6 +71,13 @@ export class LmStudioAdapter implements ChatAdapter {
       store: true 
     };
 
+    // Опциональные параметры сэмплирования для LM Studio
+    if (settings.topP !== undefined) payload.top_p = settings.topP;
+    if (settings.minP !== undefined) payload.min_p = settings.minP;
+    if (settings.seed !== undefined) payload.seed = settings.seed;
+    if (settings.maxCompletionTokens !== undefined) payload.max_predict_tokens = settings.maxCompletionTokens;
+    if (settings.repeatPenalty !== undefined) payload.repeat_penalty = settings.repeatPenalty;
+
     if (serverInstances && serverInstances.length > 0) {
       const integrations = serverInstances
         .filter(s => s.enabled && s.isConnected)
@@ -90,6 +97,7 @@ export class LmStudioAdapter implements ChatAdapter {
       payload.previous_response_id = lastAssistantWithId.response_id;
     }
 
+    console.log("Prepared LM Studio payload:", payload);
     return { 
       payload, 
       context: { 
@@ -254,7 +262,7 @@ export class LmStudioAdapter implements ChatAdapter {
 4. Do not use quotes, bold text, or punctuation.
 5. Respond ONLY with the title or SKIP.`;
 
-    const payload = {
+    const payload: any = {
       model: settings.modelName,
       input: `CONVERSATION LOG:\n${promptContext}\n\n${prompt_trigger}`,
       system_prompt: "You are a helpful assistant that categorizes and titles conversations.",

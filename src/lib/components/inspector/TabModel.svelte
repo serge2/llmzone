@@ -1,4 +1,3 @@
-<!-- src/lib/components/inspector/TabModel.svelte -->
 <script lang="ts">
   import type { Workspace, GlobalConfig } from '$lib/types';
 
@@ -82,6 +81,9 @@
       placeholder={globalConfig.apiKey ? "••••••••" : (_i18n && m.tab_model_api_key_not_set())} 
     />
   </label>
+
+  <div class="divider"><span>{_i18n && m.tab_model_sampling_limits()}</span></div>
+
   <label>
     <span class="label-text">{_i18n && m.tab_model_temperature()}: {currentWorkspace.settings.temperature}</span>
     <input 
@@ -90,6 +92,79 @@
       max="2" 
       step="0.1" 
       bind:value={currentWorkspace.settings.temperature} 
+      onchange={onSettingsChange}
+    />
+  </label>
+
+  <div class="grid-params">
+    <label>
+      <span class="label-text">{_i18n && m.tab_model_max_tokens()}</span>
+      <input 
+        type="number" 
+        placeholder="Auto"
+        bind:value={currentWorkspace.settings.maxCompletionTokens} 
+        onchange={onSettingsChange}
+      />
+    </label>
+    <label>
+      <span class="label-text">{_i18n && m.tab_model_top_p()}: {currentWorkspace.settings.topP ?? 1}</span>
+      <input 
+        type="range" min="0" max="1" step="0.05"
+        bind:value={currentWorkspace.settings.topP} 
+        onchange={onSettingsChange}
+      />
+    </label>
+  </div>
+
+  <div class="divider"><span>{_i18n && m.tab_model_strategy()}</span></div>
+
+  {#if currentWorkspace.settings.providerType === 'lm-studio'}
+    <label>
+      <span class="label-text">{_i18n && m.tab_model_reasoning_mode()} (LM Studio)</span>
+      <select bind:value={currentWorkspace.settings.reasoning} onchange={onSettingsChange}>
+        <option value={undefined}>Auto</option>
+        <option value="off">Off</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+        <option value="on">On</option>
+      </select>
+    </label>
+
+    <label>
+      <span class="label-text">{_i18n && m.tab_model_context_length()}</span>
+      <input type="number" placeholder="Default" bind:value={currentWorkspace.settings.contextLength} onchange={onSettingsChange} />
+    </label>
+
+    <div class="grid-params">
+      <label>
+        <span class="label-text">{_i18n && m.tab_model_min_p()}: {currentWorkspace.settings.minP ?? 0.05}</span>
+        <input type="range" min="0" max="1" step="0.01" bind:value={currentWorkspace.settings.minP} onchange={onSettingsChange} />
+      </label>
+      <label>
+        <span class="label-text">{_i18n && m.tab_model_repeat_penalty()}: {currentWorkspace.settings.repeatPenalty ?? 1.1}</span>
+        <input type="range" min="1" max="2" step="0.05" bind:value={currentWorkspace.settings.repeatPenalty} onchange={onSettingsChange} />
+      </label>
+    </div>
+  {:else}
+    <label>
+      <span class="label-text">{_i18n && m.tab_model_reasoning_effort()}</span>
+      <select bind:value={currentWorkspace.settings.reasoningEffort} onchange={onSettingsChange}>
+        <option value={undefined}>Default</option>
+        <option value="none">None</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+      </select>
+    </label>
+  {/if}
+
+  <label>
+    <span class="label-text">{_i18n && m.tab_model_seed()}</span>
+    <input 
+      type="number" 
+      placeholder="None"
+      bind:value={currentWorkspace.settings.seed} 
       onchange={onSettingsChange}
     />
   </label>
@@ -121,5 +196,33 @@
   input[type="range"] {
     padding: 0;
     cursor: pointer;
+  }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    margin: 8px 0 -4px 0;
+  }
+
+  .divider span {
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #9ca3af;
+    text-transform: uppercase;
+    white-space: nowrap;
+    margin-right: 10px;
+  }
+
+  .divider::after {
+    content: "";
+    height: 1px;
+    width: 100%;
+    background-color: #e5e7eb;
+  }
+
+  .grid-params {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
   }
 </style>

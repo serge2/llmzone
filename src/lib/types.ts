@@ -43,7 +43,25 @@ export interface WorkspaceSettings {
   systemPrompt: string;
   followFirstMessage?: boolean;
   includeMcpInstructions?: boolean;
+
+  // Общие параметры (OpenAI, OpenRouter, LM Studio)
   temperature: number;
+  maxCompletionTokens?: number;
+  topP?: number;             // top_p
+  frequencyPenalty?: number; // frequency_penalty [-2...2]
+  presencePenalty?: number;  // presence_penalty [-2...2]
+  seed?: number;
+  // Специфично для LM Studio
+  topK?: number;             // top_k
+  minP?: number;             // min_p 
+  repeatPenalty?: number;    // repeat_penalty 
+  contextLength?: number;    // context_length
+  // Параметры Рассуждений (Reasoning)
+  // OpenAI использует reasoning_effort
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  // LM Studio использует reasoning (согласно их доке v1)
+  reasoning?: 'off' | 'low' | 'medium' | 'high' | 'on'; 
+
   mcpConfig?: string;
   mcpTimeout?: number;
   mcpStates?: Record<string, MCPServerState>;
