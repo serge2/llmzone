@@ -35,6 +35,9 @@
   let selectedChatId = $state<string>('');
   let isHistoryLoading = $state(false); // состояние загрузки истории
   
+  // Временное состояние прогресса обработки (не сохраняется в историю)
+  let currentPromptProgress = $state<number | null>(null);
+
   // Глобальные настройки
   let globalConfig = $state<GlobalConfig>({
     apiUrl: 'http://localhost:1234/v1',
@@ -551,6 +554,10 @@
       // Сбрасываем флаг в объекте чата
       const chat = workspaces.flatMap(ws => ws.chats).find(c => c.id === id);
       if (chat) chat.isGenerating = false;
+      
+      // Сброс прогресса при остановке
+      if (id === selectedChatId) currentPromptProgress = null;
+      
       workspaces = [...workspaces];
     }
   }
@@ -671,7 +678,11 @@
           currentChat,
           effectiveSettings, // Используем централизованные настройки
           chatSpecificServers,
-          () => {
+          (metadata) => {
+            // Обработка прогресса при возобновлении (если применимо)
+            if (metadata?.promptProgress !== undefined) {
+              currentPromptProgress = metadata.promptProgress;
+            }
             workspaces = [...workspaces];
             chatWindowComponent?.scrollToBottom();
           },
@@ -682,6 +693,7 @@
         console.error("Error resuming after tool approval:", err);
       } finally {
         delete abortControllers[currentChat.id];
+        currentPromptProgress = null; // Сброс
         workspaces = [...workspaces];
         await persistChats();
       }
@@ -767,7 +779,12 @@
         chatToUpdate,
         effectiveSettings, // Используем централизованные настройки
         chatSpecificServers, 
-        () => {
+        (metadata) => {
+          // ОБРАБОТКА ПРОГРЕССА ИЗ МЕТАДАННЫХ
+          if (metadata?.promptProgress !== undefined && chatToUpdateId === selectedChatId) {
+            currentPromptProgress = metadata.promptProgress;
+          }
+
           workspaces = [...workspaces];
           if (chatToUpdateId === selectedChatId) {
               chatWindowComponent?.scrollToBottom();
@@ -780,6 +797,8 @@
       console.error("SendMessage Error:", err);
     } finally {
       delete abortControllers[chatToUpdateId];
+      // Сброс прогресса в конце
+      if (chatToUpdateId === selectedChatId) currentPromptProgress = null;
       workspaces = [...workspaces];
       await persistChats();
     }
@@ -872,6 +891,7 @@
           currentLocale={currentLocaleState}
           history={currentChat?.history || []}
           isGenerating={currentChat?.isGenerating || false}
+          promptProgress={currentPromptProgress}
           isLoading={isHistoryLoading} 
           bind:message
           onSendMessage={sendMessage}

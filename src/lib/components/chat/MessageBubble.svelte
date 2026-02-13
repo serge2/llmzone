@@ -43,6 +43,7 @@
     isLastMessage = false,
     isTyping = false,
     status = null, // Новый проп статуса генерации
+    promptProgress = null, // Прогресс (0...1.0)
     fullHistory = [], 
     messages = [], // Теперь принимаем всю группу целиком
     onEdit,
@@ -58,6 +59,7 @@
     isLastMessage?: boolean,
     isTyping?: boolean,
     status?: 'thinking' | 'typing' | 'executing_tools' | null, // Типизация статуса
+    promptProgress?: number | null,
     fullHistory?: Message[],
     messages?: Message[], // Список связанных сообщений в группе
     onEdit?: (newText: string) => void,
@@ -431,18 +433,29 @@
 
     {#if isTyping && status}
       <div class="status-indicator" transition:slide={{ axis: 'y', duration: 200 }}>
-        <div class="status-dots">
-          <span></span><span></span><span></span>
+        <div class="status-main">
+          <div class="status-dots">
+            <span></span><span></span><span></span>
+          </div>
+          <span class="status-text">
+            {#if status === 'thinking'}
+              {_i18n && m.bubble_status_thinking()}
+              {#if promptProgress !== null}
+                <span class="progress-percent">({(promptProgress * 100).toFixed(2)}%)</span>
+              {/if}
+            {:else if status === 'typing'}
+              {_i18n && m.bubble_status_typing()}
+            {:else if status === 'executing_tools'}
+              {_i18n && m.bubble_status_tools()}
+            {/if}
+          </span>
         </div>
-        <span class="status-text">
-          {#if status === 'thinking'}
-            {_i18n && m.bubble_status_thinking()}
-          {:else if status === 'typing'}
-            {_i18n && m.bubble_status_typing()}
-          {:else if status === 'executing_tools'}
-            {_i18n && m.bubble_status_tools()}
-          {/if}
-        </span>
+        
+        {#if status === 'thinking' && promptProgress !== null}
+          <div class="mini-progress-track">
+            <div class="mini-progress-bar" style="width: {promptProgress * 100}%"></div>
+          </div>
+        {/if}
       </div>
     {/if}
   </div>
@@ -618,17 +631,30 @@
   /* Новый индикатор статуса */
   .status-indicator {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    gap: 6px;
     margin-top: 4px;
     padding-left: 8px;
     color: #94a3b8;
+  }
+
+  .status-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
   .status-text {
     font-size: 0.75rem;
     font-weight: 500;
     letter-spacing: 0.01em;
+  }
+
+  .progress-percent {
+    margin-left: 4px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: #64748b;
   }
 
   .status-dots {
@@ -653,6 +679,22 @@
   @keyframes dot-pulse {
     0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
     40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Мини прогресс-бар */
+  .mini-progress-track {
+    width: 120px;
+    height: 3px;
+    background: #f1f5f9;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .mini-progress-bar {
+    height: 100%;
+    background: #5865f2;
+    border-radius: 10px;
+    transition: width 0.3s ease;
   }
 
   .thinking-text {
