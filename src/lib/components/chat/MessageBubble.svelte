@@ -450,12 +450,6 @@
             {/if}
           </span>
         </div>
-        
-        {#if status === 'thinking' && promptProgress !== null}
-          <div class="mini-progress-track">
-            <div class="mini-progress-bar" style="width: {promptProgress * 100}%"></div>
-          </div>
-        {/if}
       </div>
     {/if}
   </div>
@@ -679,22 +673,6 @@
   @keyframes dot-pulse {
     0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
     40% { transform: scale(1); opacity: 1; }
-  }
-
-  /* Мини прогресс-бар */
-  .mini-progress-track {
-    width: 120px;
-    height: 3px;
-    background: #f1f5f9;
-    border-radius: 10px;
-    overflow: hidden;
-  }
-
-  .mini-progress-bar {
-    height: 100%;
-    background: #5865f2;
-    border-radius: 10px;
-    transition: width 0.3s ease;
   }
 
   .thinking-text {
