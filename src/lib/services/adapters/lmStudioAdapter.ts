@@ -118,7 +118,14 @@ export class LmStudioAdapter implements ChatAdapter {
    * Парсинг SSE стрима LM Studio
    */
   parseStreamChunk(line: string, context: any): StreamChunkResult {
-    const raw = line.replace(/^data: /, '').trim();
+    const trimmed = line.trim();
+    
+    // Игнорируем строки типов событий SSE (event: message.delta и т.д.)
+    if (trimmed.startsWith('event:')) {
+      return {};
+    }
+
+    const raw = trimmed.replace(/^data: /, '').trim();
     if (!raw || raw === '[DONE]') return { isDone: true };
 
     try {
