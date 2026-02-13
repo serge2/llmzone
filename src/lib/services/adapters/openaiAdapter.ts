@@ -27,7 +27,7 @@ export class OpenAIAdapter implements ChatAdapter {
 
     if (serverInstances) {
       for (const instance of serverInstances) {
-        if (!instance.enabled || !instance.isConnected) continue;
+        // Мы НЕ проверяем здесь enabled, так как ChatService уже прислал только разрешенное
         for (const tool of instance.tools) {
           const uniqueName = `${instance.name}_${tool.name}`.replace(/[^a-zA-Z0-9_-]/g, '_');
           toolLookupMap.set(uniqueName, { server: instance, originalName: tool.name });
@@ -44,7 +44,6 @@ export class OpenAIAdapter implements ChatAdapter {
     }
 
     const payload: any = {
-      model: settings.modelName,
       messages: [
         { role: 'system', content: finalSystemPrompt },
         ...messages.map(m => {
@@ -74,16 +73,18 @@ export class OpenAIAdapter implements ChatAdapter {
           return msg;
         })
       ],
-      stream: true,
-      temperature: settings.temperature
+      stream: true
     };
 
     // Опциональные параметры — добавляем только если они заданы пользователем
+    if (settings.modelName !== undefined) payload.model = settings.modelName;
+    if (settings.temperature !== undefined) payload.temperature = settings.temperature;
     if (settings.topP !== undefined) payload.top_p = settings.topP;
     if (settings.seed !== undefined) payload.seed = settings.seed;
     if (settings.maxCompletionTokens !== undefined) payload.max_completion_tokens = settings.maxCompletionTokens;
     if (settings.frequencyPenalty !== undefined) payload.frequency_penalty = settings.frequencyPenalty;
     if (settings.presencePenalty !== undefined) payload.presence_penalty = settings.presencePenalty;
+    if (settings.verbosity !== undefined) payload.verbosity = settings.verbosity;
 
     // Параметры рассуждений для моделей OpenAI (o1, o3-mini)
     if (settings.reasoningEffort && settings.reasoningEffort !== 'none') {
@@ -191,7 +192,7 @@ export class OpenAIAdapter implements ChatAdapter {
 
       if (!response.ok) return 'SKIP';
       const data = await response.json();
-      console.log("[OpenRouterAdapter] Name proposition response:", data);
+      console.log("[OpenAIAdapter] Name proposition response:", data);
       
       // Очистка контента от возможного мусора (переносы строк, лишние символы)
       const rawResult = data.choices?.[0]?.message?.content || "";
@@ -202,7 +203,7 @@ export class OpenAIAdapter implements ChatAdapter {
       // Удаляем кавычки, если модель их все же добавила
       return result.replace(/["']/g, '');
     } catch (e) {
-      console.error("[OpenRouterAdapter] Failed to generate title:", e);
+      console.error("[OpenAIAdapter] Failed to generate title:", e);
       return 'SKIP';
     }
   }

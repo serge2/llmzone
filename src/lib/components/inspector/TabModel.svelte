@@ -1,5 +1,6 @@
+<!-- src/lib/components/inspector/TabModel.svelte -->
 <script lang="ts">
-  import type { Workspace, GlobalConfig } from '$lib/types';
+  import type { Workspace, GlobalConfig, WorkspaceSettings } from '$lib/types';
 
   // Импорт локализации
   import * as m from '$paraglide/messages';
@@ -30,7 +31,7 @@
 
   // Логика быстрой настройки при смене провайдера
   function handleProviderChange(e: Event) {
-    const val = (e.target as HTMLSelectElement).value;
+    // const val = (e.target as HTMLSelectElement).value;
     
     // Автоматическая подстановка URL для популярных сервисов, если поле пустое
     // if (val === 'openrouter' && !currentWorkspace.settings.apiUrl) {
@@ -38,10 +39,72 @@
     // } else if (val === 'lm-studio' && (!currentWorkspace.settings.apiUrl {
     //   currentWorkspace.settings.apiUrl = 'http://localhost:1234/';
     // }
-    
+
     onSettingsChange();
   }
+
+  // Интерфейс для типизации пропсов сниппета
+  interface OptionProps {
+    min?: number;
+    max?: number;
+    step?: number;
+    default?: number | string;
+    placeholder?: string;
+    children?: import('svelte').Snippet;
+  }
 </script>
+
+{#snippet option(
+  label: string, 
+  key: keyof WorkspaceSettings, 
+  enabledKey: keyof WorkspaceSettings, 
+  type: 'range' | 'number' | 'select', 
+  props: OptionProps = {}
+)}
+  <div class="option-container" class:disabled={!currentWorkspace.settings[enabledKey]}>
+    <div class="option-header">
+      <label class="checkbox-label">
+        <input 
+          type="checkbox" 
+          bind:checked={currentWorkspace.settings[enabledKey] as boolean} 
+          onchange={onSettingsChange} 
+        />
+        <span class="label-text">
+          {label}{#if currentWorkspace.settings[enabledKey] && type === 'range'}: {currentWorkspace.settings[key] ?? props.default}{/if}
+        </span>
+      </label>
+    </div>
+    <div class="option-body">
+      {#if type === 'range'}
+        <input 
+          type="range" 
+          min={props.min} max={props.max} step={props.step}
+          bind:value={currentWorkspace.settings[key] as number} 
+          disabled={!currentWorkspace.settings[enabledKey]}
+          onchange={onSettingsChange}
+        />
+      {:else if type === 'number'}
+        <input 
+          type="number" 
+          placeholder={props.placeholder}
+          bind:value={currentWorkspace.settings[key] as number} 
+          disabled={!currentWorkspace.settings[enabledKey]}
+          onchange={onSettingsChange}
+        />
+      {:else if type === 'select'}
+        <select 
+          bind:value={currentWorkspace.settings[key]} 
+          disabled={!currentWorkspace.settings[enabledKey]}
+          onchange={onSettingsChange}
+        >
+          {#if props.children}
+            {@render props.children()}
+          {/if}
+        </select>
+      {/if}
+    </div>
+  </div>
+{/snippet}
 
 <div class="settings-group">
   <label>
@@ -84,104 +147,58 @@
 
   <div class="divider"><span>{_i18n && m.tab_model_sampling_limits()}</span></div>
 
-  <label>
-    <span class="label-text">{_i18n && m.tab_model_temperature()}: {currentWorkspace.settings.temperature}</span>
-    <input 
-      type="range" 
-      min="0" 
-      max="2" 
-      step="0.1" 
-      bind:value={currentWorkspace.settings.temperature} 
-      onchange={onSettingsChange}
-    />
-  </label>
+  {@render option(m.tab_model_temperature(), 'temperature', 'temperatureEnabled', 'range', { min: 0, max: 2, step: 0.1, default: 1 })}
 
   <div class="grid-params">
-    <label>
-      <span class="label-text">{_i18n && m.tab_model_max_tokens()}</span>
-      <input 
-        type="number" 
-        placeholder="Auto"
-        bind:value={currentWorkspace.settings.maxCompletionTokens} 
-        onchange={onSettingsChange}
-      />
-    </label>
-    <label>
-      <span class="label-text">{_i18n && m.tab_model_top_p()}: {currentWorkspace.settings.topP ?? 1}</span>
-      <input 
-        type="range" min="0" max="1" step="0.05"
-        bind:value={currentWorkspace.settings.topP} 
-        onchange={onSettingsChange}
-      />
-    </label>
+    {@render option(m.tab_model_max_tokens(), 'maxCompletionTokens', 'maxCompletionTokensEnabled', 'number', { placeholder: "Auto" })}
+    {@render option(m.tab_model_top_p(), 'topP', 'topPEnabled', 'range', { min: 0, max: 1, step: 0.05, default: 1 })}
   </div>
 
   <div class="divider"><span>{_i18n && m.tab_model_strategy()}</span></div>
 
   {#if currentWorkspace.settings.providerType === 'lm-studio'}
-    <label>
-      <span class="label-text">{_i18n && m.tab_model_reasoning_mode()} (LM Studio)</span>
-      <select bind:value={currentWorkspace.settings.reasoning} onchange={onSettingsChange}>
-        <option value={undefined}>Auto</option>
-        <option value="off">Off</option>
-        <option value="low">Low</option>
-        <option value="medium">Medium</option>
-        <option value="high">High</option>
-        <option value="on">On</option>
-      </select>
-    </label>
+    {#snippet lmStudioReasoning()}
+      <option value="off">Off</option>
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+      <option value="on">On</option>
+    {/snippet}
 
-    <label>
-      <span class="label-text">{_i18n && m.tab_model_context_length()}</span>
-      <input type="number" placeholder="Default" bind:value={currentWorkspace.settings.contextLength} onchange={onSettingsChange} />
-    </label>
+    {@render option(m.tab_model_reasoning_mode(), 'reasoning', 'reasoningEnabled', 'select', { children: lmStudioReasoning })}
+
+    {@render option(m.tab_model_context_length(), 'contextLength', 'contextLengthEnabled', 'number', { placeholder: "Default" })}
 
     <div class="grid-params">
-      <label>
-        <span class="label-text">{_i18n && m.tab_model_min_p()}: {currentWorkspace.settings.minP ?? 0.05}</span>
-        <input type="range" min="0" max="1" step="0.01" bind:value={currentWorkspace.settings.minP} onchange={onSettingsChange} />
-      </label>
-      <label>
-        <span class="label-text">{_i18n && m.tab_model_repeat_penalty()}: {currentWorkspace.settings.repeatPenalty ?? 1.1}</span>
-        <input type="range" min="1" max="2" step="0.05" bind:value={currentWorkspace.settings.repeatPenalty} onchange={onSettingsChange} />
-      </label>
+      {@render option(m.tab_model_min_p(), 'minP', 'minPEnabled', 'range', { min: 0, max: 1, step: 0.01, default: 0.05 })}
+      {@render option(m.tab_model_repeat_penalty(), 'repeatPenalty', 'repeatPenaltyEnabled', 'range', { min: 1, max: 2, step: 0.05, default: 1.1 })}
     </div>
   {:else}
-    <label>
-      <span class="label-text">{_i18n && m.tab_model_reasoning_effort()}</span>
-      <select bind:value={currentWorkspace.settings.reasoningEffort} onchange={onSettingsChange}>
-        <option value={undefined}>Default</option>
-        <option value="none">None</option>
-        <option value="low">Low</option>
-        <option value="medium">Medium</option>
-        <option value="high">High</option>
-      </select>
-    </label>
+    {#snippet reasoningEffortOptions()}
+      <option value="none">None</option>
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+    {/snippet}
+
+    {@render option(m.tab_model_reasoning_effort(), 'reasoningEffort', 'reasoningEffortEnabled', 'select', { children: reasoningEffortOptions })}
   {/if}
 
-  <label>
-    <span class="label-text">{_i18n && m.tab_model_seed()}</span>
-    <input 
-      type="number" 
-      placeholder="None"
-      bind:value={currentWorkspace.settings.seed} 
-      onchange={onSettingsChange}
-    />
-  </label>
+  {@render option(m.tab_model_seed(), 'seed', 'seedEnabled', 'number', { placeholder: "None" })}
 </div>
 
 <style>
-  .settings-group { display: flex; flex-direction: column; gap: 16px; width: 100%; }
+  .settings-group { display: flex; flex-direction: column; gap: 10px; width: 100%; }
   .settings-group label { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-  .label-text { font-size: 0.75rem; font-weight: 700; color: #4b5563; text-transform: uppercase; }
+  .label-text { font-size: 0.7rem; font-weight: 700; color: #4b5563;/* text-transform: uppercase;*/ }
   
   input, select {
     width: 100%; 
     box-sizing: border-box; /* ГАРАНТИРУЕТ ЧТО PADDING НЕ РАЗДУВАЕТ ШИРИНУ */
-    padding: 8px 10px; 
+    padding: 4px 10px; 
     border: 1px solid #d1d5db;
     border-radius: 6px; 
-    font-size: 0.9rem; 
+    font-size: 0.7rem; 
     font-family: inherit;
     background-color: white;
   }
@@ -198,6 +215,12 @@
     cursor: pointer;
   }
 
+  input:disabled, select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f3f4f6;
+  }
+
   .divider {
     display: flex;
     align-items: center;
@@ -205,7 +228,7 @@
   }
 
   .divider span {
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     font-weight: 800;
     color: #9ca3af;
     text-transform: uppercase;
@@ -224,5 +247,35 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
+  }
+
+  .option-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: opacity 0.2s;
+  }
+
+  .option-container.disabled {
+    opacity: 0.6;
+  }
+
+  .checkbox-label {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px !important;
+    cursor: pointer;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .option-body {
+    width: 100%;
   }
 </style>

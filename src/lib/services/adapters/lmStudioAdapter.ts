@@ -58,6 +58,7 @@ export class LmStudioAdapter implements ChatAdapter {
     finalSystemPrompt?: string
   ): { payload: any; context: any } {
     console.log("preparePayload massages:", messages);
+    console.log("preparePayload serverInstances:", serverInstances);
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
     const lastAssistantWithId = [...messages].reverse().find(m => (m as any).response_id);
     console.log("preparePayload previous_respose_id:", lastAssistantWithId? lastAssistantWithId.response_id || null : undefined);
@@ -66,27 +67,33 @@ export class LmStudioAdapter implements ChatAdapter {
       model: settings.modelName,
       input: lastUserMsg?.text || "",
       stream: true,
-      temperature: settings.temperature,
       system_prompt: finalSystemPrompt || settings.systemPrompt,
       store: true 
     };
 
     // Опциональные параметры сэмплирования для LM Studio
+    if (settings.temperature !== undefined) payload.temperature = settings.temperature;
     if (settings.topP !== undefined) payload.top_p = settings.topP;
     if (settings.minP !== undefined) payload.min_p = settings.minP;
+    if (settings.topK !== undefined) payload.top_k = settings.topK;
     if (settings.seed !== undefined) payload.seed = settings.seed;
-    if (settings.maxCompletionTokens !== undefined) payload.max_predict_tokens = settings.maxCompletionTokens;
+    if (settings.maxCompletionTokens !== undefined) payload.max_output_tokens = settings.maxCompletionTokens;
     if (settings.repeatPenalty !== undefined) payload.repeat_penalty = settings.repeatPenalty;
+    if (settings.reasoning && settings.reasoning !== 'off') payload.reasoning = settings.reasoning;
 
     if (serverInstances && serverInstances.length > 0) {
       const integrations = serverInstances
-        .filter(s => s.enabled && s.isConnected)
-        .map(server => ({
-          type: 'ephemeral_mcp',
-          server_label: server.name,
-          server_url: server.url,
-          headers: server.config?.headers || {}
-        }));
+        .map(server => {
+          return {
+            type: 'ephemeral_mcp',
+            server_label: server.name,
+            server_url: server.url,
+            // Явно передаем список разрешенных инструментов
+            allowed_tools: (server.tools || []).map((t: any) => t.name),
+            // Берем заголовки либо из проксированного объекта, либо напрямую из конфига
+            headers: server.headers || server.config?.headers || {}
+          };
+        });
 
       if (integrations.length > 0) {
         payload.integrations = integrations;

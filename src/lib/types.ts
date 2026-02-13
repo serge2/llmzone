@@ -45,22 +45,36 @@ export interface WorkspaceSettings {
   includeMcpInstructions?: boolean;
 
   // Общие параметры (OpenAI, OpenRouter, LM Studio)
-  temperature: number;
+  temperature?: number;
+  temperatureEnabled?: boolean;
   maxCompletionTokens?: number;
+  maxCompletionTokensEnabled?: boolean;
   topP?: number;             // top_p
+  topPEnabled?: boolean;
   frequencyPenalty?: number; // frequency_penalty [-2...2]
+  frequencyPenaltyEnabled?: boolean;
   presencePenalty?: number;  // presence_penalty [-2...2]
+  presencePenaltyEnabled?: boolean;
   seed?: number;
+  seedEnabled?: boolean;
   // Специфично для LM Studio
   topK?: number;             // top_k
+  topKEnabled?: boolean;
   minP?: number;             // min_p 
-  repeatPenalty?: number;    // repeat_penalty 
+  minPEnabled?: boolean;
+  repeatPenalty?: number;    // repeat_penalty
+  repeatPenaltyEnabled?: boolean;
   contextLength?: number;    // context_length
+  contextLengthEnabled?: boolean;
   // Параметры Рассуждений (Reasoning)
   // OpenAI использует reasoning_effort
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  reasoningEffortEnabled?: boolean;
+  verbosity?: 'low' | 'medium' | 'high';
+  verbosityEnabled?: boolean;
   // LM Studio использует reasoning (согласно их доке v1)
   reasoning?: 'off' | 'low' | 'medium' | 'high' | 'on'; 
+  reasoningEnabled?: boolean;
 
   mcpConfig?: string;
   mcpTimeout?: number;

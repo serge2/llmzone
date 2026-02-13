@@ -21,6 +21,40 @@ export class ChatService {
   }
 
   /**
+   * Метод для фильтрации настроек воркспейса на основе флагов "Enabled".
+   * Оставляет в объекте только те параметры, которые разрешено отправлять в модель.
+   */
+  private getActiveSettings(settings: WorkspaceSettings): WorkspaceSettings {
+    const activeSettings = { ...settings };
+
+    // Маппинг ключей значений к их флагам активации
+    const paramsMap: Array<[keyof WorkspaceSettings, keyof WorkspaceSettings]> = [
+      ['temperature', 'temperatureEnabled'],
+      ['maxCompletionTokens', 'maxCompletionTokensEnabled'],
+      ['topP', 'topPEnabled'],
+      ['frequencyPenalty', 'frequencyPenaltyEnabled'],
+      ['presencePenalty', 'presencePenaltyEnabled'],
+      ['seed', 'seedEnabled'],
+      ['topK', 'topKEnabled'],
+      ['minP', 'minPEnabled'],
+      ['repeatPenalty', 'repeatPenaltyEnabled'],
+      ['contextLength', 'contextLengthEnabled'],
+      ['reasoningEffort', 'reasoningEffortEnabled'],
+      ['reasoning', 'reasoningEnabled'],
+      ['verbosity', 'verbosityEnabled'],
+    ];
+
+    for (const [valKey, enabledKey] of paramsMap) {
+      if (!settings[enabledKey]) {
+        // Если опция выключена, удаляем значение из объекта для отправки
+        delete activeSettings[valKey];
+      }
+    }
+
+    return activeSettings;
+  }
+
+  /**
    * Метод для интеллектуальной генерации названия чата через адаптер
    */
   async generate_chat_title(chat: Chat, settings: WorkspaceSettings): Promise<string | 'SKIP'> {
@@ -52,7 +86,10 @@ export class ChatService {
     if (chat.isGenerating) return;
     chat.isGenerating = true;
 
-    const adapter = this.getAdapter(settings.providerType);
+    // Подготовка "чистых" настроек (только включенные опции)
+    const activeSettings = this.getActiveSettings(settings);
+    const adapter = this.getAdapter(activeSettings.providerType);
+    
     let currentAssistantMsgIdx: number | null = null;
     let streamingMessageId: string | null = null; // Фиксация активного сообщения для предотвращения дублей
     
@@ -61,8 +98,8 @@ export class ChatService {
 
     try {
       // ПРИМЕНЕНИЕ СИСТЕМНОГО ПРОМПТА И ИНСТРУКЦИЙ
-      let fullSystemPrompt = settings.systemPrompt || "";
-      const shouldIncludeMcp = settings.includeMcpInstructions ?? true;
+      let fullSystemPrompt = activeSettings.systemPrompt || "";
+      const shouldIncludeMcp = activeSettings.includeMcpInstructions ?? true;
 
       if (shouldIncludeMcp) {
         const wsId = serverInstances.length > 0 ? serverInstances[0].workspaceId : null;
@@ -72,15 +109,15 @@ export class ChatService {
         }
       }
 
-      if (settings.followFirstMessage) {
+      if (activeSettings.followFirstMessage) {
         const firstUserMsg = chat.history.find(m => m.role === 'user');
         if (firstUserMsg?.text) {
           fullSystemPrompt += (fullSystemPrompt ? "\n\n" : "") + `### PRIMARY GOAL:\n${firstUserMsg.text}`;
         }
       }
       
-      const maxIterations = (settings.toolsLoopLimitEnabled ?? true) 
-        ? (settings.toolsMaxIterations ?? this.DEFAULT_MAX_ITERATIONS) 
+      const maxIterations = (activeSettings.toolsLoopLimitEnabled ?? true) 
+        ? (activeSettings.toolsMaxIterations ?? this.DEFAULT_MAX_ITERATIONS) 
         : Infinity;
 
       let iteration = 0;
@@ -89,6 +126,27 @@ export class ChatService {
       while (isLooping && iteration <= maxIterations) {
         if (abortSignal.aborted) break;
         iteration++;
+
+        // --- ФИЛЬТРАЦИЯ ИНСТРУМЕНТОВ (БЕЗОПАСНАЯ) ---
+        // Мы создаем обертку вокруг оригинального объекта сервера.
+        const filteredServers = serverInstances
+          .filter(s => s.enabled && s.isConnected)
+          .map(server => {
+            // Явно извлекаем инструменты, которые включены пользователем
+            const activeTools = server.tools.filter((t: any) => t.enabled !== false);
+            
+            // Возвращаем DTO-объект, который гарантированно содержит нужные поля для адаптеров
+            return {
+              name: server.name,
+              url: server.url,        // Явно прокидываем из $state
+              headers: server.headers, // Явно прокидываем из $state
+              autoApproveAll: server.autoApproveAll,
+              tools: activeTools,
+              // Сохраняем метод callTool через замыкание
+              callTool: (name: string, args: any) => server.callTool(name, args)
+            };
+          })
+          .filter(server => server.tools.length > 0);
 
         // Проверяем наличие инструментов, ожидающих подтверждения (для режима OpenAI)
         const lastMsg = chat.history[chat.history.length - 1];
@@ -101,8 +159,8 @@ export class ChatService {
           if (!requestContext) {
             const prep = adapter.preparePayload(
               chat.history.slice(0, -1), 
-              settings, 
-              serverInstances,
+              activeSettings, // Используем отфильтрованные настройки
+              filteredServers, // Используем отфильтрованные данные
               fullSystemPrompt
             );
             requestContext = prep.context;
@@ -121,20 +179,20 @@ export class ChatService {
           });
           onUpdate();
 
-          // 1. ПОДГОТОВКА PAYLOAD ЧЕРЕЗ АДАПТЕР
+          // 1. ПОДГОТОВКА PAYLOAD ЧЕРЕЗ АДАПТЕР (С ОТФИЛЬТРОВАННЫМИ ИНСТРУМЕНТАМИ)
           const { payload, context } = adapter.preparePayload(
             chat.history.slice(0, -1), 
-            settings, 
-            serverInstances,
+            activeSettings, // Используем отфильтрованные настройки
+            filteredServers, // Используем отфильтрованные данные
             fullSystemPrompt
           );
           
           requestContext = context;
 
           // 2. ЗАПРОС К API
-          const response = await fetch(adapter.getEndpoint(settings.apiUrl), {
+          const response = await fetch(adapter.getEndpoint(activeSettings.apiUrl), {
             method: 'POST',
-            headers: adapter.getHeaders(settings),
+            headers: adapter.getHeaders(activeSettings),
             body: JSON.stringify(payload),
             signal: abortSignal
           });
@@ -247,8 +305,6 @@ export class ChatService {
                       }
                     }
 
-                    
-
                     onUpdate();
 
                     if (chunk.isDone) break;
@@ -326,6 +382,7 @@ export class ChatService {
               const toolBinding = requestContext?.toolLookupMap?.get(call.name);
               if (!toolBinding) throw new Error(m.chat_error_tool_not_found({ name: call.name }));
 
+              // Теперь callTool вызывается на объекте, который гарантированно имеет этот метод
               const result = await toolBinding.server.callTool(toolBinding.originalName, call.arguments);
               
               chat.history.push({
@@ -354,8 +411,8 @@ export class ChatService {
       }
 
       // ЛОГИКА АВТОМАТИЧЕСКОГО ПЕРЕИМЕНОВАНИЯ
-      if (settings.autoRenameEnabled && chat.is_untitled && !abortSignal.aborted) {
-        this.generate_chat_title(chat, settings).then(new_title => {
+      if (activeSettings.autoRenameEnabled && chat.is_untitled && !abortSignal.aborted) {
+        this.generate_chat_title(chat, activeSettings).then(new_title => {
           if (new_title && new_title !== 'SKIP') {
             console.log("[ChatService] New title suggested:", new_title);
             onRename(new_title);

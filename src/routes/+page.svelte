@@ -1,5 +1,5 @@
+<!-- src/routes/+page.svelte -->
 <script lang="ts">
-  import { fetch } from '@tauri-apps/plugin-http';
   import { onMount, untrack } from 'svelte';
   import { loadConfig, saveConfig } from '$lib/config';
   import type { Workspace, Chat, Message, AppSettings, GlobalConfig, Attachment } from '$lib/types'; // Добавлен импорт Attachment
@@ -8,8 +8,8 @@
     loadChatsForWorkspace, 
     saveChatsForWorkspace, 
     deleteWorkspaceFolder,
-    loadChatHistory,    // НОВОЕ: импорт для ленивой загрузки
-    deleteChatFolder    // НОВОЕ: импорт для удаления папки чата
+    loadChatHistory,    // импорт для ленивой загрузки
+    deleteChatFolder    // импорт для удаления папки чата
   } from '$lib/storage/chatStorage';
   import Inspector from '$lib/components/Inspector.svelte';
   
@@ -33,7 +33,7 @@
   let workspaces = $state<Workspace[]>([]);
   let selectedWorkspaceId = $state<string>('');
   let selectedChatId = $state<string>('');
-  let isHistoryLoading = $state(false); // НОВОЕ: состояние загрузки истории
+  let isHistoryLoading = $state(false); // состояние загрузки истории
   
   // Глобальные настройки
   let globalConfig = $state<GlobalConfig>({
@@ -47,7 +47,7 @@
   let currentLocaleState = $state(getLocale());
 
   let message = $state("");
-  // Словарь для независимых контроллеров отмены: { chatId: AbortController }
+  // Словарь для независимых контроллеров отмена: { chatId: AbortController }
   let abortControllers = $state<Record<string, AbortController>>({});
   let manualAborts = $state<Record<string, boolean>>({}); 
 
@@ -76,6 +76,44 @@
   const currentWorkspace = $derived(workspaces.find(w => w.id === selectedWorkspaceId));
   const currentChat = $derived(currentWorkspace?.chats.find(c => c.id === selectedChatId));
   const collapsedWorkspaces = $state<Record<string, boolean>>({});
+
+  // --- ЭФФЕКТИВНЫЕ НАСТРОЙКИ (Централизовано) ---
+  const effectiveSettings = $derived.by(() => {
+    if (!currentWorkspace) return null;
+    return {
+      apiUrl: currentWorkspace.settings.apiUrl || globalConfig.apiUrl,
+      apiKey: currentWorkspace.settings.apiKey || globalConfig.apiKey,
+      modelName: currentWorkspace.settings.modelName || globalConfig.modelName,
+      providerType: currentWorkspace.settings.providerType,
+      systemPrompt: currentWorkspace.settings.systemPrompt,
+      // Параметры сэмплирования и их флаги
+      temperature: currentWorkspace.settings.temperature,
+      temperatureEnabled: currentWorkspace.settings.temperatureEnabled ?? false,
+      topP: currentWorkspace.settings.topP,
+      topPEnabled: currentWorkspace.settings.topPEnabled ?? false,
+      maxCompletionTokens: currentWorkspace.settings.maxCompletionTokens,
+      maxCompletionTokensEnabled: currentWorkspace.settings.maxCompletionTokensEnabled ?? false,
+      seed: currentWorkspace.settings.seed,
+      seedEnabled: currentWorkspace.settings.seedEnabled ?? false,
+      minP: currentWorkspace.settings.minP,
+      minPEnabled: currentWorkspace.settings.minPEnabled ?? false,
+      repeatPenalty: currentWorkspace.settings.repeatPenalty,
+      repeatPenaltyEnabled: currentWorkspace.settings.repeatPenaltyEnabled ?? false,
+      contextLength: currentWorkspace.settings.contextLength,
+      contextLengthEnabled: currentWorkspace.settings.contextLengthEnabled ?? false,
+      reasoning: currentWorkspace.settings.reasoning,
+      reasoningEnabled: currentWorkspace.settings.reasoningEnabled ?? false,
+      reasoningEffort: currentWorkspace.settings.reasoningEffort,
+      reasoningEffortEnabled: currentWorkspace.settings.reasoningEffortEnabled ?? false,
+      // MCP и логика
+      mcpStates: currentWorkspace.settings.mcpStates,
+      followFirstMessage: currentWorkspace.settings.followFirstMessage,
+      includeMcpInstructions: currentWorkspace.settings.includeMcpInstructions,
+      toolsLoopLimitEnabled: currentWorkspace.settings.toolsLoopLimitEnabled,
+      toolsMaxIterations: currentWorkspace.settings.toolsMaxIterations,
+      autoRenameEnabled: currentWorkspace.settings.autoRenameEnabled
+    };
+  });
 
   // Реактивный заголовок чата, который обновляется при смене языка
   const headerChatName = $derived.by(() => {
@@ -218,6 +256,16 @@
           settings: {
             lastActiveTab: 'model',
             autoRenameEnabled: true, // Дефолт для существующих воркспейсов без флага
+            // Инициализация новых флагов для старых воркспейсов
+            temperatureEnabled: ws.settings.temperatureEnabled ?? false,
+            topPEnabled: ws.settings.topPEnabled ?? false,
+            maxCompletionTokensEnabled: ws.settings.maxCompletionTokensEnabled ?? false,
+            seedEnabled: ws.settings.seedEnabled ?? false,
+            minPEnabled: ws.settings.minPEnabled ?? false,
+            repeatPenaltyEnabled: ws.settings.repeatPenaltyEnabled ?? false,
+            contextLengthEnabled: ws.settings.contextLengthEnabled ?? false,
+            reasoningEnabled: ws.settings.reasoningEnabled ?? false,
+            reasoningEffortEnabled: ws.settings.reasoningEffortEnabled ?? false,
             ...ws.settings
           },
           chats: (savedChats || []).map(c => ({
@@ -261,9 +309,23 @@
           modelName: '',
           systemPrompt: '',
           temperature: 0.7,
+          temperatureEnabled: false,
           topP: 1.0,
+          topPEnabled: false,
           maxCompletionTokens: undefined,
+          maxCompletionTokensEnabled: false,
           seed: undefined,
+          seedEnabled: false,
+          minP: 0.05,
+          minPEnabled: false,
+          repeatPenalty: 1.1,
+          repeatPenaltyEnabled: false,
+          contextLength: 4096,
+          contextLengthEnabled: false,
+          reasoning: 'off',
+          reasoningEnabled: false,
+          reasoningEffort: 'medium',
+          reasoningEffortEnabled: false,
           followFirstMessage: false,
           includeMcpInstructions: true,
           lastActiveTab: 'model',
@@ -357,7 +419,23 @@
         modelName: '',
         systemPrompt: '',
         temperature: 0.7,
+        temperatureEnabled: false,
         topP: 1.0,
+        topPEnabled: false,
+        maxCompletionTokens: undefined,
+        maxCompletionTokensEnabled: false,
+        seed: undefined,
+        seedEnabled: false,
+        minP: 0.05,
+        minPEnabled: false,
+        repeatPenalty: 1.1,
+        repeatPenaltyEnabled: false,
+        contextLength: 32768,
+        contextLengthEnabled: false,
+        reasoning: 'off',
+        reasoningEnabled: false,
+        reasoningEffort: 'medium',
+        reasoningEffortEnabled: false,
         followFirstMessage: false,
         includeMcpInstructions: true,
         lastActiveTab: 'model',
@@ -566,7 +644,7 @@
 
   // --- ЛОГИКА ПОДТВЕРЖДЕНИЯ ИНСТРУМЕНТОВ ---
   async function handleApproveTool(callId: string, status: 'approved' | 'rejected') {
-    if (!currentChat || !currentWorkspace) return;
+    if (!currentChat || !currentWorkspace || !effectiveSettings) return;
 
     // 1. Находим и обновляем статус подтверждения в истории
     for (const msg of currentChat.history) {
@@ -585,36 +663,13 @@
       if (!abortControllers[currentChat.id]) {
         abortControllers[currentChat.id] = new AbortController();
       }
-      
-      const effectiveSettings = {
-        apiUrl: currentWorkspace.settings.apiUrl || globalConfig.apiUrl,
-        apiKey: currentWorkspace.settings.apiKey || globalConfig.apiKey,
-        modelName: currentWorkspace.settings.modelName || globalConfig.modelName,
-        providerType: currentWorkspace.settings.providerType,
-        systemPrompt: currentWorkspace.settings.systemPrompt,
-        temperature: currentWorkspace.settings.temperature,
-        topP: currentWorkspace.settings.topP,
-        maxCompletionTokens: currentWorkspace.settings.maxCompletionTokens,
-        seed: currentWorkspace.settings.seed,
-        reasoningEffort: currentWorkspace.settings.reasoningEffort,
-        reasoning: currentWorkspace.settings.reasoning,
-        minP: currentWorkspace.settings.minP,
-        repeatPenalty: currentWorkspace.settings.repeatPenalty,
-        contextLength: currentWorkspace.settings.contextLength,
-        mcpStates: currentWorkspace.settings.mcpStates,
-        followFirstMessage: currentWorkspace.settings.followFirstMessage,
-        includeMcpInstructions: currentWorkspace.settings.includeMcpInstructions,
-        toolsLoopLimitEnabled: currentWorkspace.settings.toolsLoopLimitEnabled,
-        toolsMaxIterations: currentWorkspace.settings.toolsMaxIterations,
-        autoRenameEnabled: currentWorkspace.settings.autoRenameEnabled
-      };
 
       const chatSpecificServers = mcpManager.getForWorkspace(currentWorkspace.id);
 
       try {
         await chatService.send(
           currentChat,
-          effectiveSettings,
+          effectiveSettings, // Используем централизованные настройки
           chatSpecificServers,
           () => {
             workspaces = [...workspaces];
@@ -639,30 +694,21 @@
 
   /**
    * Продолжает генерацию, если она была прервана лимитом итераций.
-   * Мы просто сбрасываем флаг и вызываем sendMessage без новых сообщений пользователя.
    */
   async function handleExtendLimit() {
     if (!currentChat || !currentWorkspace) return;
 
-    // Находим последнее сообщение с флагом и убираем его
     const lastMsg = currentChat.history[currentChat.history.length - 1];
     if (lastMsg && lastMsg.requiresLimitExtension) {
       lastMsg.requiresLimitExtension = false;
     }
 
-    // Вызываем sendMessage. 
-    // Так как переменная message пуста, сервис просто подхватит историю и пойдет на новый цикл.
     await sendMessage();
-
-    // Принудительно скроллим вниз после запуска
-    // tick().then(() => {
-    //   chatWindowComponent?.scrollToBottom(true);
-    // }); 
   }
 
   // --- Основная логика отправки (теперь через ChatService с поддержкой MCP) ---
   async function sendMessage(attachments: Attachment[] = []) { // Обновлено: принимает аттачи
-    if (!currentChat || !currentWorkspace) return;
+    if (!currentChat || !currentWorkspace || !effectiveSettings) return;
 
     if (currentChat.isGenerating) {
       stopGeneration(currentChat.id);
@@ -675,35 +721,6 @@
     }
 
     const chatToUpdate = currentChat;
-    
-    // Находим воркспейс, к которому реально относится этот чат
-    const chatWorkspace = workspaces.find(ws => ws.chats.some(c => c.id === chatToUpdate.id));
-    if (!chatWorkspace) return;
-
-    // Подготовка эффективных настроек
-    const effectiveSettings = {
-      apiUrl: chatWorkspace.settings.apiUrl || globalConfig.apiUrl,
-      apiKey: chatWorkspace.settings.apiKey || globalConfig.apiKey,
-      modelName: chatWorkspace.settings.modelName || globalConfig.modelName,
-      providerType: chatWorkspace.settings.providerType,
-      systemPrompt: chatWorkspace.settings.systemPrompt,
-      temperature: chatWorkspace.settings.temperature,
-      topP: chatWorkspace.settings.topP,
-      maxCompletionTokens: chatWorkspace.settings.maxCompletionTokens,
-      seed: chatWorkspace.settings.seed,
-      reasoningEffort: chatWorkspace.settings.reasoningEffort,
-      reasoning: chatWorkspace.settings.reasoning,
-      minP: chatWorkspace.settings.minP,
-      repeatPenalty: chatWorkspace.settings.repeatPenalty,
-      contextLength: chatWorkspace.settings.contextLength,
-      mcpStates: chatWorkspace.settings.mcpStates,
-      followFirstMessage: chatWorkspace.settings.followFirstMessage,
-      includeMcpInstructions: chatWorkspace.settings.includeMcpInstructions,
-      toolsLoopLimitEnabled: chatWorkspace.settings.toolsLoopLimitEnabled,
-      toolsMaxIterations: chatWorkspace.settings.toolsMaxIterations,
-      autoRenameEnabled: chatWorkspace.settings.autoRenameEnabled
-    };
-
     const chatToUpdateId = chatToUpdate.id;
 
     // Создаем новый контроллер для этого конкретного чата
@@ -719,10 +736,14 @@
         attachments: attachments.length > 0 ? attachments : undefined // Сохраняем аттачи
       }];
       
-      const chatIndex = chatWorkspace.chats.findIndex(c => c.id === chatToUpdateId);
-      if (chatIndex > 0) {
-        const [movedChat] = chatWorkspace.chats.splice(chatIndex, 1);
-        chatWorkspace.chats.unshift(movedChat);
+      // Находим воркспейс для перемещения чата наверх
+      const chatWorkspace = workspaces.find(ws => ws.chats.some(c => c.id === chatToUpdateId));
+      if (chatWorkspace) {
+        const chatIndex = chatWorkspace.chats.findIndex(c => c.id === chatToUpdateId);
+        if (chatIndex > 0) {
+          const [movedChat] = chatWorkspace.chats.splice(chatIndex, 1);
+          chatWorkspace.chats.unshift(movedChat);
+        }
       }
       
       message = "";
@@ -737,17 +758,16 @@
         await chatWindowComponent?.scrollToBottom();
     }
 
-    // Получаем специфичные для воркспейса этого чата инстанво серверов
-    const chatSpecificServers = mcpManager.getForWorkspace(chatWorkspace.id);
+    // Получаем специфичные для воркспейса этого чата инстансы серверов
+    const chatSpecificServers = mcpManager.getForWorkspace(currentWorkspace.id);
 
     try {
-      // Вызываем универсальный сервис чата, который обработает цепочку MCP инструментов
+      // Вызываем универсальный сервис чата
       await chatService.send(
         chatToUpdate,
-        effectiveSettings,
+        effectiveSettings, // Используем централизованные настройки
         chatSpecificServers, 
         () => {
-          // Коллбэк для реактивного обновления UI при каждом шаге
           workspaces = [...workspaces];
           if (chatToUpdateId === selectedChatId) {
               chatWindowComponent?.scrollToBottom();
@@ -816,7 +836,7 @@
         selectedWorkspaceId = id;
         const ws = workspaces.find(w => w.id === id);
         if (ws?.chats.length) {
-          selectChat(ws.chats[0].id, id); // Используем selectChat для подгрузки истории
+          selectChat(ws.chats[0].id, id); 
         } else {
           selectedChatId = '';
         }
@@ -891,7 +911,6 @@
 </main>
 
 <style>
-  /* Стили без изменений */
   .app-container {
     height: 100vh;
     display: flex;

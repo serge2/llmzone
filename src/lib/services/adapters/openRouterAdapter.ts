@@ -44,7 +44,8 @@ export class OpenRouterAdapter implements ChatAdapter {
 
     if (serverInstances) {
       for (const instance of serverInstances) {
-        if (!instance.enabled || !instance.isConnected) continue;
+        // ChatService уже отфильтровал выключенные сервера и инструменты.
+        // Просто собираем то, что разрешено.
         for (const tool of instance.tools) {
           const uniqueName = `${instance.name}_${tool.name}`.replace(/[^a-zA-Z0-9_-]/g, '_');
           toolLookupMap.set(uniqueName, { server: instance, originalName: tool.name });
@@ -61,7 +62,6 @@ export class OpenRouterAdapter implements ChatAdapter {
     }
 
     const payload: any = {
-      model: settings.modelName,
       messages: [
         { role: 'system', content: finalSystemPrompt },
         ...messages.map(m => {
@@ -74,7 +74,7 @@ export class OpenRouterAdapter implements ChatAdapter {
                 : String(m.tool_result?.content || "") 
             };
           }
-          
+
           const msg: any = { role: m.role, content: m.text || "" };
 
           if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
@@ -86,24 +86,25 @@ export class OpenRouterAdapter implements ChatAdapter {
                 arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments || {})
               }
             }));
+            if ('approvalStatus' in (msg as any)) delete (msg as any).approvalStatus;
           }
           return msg;
         })
       ],
-      stream: true,
-      temperature: settings.temperature,
-      // Специфика OpenRouter для моделей с рассуждениями
-      include_reasoning: true 
+      stream: true
     };
 
     // Опциональные параметры — добавляем только если они заданы пользователем
+    if (settings.modelName !== undefined) payload.model = settings.modelName;
+    if (settings.temperature !== undefined) payload.temperature = settings.temperature;
     if (settings.topP !== undefined) payload.top_p = settings.topP;
     if (settings.seed !== undefined) payload.seed = settings.seed;
     if (settings.maxCompletionTokens !== undefined) payload.max_completion_tokens = settings.maxCompletionTokens;
     if (settings.frequencyPenalty !== undefined) payload.frequency_penalty = settings.frequencyPenalty;
     if (settings.presencePenalty !== undefined) payload.presence_penalty = settings.presencePenalty;
+    if (settings.verbosity !== undefined) payload.verbosity = settings.verbosity;
 
-    // Поддержка reasoning_effort для моделей OpenAI через OpenRouter
+    // Параметры рассуждений для моделей OpenAI (o1, o3-mini)
     if (settings.reasoningEffort && settings.reasoningEffort !== 'none') {
       payload.reasoning_effort = settings.reasoningEffort;
       
