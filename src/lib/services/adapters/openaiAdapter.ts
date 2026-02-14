@@ -73,7 +73,10 @@ export class OpenAIAdapter implements ChatAdapter {
           return msg;
         })
       ],
-      stream: true
+      stream: true,
+      stream_options: {
+        include_usage: true
+      }
     };
 
     // Опциональные параметры — добавляем только если они заданы пользователем
@@ -85,19 +88,8 @@ export class OpenAIAdapter implements ChatAdapter {
     if (settings.frequencyPenalty !== undefined) payload.frequency_penalty = settings.frequencyPenalty;
     if (settings.presencePenalty !== undefined) payload.presence_penalty = settings.presencePenalty;
     if (settings.verbosity !== undefined) payload.verbosity = settings.verbosity;
-
-    // Параметры рассуждений для моделей OpenAI (o1, o3-mini)
-    if (settings.reasoningEffort && settings.reasoningEffort !== 'none') {
-      payload.reasoning_effort = settings.reasoningEffort;
+    if (settings.reasoningEffort) payload.reasoning_effort = settings.reasoningEffort;
       
-      // Специфика OpenAI: модели o1/o3 не принимают temperature и top_p при включенном рассуждении
-      const isOModel = settings.modelName.startsWith('o1') || settings.modelName.startsWith('o3');
-      if (isOModel) {
-        delete payload.temperature;
-        delete payload.top_p;
-      }
-    }
-
     if (tools.length > 0) payload.tools = tools;
 
     console.log("Prepared OpenAI payload:", payload);
@@ -110,7 +102,19 @@ export class OpenAIAdapter implements ChatAdapter {
 
     try {
       const data = JSON.parse(raw);
-      if (data.error) return { isDone: true };
+      console.log("[OpenAI] Received chunk:", data);
+      if (data.error) {
+        console.error("[OpenAI] Error chunk:", data.error);
+        return { isDone: true };
+      }
+
+      if (data.object !== 'chat.completion.chunk') {
+        return {};
+      }
+
+      if (data.usage) {
+        return { usage: data.usage, isDone: true };
+      }
 
       const choice = data.choices?.[0];
       if (!choice) return {};
@@ -119,7 +123,10 @@ export class OpenAIAdapter implements ChatAdapter {
       const result: StreamChunkResult = {};
 
       if (delta?.content) result.content = delta.content;
-      if (delta?.reasoning_content) result.reasoning = delta.reasoning_content;
+      // Сбор рассуждений (reasoning/thought)
+      if (delta?.reasoning || delta?.reasoning_content || delta?.thought) {
+        result.reasoning = delta.reasoning || delta.reasoning_content || delta.thought;
+      }
 
       if (delta?.tool_calls) {
         for (const tc of delta.tool_calls) {
@@ -146,7 +153,6 @@ export class OpenAIAdapter implements ChatAdapter {
         });
       }
 
-      if (data.usage) result.usage = data.usage;
       if (choice.finish_reason === 'stop' || choice.finish_reason === 'tool_calls') result.isDone = true;
 
       return result;

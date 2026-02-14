@@ -91,7 +91,10 @@ export class OpenRouterAdapter implements ChatAdapter {
           return msg;
         })
       ],
-      stream: true
+      stream: true,
+      stream_options: {
+        include_usage: true
+      }
     };
 
     // Опциональные параметры — добавляем только если они заданы пользователем
@@ -99,23 +102,13 @@ export class OpenRouterAdapter implements ChatAdapter {
     if (settings.temperature !== undefined) payload.temperature = settings.temperature;
     if (settings.topP !== undefined) payload.top_p = settings.topP;
     if (settings.seed !== undefined) payload.seed = settings.seed;
+    if (settings.maxTokens !== undefined) payload.max_tokens = settings.maxTokens;
     if (settings.maxCompletionTokens !== undefined) payload.max_completion_tokens = settings.maxCompletionTokens;
     if (settings.frequencyPenalty !== undefined) payload.frequency_penalty = settings.frequencyPenalty;
     if (settings.presencePenalty !== undefined) payload.presence_penalty = settings.presencePenalty;
-    if (settings.verbosity !== undefined) payload.verbosity = settings.verbosity;
-
-    // Параметры рассуждений для моделей OpenAI (o1, o3-mini)
-    if (settings.reasoningEffort && settings.reasoningEffort !== 'none') {
-      payload.reasoning_effort = settings.reasoningEffort;
+    
+    if (settings.reasoningEffort) payload.reasoning = { effort: settings.reasoningEffort };
       
-      // Для моделей серии o1/o3 убираем несовместимые параметры
-      const isOModel = settings.modelName.includes('openai/o1') || settings.modelName.includes('openai/o3');
-      if (isOModel) {
-        delete payload.temperature;
-        delete payload.top_p;
-      }
-    }
-
     if (tools.length > 0) {
       payload.tools = tools;
       payload.tool_choice = 'auto';
@@ -131,24 +124,35 @@ export class OpenRouterAdapter implements ChatAdapter {
    * Теперь принимает строку (line) и контекст, как и остальные адаптеры.
    */
   parseStreamChunk(line: string, context: any): StreamChunkResult {
-    const raw = line.replace(/^data: /, '').trim();
-    if (!raw || raw === '[DONE]') return { isDone: true };
+    const trimmed = line.trim();
+    
+    // Игнорируем строки типов событий SSE (: OPENROUTER PROCESSING), которые OpenRouter может вставлять для обозначения этапов обработки.  
+    if (trimmed.startsWith(': OPENROUTER PROCESSING')) {
+      return {};
+    }
 
+    const raw = trimmed.replace(/^data: /, '').trim();
+    if (!raw || raw === '[DONE]') return { isDone: true };
+  
     try {
       const data = JSON.parse(raw);
-      
+      console.log("[OpenRouter] Received chunk:", data);
       if (data.error) {
         console.error("[OpenRouter] Error chunk:", data.error);
         return { isDone: true };
       }
 
-      const choice = data.choices?.[0];
+      if (data.object !== 'chat.completion.chunk') {
+        return {};
+      }
+
       
       // OpenRouter часто присылает usage в финальном пустом чанке
-      if (!choice && data.usage) {
+      if (data.usage) {
         return { usage: data.usage, isDone: true };
       }
       
+      const choice = data.choices?.[0];
       if (!choice) return {};
 
       const delta = choice.delta;

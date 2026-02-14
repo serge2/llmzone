@@ -44,36 +44,38 @@ export interface WorkspaceSettings {
   followFirstMessage?: boolean;
   includeMcpInstructions?: boolean;
 
-  // Общие параметры (OpenAI, OpenRouter, LM Studio)
-  temperature?: number;
+  
+  temperature?: number;             // OpenAI, OpenRouter, LM Studio
   temperatureEnabled?: boolean;
-  maxCompletionTokens?: number;
+  maxCompletionTokens?: number;     // OpenAI, OpenRouter, LM Studio (max_output_tokens)
   maxCompletionTokensEnabled?: boolean;
-  topP?: number;             // top_p
+  maxTokens?: number;               // OpenRouter
+  maxTokensEnabled?: boolean;
+  topP?: number;                    // OpenAI, OpenRouter, LM Studio
   topPEnabled?: boolean;
-  frequencyPenalty?: number; // frequency_penalty [-2...2]
+  frequencyPenalty?: number;        // OpenAI, OpenRouter
   frequencyPenaltyEnabled?: boolean;
-  presencePenalty?: number;  // presence_penalty [-2...2]
+  presencePenalty?: number;         // OpenAI, OpenRouter
   presencePenaltyEnabled?: boolean;
-  seed?: number;
+  seed?: number;                    // OpenAI, OpenRouter
   seedEnabled?: boolean;
-  // Специфично для LM Studio
-  topK?: number;             // top_k
+  topK?: number;                    // LM Studio
   topKEnabled?: boolean;
-  minP?: number;             // min_p 
+  minP?: number;                    // LM Studio 
   minPEnabled?: boolean;
-  repeatPenalty?: number;    // repeat_penalty
+  repeatPenalty?: number;           // LM Studio
   repeatPenaltyEnabled?: boolean;
-  contextLength?: number;    // context_length
+  contextLength?: number;           // LM Studio
   contextLengthEnabled?: boolean;
   // Параметры Рассуждений (Reasoning)
   // OpenAI использует reasoning_effort
-  reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  // OpenRouter использует reasoning с вложенным effort
+  reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'; // OpenAI, OpenRouter
   reasoningEffortEnabled?: boolean;
-  verbosity?: 'low' | 'medium' | 'high';
+  verbosity?: 'low' | 'medium' | 'high'; // OpenAI
   verbosityEnabled?: boolean;
   // LM Studio использует reasoning (согласно их доке v1)
-  reasoning?: 'off' | 'low' | 'medium' | 'high' | 'on'; 
+  reasoning?: 'off' | 'low' | 'medium' | 'high' | 'on'; // LM Studio
   reasoningEnabled?: boolean;
 
   mcpConfig?: string;

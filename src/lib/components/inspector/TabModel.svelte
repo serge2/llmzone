@@ -147,44 +147,81 @@
 
   <div class="divider"><span>{_i18n && m.tab_model_sampling_limits()}</span></div>
 
-  {@render option(m.tab_model_temperature(), 'temperature', 'temperatureEnabled', 'range', { min: 0, max: 2, step: 0.1, default: 1 })}
-
-  <div class="grid-params">
-    {@render option(m.tab_model_max_tokens(), 'maxCompletionTokens', 'maxCompletionTokensEnabled', 'number', { placeholder: "Auto" })}
+  {#if currentWorkspace.settings.providerType === 'openrouter'}
+    {@render option(m.tab_model_temperature(), 'temperature', 'temperatureEnabled', 'range', { min: 0, max: 2, step: 0.1, default: 1 })}
     {@render option(m.tab_model_top_p(), 'topP', 'topPEnabled', 'range', { min: 0, max: 1, step: 0.05, default: 1 })}
-  </div>
+    <div class="grid-params">
+      {@render option(m.tab_model_max_completion_tokens(), 'maxCompletionTokens', 'maxCompletionTokensEnabled', 'number', { placeholder: "Auto" })}
+      {@render option(m.tab_model_max_tokens(), 'maxTokens', 'maxTokensEnabled', 'number', { placeholder: "Auto" })}
+    </div>
+    {@render option(m.tab_model_presence_penalty(), 'presencePenalty', 'presencePenaltyEnabled', 'range', { min: -2, max: 2, step: 0.05, default: 0 })}
+    {@render option(m.tab_model_frequency_penalty(), 'frequencyPenalty', 'frequencyPenaltyEnabled', 'range', { min: -2, max: 2, step: 0.05, default: 0 })}
 
-  <div class="divider"><span>{_i18n && m.tab_model_strategy()}</span></div>
+    <div class="divider"><span>{_i18n && m.tab_model_strategy()}</span></div>
 
-  {#if currentWorkspace.settings.providerType === 'lm-studio'}
-    {#snippet lmStudioReasoning()}
+    {#snippet reasoningEffortOptions()}
+      <option value="none">None</option>
+      <option value="minimal">Minimal</option>
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+      <option value="xhigh">XHigh</option>
+    {/snippet}
+
+    {@render option(m.tab_model_reasoning_effort(), 'reasoningEffort', 'reasoningEffortEnabled', 'select', { children: reasoningEffortOptions })}
+    {@render option(m.tab_model_seed(), 'seed', 'seedEnabled', 'number', { placeholder: "None" })}
+
+  {:else if currentWorkspace.settings.providerType === 'openai'}
+
+    {@render option(m.tab_model_temperature(), 'temperature', 'temperatureEnabled', 'range', { min: 0, max: 2, step: 0.1, default: 0.8 })}
+    {@render option(m.tab_model_top_p(), 'topP', 'topPEnabled', 'range', { min: 0, max: 1, step: 0.05, default: 0.95 })}
+    {@render option(m.tab_model_max_completion_tokens(), 'maxCompletionTokens', 'maxCompletionTokensEnabled', 'number', { placeholder: "Auto" })}
+    {@render option(m.tab_model_presence_penalty(), 'presencePenalty', 'presencePenaltyEnabled', 'range', { min: -2, max: 2, step: 0.05, default: 0 })}
+    {@render option(m.tab_model_frequency_penalty(), 'frequencyPenalty', 'frequencyPenaltyEnabled', 'range', { min: -2, max: 2, step: 0.05, default: 0 })}
+
+    <div class="divider"><span>{_i18n && m.tab_model_strategy()}</span></div>
+
+    {#snippet reasoningEffortOptions()}
+      <option value="none">None</option>
+      <option value="minimal">Minimal</option>
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+      <option value="xhigh">XHigh</option>
+    {/snippet}
+    {@render option(m.tab_model_reasoning_effort(), 'reasoningEffort', 'reasoningEffortEnabled', 'select', { children: reasoningEffortOptions })}
+
+    {#snippet verbosityOptions()}
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+    {/snippet}
+    {@render option(m.tab_model_verbosity(), 'verbosity', 'verbosityEnabled', 'select', { children: verbosityOptions })}
+    {@render option(m.tab_model_seed(), 'seed', 'seedEnabled', 'number', { placeholder: "None" })}
+
+
+  {:else if currentWorkspace.settings.providerType === 'lm-studio'}
+
+    {@render option(m.tab_model_temperature(), 'temperature', 'temperatureEnabled', 'range', { min: 0, max: 1, step: 0.05, default: 0.8 })}
+    {@render option(m.tab_model_top_p(), 'topP', 'topPEnabled', 'range', { min: 0, max: 1, step: 0.05, default: 0.95 })}
+    {@render option(m.tab_model_top_k(), 'topK', 'topKEnabled', 'range', { min: 0, max: 100, step: 1, default: 40 })}
+    {@render option(m.tab_model_min_p(), 'minP', 'minPEnabled', 'range', { min: 0, max: 1, step: 0.01, default: 0.05 })}
+    {@render option(m.tab_model_repeat_penalty(), 'repeatPenalty', 'repeatPenaltyEnabled', 'range', { min: 1, max: 2, step: 0.05, default: 1.1 })}
+    {@render option(m.tab_model_max_completion_tokens(), 'maxCompletionTokens', 'maxCompletionTokensEnabled', 'number', { placeholder: "Auto" })}
+
+    <div class="divider"><span>{_i18n && m.tab_model_strategy()}</span></div>
+    
+    {#snippet reasoningOptions()}
       <option value="off">Off</option>
       <option value="low">Low</option>
       <option value="medium">Medium</option>
       <option value="high">High</option>
       <option value="on">On</option>
     {/snippet}
+    {@render option(m.tab_model_reasoning_effort(), 'reasoning', 'reasoningEnabled', 'select', { children: reasoningOptions })}
+    {@render option(m.tab_model_context_length(), 'contextLength', 'contextLengthEnabled', 'number', { placeholder: "Auto" })}
 
-    {@render option(m.tab_model_reasoning_mode(), 'reasoning', 'reasoningEnabled', 'select', { children: lmStudioReasoning })}
-
-    {@render option(m.tab_model_context_length(), 'contextLength', 'contextLengthEnabled', 'number', { placeholder: "Default" })}
-
-    <div class="grid-params">
-      {@render option(m.tab_model_min_p(), 'minP', 'minPEnabled', 'range', { min: 0, max: 1, step: 0.01, default: 0.05 })}
-      {@render option(m.tab_model_repeat_penalty(), 'repeatPenalty', 'repeatPenaltyEnabled', 'range', { min: 1, max: 2, step: 0.05, default: 1.1 })}
-    </div>
-  {:else}
-    {#snippet reasoningEffortOptions()}
-      <option value="none">None</option>
-      <option value="low">Low</option>
-      <option value="medium">Medium</option>
-      <option value="high">High</option>
-    {/snippet}
-
-    {@render option(m.tab_model_reasoning_effort(), 'reasoningEffort', 'reasoningEffortEnabled', 'select', { children: reasoningEffortOptions })}
   {/if}
-
-  {@render option(m.tab_model_seed(), 'seed', 'seedEnabled', 'number', { placeholder: "None" })}
 </div>
 
 <style>

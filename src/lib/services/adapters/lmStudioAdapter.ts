@@ -76,9 +76,9 @@ export class LmStudioAdapter implements ChatAdapter {
     if (settings.topP !== undefined) payload.top_p = settings.topP;
     if (settings.minP !== undefined) payload.min_p = settings.minP;
     if (settings.topK !== undefined) payload.top_k = settings.topK;
-    if (settings.seed !== undefined) payload.seed = settings.seed;
     if (settings.maxCompletionTokens !== undefined) payload.max_output_tokens = settings.maxCompletionTokens;
     if (settings.repeatPenalty !== undefined) payload.repeat_penalty = settings.repeatPenalty;
+    if (settings.contextLength !== undefined) payload.context_length = settings.contextLength;
     if (settings.reasoning && settings.reasoning !== 'off') payload.reasoning = settings.reasoning;
 
     if (serverInstances && serverInstances.length > 0) {
@@ -180,8 +180,9 @@ export class LmStudioAdapter implements ChatAdapter {
             if (event.tool) context.currentToolCall.name = event.tool;
             context.currentToolCall.arguments = event.arguments;
             const finalCall = { ...context.currentToolCall };
+            context.currentToolCall = null;
+            context.activeCallId = null;
             
-            // --- ЧЕСТНЫЙ ВЫВОД БЕЗ МОДИФИКАЦИЙ ---
             let rawOutput = event.output;
             try {
               // Десериализуем строку из лога в реальный объект, 
@@ -190,10 +191,9 @@ export class LmStudioAdapter implements ChatAdapter {
               rawOutput = JSON.stringify(parsed, null, 2);
             } catch (e) {
               // Если это не JSON, оставляем как пришло
-              rawOutput = event.output;
             }
 
-            const result = { 
+            return { 
               toolCalls: [finalCall],
               toolResult: {
                 tool_call_id: finalCall.id,
@@ -201,11 +201,6 @@ export class LmStudioAdapter implements ChatAdapter {
                 isError: false
               }
             };
-
-            context.currentToolCall = null;
-            context.activeCallId = null;
-
-            return result;
           }
           break;
 
@@ -230,7 +225,6 @@ export class LmStudioAdapter implements ChatAdapter {
 
         case 'message.delta':
           return { content: event.content };
-
         case 'error':
           throw new Error(event.error?.message || 'LM Studio Stream Error');
 

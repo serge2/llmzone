@@ -31,6 +31,7 @@ export class ChatService {
     const paramsMap: Array<[keyof WorkspaceSettings, keyof WorkspaceSettings]> = [
       ['temperature', 'temperatureEnabled'],
       ['maxCompletionTokens', 'maxCompletionTokensEnabled'],
+      ['maxTokens', 'maxTokensEnabled'],
       ['topP', 'topPEnabled'],
       ['frequencyPenalty', 'frequencyPenaltyEnabled'],
       ['presencePenalty', 'presencePenaltyEnabled'],
