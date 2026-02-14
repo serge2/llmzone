@@ -9,18 +9,23 @@ class ToastService {
   messages = $state<Toast[]>([]);
 
   show(message: string, type: 'error' | 'success' | 'info' = 'error') {
-    const id = Date.now();
+    const id = this.uniqueId();
     this.messages.push({ id, message, type });
 
-    // Автоматическое удаление через 5 секунд
+    // Автоматическое удаление через 10 секунд
     setTimeout(() => {
       this.messages = this.messages.filter(t => t.id !== id);
-    }, 5000);
+    }, 10000);
   }
 
   remove(id: number) {
     this.messages = this.messages.filter(t => t.id !== id);
   }
+
+  private uniqueId() {
+    return Date.now()*1000 + Math.floor(Math.random() * 1000);
+  }
 }
 
 export const toastService = new ToastService();
+
