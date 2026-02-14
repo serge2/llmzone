@@ -14,12 +14,6 @@ export interface Attachment {
   type: 'image' | 'document' | 'archive' | 'other';
 }
 
-export interface GlobalConfig {
-  apiUrl: string;
-  apiKey: string;
-  modelName: string;
-}
-
 export interface MCPToolState {
   enabled: boolean;
   alwaysAllow: boolean;
@@ -142,5 +136,4 @@ export interface AppSettings {
   language: 'ru' | 'en';
   lastSelectedWorkspaceId: string;
   workspaces: Omit<Workspace, 'chats'>[];
-  globalConfig?: GlobalConfig;
 }

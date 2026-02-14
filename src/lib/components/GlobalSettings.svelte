@@ -1,10 +1,8 @@
 <script lang="ts">
-  import type { GlobalConfig } from '$lib/types';
   import { setLocale } from '$paraglide/runtime'; // getLocale больше не нужен здесь
   import * as m from '$paraglide/messages';
 
-  let { globalConfig, currentLocale, onSave, onClose }: { 
-    globalConfig: GlobalConfig, 
+  let {currentLocale, onSave, onClose }: { 
     currentLocale: string, // ПРИНИМАЕМ СНАРУЖИ
     onSave: () => void,
     onClose: () => void 
@@ -47,39 +45,6 @@
           <option value="ru">Русский</option>
           <option value="en">English</option>
         </select>
-      </div>
-      
-      <div class="setting-item">
-        <label for="apiUrl">{_i18n && m.settings_label_api_url()}</label>
-        <input 
-          id="apiUrl"
-          type="text" 
-          bind:value={globalConfig.apiUrl} 
-          onchange={onSave}
-          placeholder="http://localhost:1234"
-        />
-      </div>
-
-      <div class="setting-item">
-        <label for="apiKey">{_i18n && m.settings_label_api_key()}</label>
-        <input 
-          id="apiKey"
-          type="password" 
-          bind:value={globalConfig.apiKey} 
-          onchange={onSave}
-          placeholder={_i18n && m.settings_label_api_key()}
-        />
-      </div>
-
-      <div class="setting-item">
-        <label for="modelName">{_i18n && m.settings_label_model()}</label>
-        <input 
-          id="modelName"
-          type="text" 
-          bind:value={globalConfig.modelName} 
-          onchange={onSave}
-          placeholder="local-model"
-        />
       </div>
       
       <div class="footer-info">

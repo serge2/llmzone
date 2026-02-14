@@ -2,7 +2,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { loadConfig, saveConfig } from '$lib/config';
-  import type { Workspace, Chat, Message, AppSettings, GlobalConfig, Attachment } from '$lib/types'; // Добавлен импорт Attachment
+  import type { Workspace, Chat, Message, AppSettings, Attachment } from '$lib/types'; // Добавлен импорт Attachment
   // Обновленные импорты для работы с раздельными чатами
   import { 
     loadChatsForWorkspace, 
@@ -38,12 +38,6 @@
   // Временное состояние прогресса обработки (не сохраняется в историю)
   let currentPromptProgress = $state<number | null>(null);
 
-  // Глобальные настройки
-  let globalConfig = $state<GlobalConfig>({
-    apiUrl: 'http://localhost:1234/v1',
-    apiKey: '',
-    modelName: 'local-model'
-  });
 
   // --- РЕАКТИВНЫЙ МОСТИК ЛОКАЛИЗАЦИИ ---
   // Мы создаем явный стейт для локали, чтобы Svelte видел его изменения
@@ -84,9 +78,9 @@
   const effectiveSettings = $derived.by(() => {
     if (!currentWorkspace) return null;
     return {
-      apiUrl: currentWorkspace.settings.apiUrl || globalConfig.apiUrl,
-      apiKey: currentWorkspace.settings.apiKey || globalConfig.apiKey,
-      modelName: currentWorkspace.settings.modelName || globalConfig.modelName,
+      apiUrl: currentWorkspace.settings.apiUrl || '',
+      apiKey: currentWorkspace.settings.apiKey || '',
+      modelName: currentWorkspace.settings.modelName || '',
       providerType: currentWorkspace.settings.providerType,
       systemPrompt: currentWorkspace.settings.systemPrompt,
       // Параметры сэмплирования и их флаги
@@ -254,11 +248,6 @@
       currentLocaleState = config.language; // Синхронизируем руну
     }
     
-    // Загружаем глобальные настройки если они есть
-    if (config?.globalConfig) {
-      globalConfig = { ...globalConfig, ...config.globalConfig };
-    }
-
     if (config?.workspaces && config.workspaces.length > 0) {
       // 2. Инициализируем воркспейсы и подгружаем чаты для каждого из своих каталогов
       const loadedWorkspaces = await Promise.all(config.workspaces.map(async (ws) => {
@@ -410,7 +399,6 @@
       language: getLocale() as 'en' | 'ru',
       lastSelectedWorkspaceId: selectedWorkspaceId,
       workspaces: workspacesToSave,
-      globalConfig: $state.snapshot(globalConfig)
     };
     
     await saveConfig(configToSave);
@@ -871,7 +859,6 @@
     {#if selectedTab === 'settings'}
       <div class="modal-layer">
         <GlobalSettings 
-          {globalConfig}
           currentLocale={currentLocaleState}
           onSave={persistConfig} 
           onClose={() => selectedTab = 'chats'} 
@@ -942,7 +929,6 @@
       {#if inspectorVisible}
         <Inspector 
           bind:currentWorkspace={workspaces[workspaces.findIndex(w => w.id === selectedWorkspaceId)]} 
-          {globalConfig} 
           currentLocale={currentLocaleState}
           bind:serverInstances={mcpServers}
           onSettingsChange={() => {

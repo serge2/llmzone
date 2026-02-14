@@ -1,18 +1,16 @@
 <!-- src/lib/components/inspector/TabModel.svelte -->
 <script lang="ts">
-  import type { Workspace, GlobalConfig, WorkspaceSettings } from '$lib/types';
+  import type { Workspace, WorkspaceSettings } from '$lib/types';
 
   // Импорт локализации
   import * as m from '$paraglide/messages';
 
   let { 
     currentWorkspace = $bindable(), 
-    globalConfig,
     currentLocale, // Добавляем проп для локали
     onSettingsChange 
   }: { 
     currentWorkspace: Workspace, 
-    globalConfig: GlobalConfig,
     currentLocale: string, // Типизация локали
     onSettingsChange: () => void 
   } = $props();
@@ -31,14 +29,22 @@
 
   // Логика быстрой настройки при смене провайдера
   function handleProviderChange(e: Event) {
-    // const val = (e.target as HTMLSelectElement).value;
+    const val = (e.target as HTMLSelectElement).value;
     
     // Автоматическая подстановка URL для популярных сервисов, если поле пустое
-    // if (val === 'openrouter' && !currentWorkspace.settings.apiUrl) {
-    //   currentWorkspace.settings.apiUrl = 'https://openrouter.ai/api/';
-    // } else if (val === 'lm-studio' && (!currentWorkspace.settings.apiUrl {
-    //   currentWorkspace.settings.apiUrl = 'http://localhost:1234/';
-    // }
+    if (val === 'openrouter'
+    //  && !currentWorkspace.settings.apiUrl
+    ) {
+      currentWorkspace.settings.apiUrl = 'https://openrouter.ai/api/';
+    } else if (val === 'openai'
+    //  && !currentWorkspace.settings.apiUrl
+    ) {
+      currentWorkspace.settings.apiUrl = 'https://api.openai.com/v1/';
+    } else if (val === 'lm-studio'
+    //  && !currentWorkspace.settings.apiUrl
+    ) {
+      currentWorkspace.settings.apiUrl = 'http://localhost:1234/';
+    }
 
     onSettingsChange();
   }
@@ -124,7 +130,7 @@
     <input 
       bind:value={currentWorkspace.settings.apiUrl} 
       onchange={onSettingsChange}
-      placeholder={globalConfig.apiUrl} 
+      placeholder={'https://api.example.com'} 
     />
   </label>
   <label>
@@ -132,7 +138,7 @@
     <input 
       bind:value={currentWorkspace.settings.modelName} 
       onchange={onSettingsChange}
-      placeholder={globalConfig.modelName} 
+      placeholder={'model-name'} 
     />
   </label>
   <label>
@@ -141,7 +147,7 @@
       type="password"
       bind:value={currentWorkspace.settings.apiKey} 
       onchange={onSettingsChange}
-      placeholder={globalConfig.apiKey ? "••••••••" : (_i18n && m.tab_model_api_key_not_set())} 
+      placeholder={currentWorkspace.settings.apiKey ? "••••••••" : (_i18n && m.tab_model_api_key_not_set())} 
     />
   </label>
 
@@ -167,7 +173,6 @@
       <option value="high">High</option>
       <option value="xhigh">XHigh</option>
     {/snippet}
-
     {@render option(m.tab_model_reasoning_effort(), 'reasoningEffort', 'reasoningEffortEnabled', 'select', { children: reasoningEffortOptions })}
     {@render option(m.tab_model_seed(), 'seed', 'seedEnabled', 'number', { placeholder: "None" })}
 

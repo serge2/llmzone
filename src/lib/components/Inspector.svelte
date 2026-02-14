@@ -1,6 +1,6 @@
 <!-- src/lib/components/Inspector.svelte -->
 <script lang="ts">
-  import type { Workspace, GlobalConfig, InspectorTab } from '$lib/types';
+  import type { Workspace, InspectorTab } from '$lib/types';
   import TabModel from './inspector/TabModel.svelte';
   import TabContext from './inspector/TabContext.svelte';
   import TabTools from './inspector/TabTools.svelte';
@@ -16,13 +16,11 @@
   
   let { 
     currentWorkspace = $bindable(), 
-    globalConfig,
     currentLocale, // Новое: принимаем текущую локаль
     serverInstances = $bindable(), // Добавляем bindable проп для серверов
     onSettingsChange 
   }: { 
     currentWorkspace: Workspace | undefined, 
-    globalConfig: GlobalConfig,
     currentLocale: string, // Типизация локали
     serverInstances: MCPServerInstance[], // Типизация массива инстансов
     onSettingsChange: () => void 
@@ -64,7 +62,6 @@
       {#if inspectorTab === 'model'}
         <TabModel 
           bind:currentWorkspace={currentWorkspace} 
-          {globalConfig} 
           {onSettingsChange} 
           currentLocale={currentLocale}
         />
