@@ -1,4 +1,3 @@
-<!-- MessageBubble.svelte -->
 <script lang="ts">
   import { marked } from 'marked';
   import Prism from 'prismjs';
@@ -77,9 +76,32 @@
   let isConfirmingDelete = $state(false);
   let deleteTimer: ReturnType<typeof setTimeout> | undefined;
 
+  /**
+   * Функция для экранирования HTML. 
+   * Предотвращает инъекцию элементов из текста сообщения в интерфейс приложения.
+   */
+  function escapeHtml(text: string) {
+    const map: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, (m) => map[m]);
+  }
+
   // Настройка рендерера
   const renderer = new marked.Renderer();
   
+  /**
+   * Переопределяем рендеринг HTML-тегов внутри Markdown.
+   * Актуально для последних версий marked. Любые теги будут отображены как текст.
+   */
+  renderer.html = (token: { text: string }) => {
+    return escapeHtml(token.text);
+  };
+
   renderer.code = (token: any) => {
     const codeVal = typeof token === 'string' ? token : (token.text || "");
     const lang = (token.lang || 'text').toUpperCase();
@@ -103,10 +125,12 @@
   // Вспомогательная функция для парсинга Markdown
   function parseMarkdown(content: string) {
     try {
-      return content ? marked.parse(content) : "";
+      // marked.parse возвращает Promise в некоторых конфигурациях, 
+      // но с обычным рендерером это синхронная операция.
+      return content ? (marked.parse(content) as string) : "";
     } catch (e) {
       console.error("Marked Error:", e);
-      return content;
+      return escapeHtml(content);
     }
   }
 
@@ -324,7 +348,11 @@
 
             {#if msg.text && msg.role !== 'tool'}
               <div class:chain-item-text={i > 0}>
-                {@html parseMarkdown(msg.text)}
+                {#if role === 'user'}
+                  <div class="plain-text">{msg.text}</div>
+                {:else}
+                  {@html parseMarkdown(msg.text)}
+                {/if}
               </div>
             {:else if role === 'assistant' && i === messages.length - 1 && (!msg.tool_calls || msg.tool_calls.length === 0) && !msg.reasoning && msg.role !== 'tool'}
                {#if !isTyping}
@@ -488,6 +516,12 @@
 
   .prose :global(p) { margin: 0 0 1em 0; }
   .prose :global(p:last-child) { margin-bottom: 0; }
+
+  /* Стили для простого текста пользователя */
+  .plain-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
 
   .prose :global(.code-block-wrapper) {
     margin: 12px 0;
