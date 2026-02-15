@@ -9,6 +9,7 @@ import {
   deleteChatFolder
 } from '$lib/storage/chatStorage';
 import { ChatService } from '$lib/services/chatService';
+import { toastService } from '$lib/services/toastService.svelte';
 import { mcpManager, MCPServerInstance } from '$lib/mcp/manager.svelte';
 import { setLocale, getLocale } from '$paraglide/runtime';
 import * as m from '$paraglide/messages';
@@ -245,14 +246,25 @@ class AppState {
     if (this.workspaces.length <= 1) return;
     const ws = this.workspaces.find(w => w.id === id);
     if (confirm(m.delete_workspace_confirm({ name: ws?.name || "" }))) {
-      mcpManager.removeWorkspace(id);
-      await deleteWorkspaceFolder(id);
-      this.workspaces = this.workspaces.filter(w => w.id !== id);
-      if (this.selectedWorkspaceId === id) {
-        this.selectedWorkspaceId = this.workspaces[0].id;
-        this.selectedChatId = this.workspaces[0].chats[0]?.id || '';
+      try {
+        // Сначала пытаемся удалить файловые данные
+        await deleteWorkspaceFolder(id);
+        
+        // Только если удаление файлов успешно - удаляем из конфига
+        mcpManager.removeWorkspace(id);
+        this.workspaces = this.workspaces.filter(w => w.id !== id);
+        if (this.selectedWorkspaceId === id) {
+          this.selectedWorkspaceId = this.workspaces[0].id;
+          this.selectedChatId = this.workspaces[0].chats[0]?.id || '';
+        }
+        await this.persistConfig();
+        console.log(`[AppState] Workspace "${ws?.name}" deleted successfully`);
+      } catch (err) {
+        // Если удаление файлов не удалось - НЕ удаляем из конфига, показываем ошибку
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[AppState] Failed to delete workspace "${ws?.name}":`, errorMsg);
+        toastService.show(m.delete_workspace_error({ error: errorMsg }), 'error');
       }
-      await this.persistConfig();
     }
   }
 
@@ -273,12 +285,23 @@ class AppState {
   async handleDeleteChat(chatId: string) {
     if (!this.currentWorkspace) return;
     this.stopGeneration(chatId);
-    await deleteChatFolder(this.currentWorkspace.id, chatId);
-    this.currentWorkspace.chats = this.currentWorkspace.chats.filter(c => c.id !== chatId);
-    if (this.selectedChatId === chatId) {
-      this.selectedChatId = this.currentWorkspace.chats[0]?.id || '';
+    try {
+      // Сначала пытаемся удалить файловые данные чата
+      await deleteChatFolder(this.currentWorkspace.id, chatId);
+      
+      // Только если удаление файлов успешно - удаляем из состояния
+      this.currentWorkspace.chats = this.currentWorkspace.chats.filter(c => c.id !== chatId);
+      if (this.selectedChatId === chatId) {
+        this.selectedChatId = this.currentWorkspace.chats[0]?.id || '';
+      }
+      await this.persistChats();
+      console.log(`[AppState] Chat ${chatId} deleted successfully`);
+    } catch (err) {
+      // Если удаление файлов не удалось - НЕ удаляем из состояния, показываем ошибку
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[AppState] Failed to delete chat ${chatId}:`, errorMsg);
+      toastService.show(m.sidebar_delete_chat_error({ error: errorMsg }), 'error');
     }
-    await this.persistChats();
   }
 
   handleRenameChat(chatId: string, newName: string) {

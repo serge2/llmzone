@@ -18,6 +18,7 @@
   "sidebar_delete_confirm": "Delete?",
   "sidebar_menu_rename": "Rename",
   "sidebar_menu_delete": "Delete",
+  "sidebar_delete_chat_error": "Failed to delete chat: {error}",
   "sidebar_tooltip_save": "Save",
   "sidebar_tooltip_cancel": "Cancel",
   
@@ -29,6 +30,7 @@
   "workspace_new_name": "Workspace",
   "workspace_add_button": "New workspace",
   "delete_workspace_confirm": "Delete workspace \"{name}\" and all its data?",
+  "delete_workspace_error": "Failed to delete workspace: {error}",
 
   "menu_open_link": "Open in Browser",
   "menu_copy_link": "Copy Link",

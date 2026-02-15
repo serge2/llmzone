@@ -18,6 +18,7 @@
   "sidebar_delete_confirm": "Удалить?",
   "sidebar_menu_rename": "Переименовать",
   "sidebar_menu_delete": "Удалить",
+  "sidebar_delete_chat_error": "Ошибка при удалении чата: {error}",
   "sidebar_tooltip_save": "Сохранить",
   "sidebar_tooltip_cancel": "Отмена",
   
@@ -29,6 +30,7 @@
   "workspace_new_name": "Новое пространство",
   "workspace_add_button": "Новое пространство",
   "delete_workspace_confirm": "Удалить рабочее пространство \"{name}\" и все его данные?",
+  "delete_workspace_error": "Ошибка при удалении пространства: {error}",
 
   "menu_open_link": "Открыть в браузере",
   "menu_copy_link": "Копировать ссылку",

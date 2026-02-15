@@ -111,13 +111,25 @@ export async function deleteChatFolder(wsId: string, chatId: string) {
     const chatExists = await exists(chatDir, { baseDir: BaseDirectory.AppData });
     
     if (chatExists) {
+      console.log(`[ChatStorage] Attempting to delete chat folder: ${chatDir}`);
       await remove(chatDir, { 
         baseDir: BaseDirectory.AppData, 
         recursive: true 
       });
+      
+      // Проверяем что папка действительно удалена
+      const stillExists = await exists(chatDir, { baseDir: BaseDirectory.AppData });
+      if (stillExists) {
+        throw new Error(`Failed to delete chat folder - directory still exists: ${chatDir}`);
+      }
+      console.log(`[ChatStorage] Chat folder deleted successfully: ${chatDir}`);
+    } else {
+      console.log(`[ChatStorage] Chat folder does not exist: ${chatDir}`);
     }
   } catch (err) {
-    console.error(`deleteChatFolder error for ${chatId}:`, err);
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[ChatStorage] deleteChatFolder error for ${chatId}:`, errorMsg);
+    throw err; // Выбрасываем ошибку наверх
   }
 }
 
@@ -130,13 +142,25 @@ export async function deleteWorkspaceFolder(wsId: string) {
     const dirExists = await exists(dirPath, { baseDir: BaseDirectory.AppData });
     
     if (dirExists) {
+      console.log(`[ChatStorage] Attempting to delete workspace folder: ${dirPath}`);
       // В Tauri 2 используем remove вместо removeDir
       await remove(dirPath, { 
         baseDir: BaseDirectory.AppData, 
         recursive: true 
       });
+      
+      // Проверяем что папка действительно удалена
+      const stillExists = await exists(dirPath, { baseDir: BaseDirectory.AppData });
+      if (stillExists) {
+        throw new Error(`Failed to delete workspace folder - directory still exists: ${dirPath}`);
+      }
+      console.log(`[ChatStorage] Workspace folder deleted successfully: ${dirPath}`);
+    } else {
+      console.log(`[ChatStorage] Workspace folder does not exist: ${dirPath}`);
     }
   } catch (err) {
-    console.error(`deleteWorkspaceFolder error for ${wsId}:`, err);
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[ChatStorage] deleteWorkspaceFolder error for ${wsId}:`, errorMsg);
+    throw err; // Выбрасываем ошибку наверх
   }
 }
