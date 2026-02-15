@@ -63,9 +63,37 @@ export class LmStudioAdapter implements ChatAdapter {
     const lastAssistantWithId = [...messages].reverse().find(m => (m as any).response_id);
     console.log("preparePayload previous_respose_id:", lastAssistantWithId? lastAssistantWithId.response_id || null : undefined);
  
+    // Build input: either simple string or array of blocks with text/image/audio
+    let input: string | any[] = lastUserMsg?.text || "";
+
+    if (lastUserMsg?.attachments && lastUserMsg.attachments.length > 0) {
+      const inputBlocks: any[] = [];
+
+      // Add text first if present
+      if (lastUserMsg.text && lastUserMsg.text.length > 0) {
+        inputBlocks.push({ type: 'text', content: lastUserMsg.text });
+      }
+
+      // Add attachments
+      for (const a of lastUserMsg.attachments) {
+        if (a.base64) {
+          const base64 = String(a.base64).trim();
+          const mime = a.mimeType;
+
+          if (mime.startsWith('image/')) {
+            inputBlocks.push({ type: 'image', data_url: base64 });
+          }
+        }
+      }
+
+      if (inputBlocks.length > 0) {
+        input = inputBlocks;
+      }
+    }
+
     const payload: any = {
       model: settings.modelName,
-      input: lastUserMsg?.text || "",
+      input: input,
       stream: true,
       system_prompt: finalSystemPrompt || settings.systemPrompt,
       store: true 

@@ -75,7 +75,30 @@ export class OpenRouterAdapter implements ChatAdapter {
             };
           }
 
-          const msg: any = { role: m.role, content: m.text || "" };
+          const msg: any = { role: m.role };
+
+          if (m.attachments && m.attachments.length > 0) {
+            const contentBlocks: any[] = [];
+            if (m.text && m.text.length > 0) contentBlocks.push({ type: 'text', text: m.text });
+
+            for (const a of m.attachments) {
+              if (a.base64) {
+                const base64 = String(a.base64).trim();
+                const mime = a.mimeType;
+
+                if (mime.startsWith('image/')) {
+                  contentBlocks.push({ type: 'image_url', image_url: { url: base64 } });
+                } else if (mime.startsWith('audio/')) {
+                  const format = mime.split('/')[1] || 'wav';
+                  contentBlocks.push({ type: 'input_audio', input_audio: { data: base64, format: format } });
+                }
+              }
+            }
+
+            msg.content = contentBlocks;
+          } else {
+            msg.content = m.text || "";
+          }
 
           if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
             msg.tool_calls = m.tool_calls.map((tc: any) => ({

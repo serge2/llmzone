@@ -57,7 +57,32 @@ export class OpenAIAdapter implements ChatAdapter {
             };
           }
 
-          const msg: any = { role: m.role, content: m.text || "" };
+          // If message has attachments, build a content array supporting text + image_url blocks
+          const msg: any = { role: m.role };
+
+          if (m.attachments && m.attachments.length > 0) {
+            const contentBlocks: any[] = [];
+            if (m.text && m.text.length > 0) contentBlocks.push({ type: 'text', text: m.text });
+
+            for (const a of m.attachments) {
+              if (a.base64) {
+                const base64 = String(a.base64).trim();
+                const mime = a.mimeType;
+
+                if (mime.startsWith('image/')) {
+                  contentBlocks.push({ type: 'image_url', image_url: {url: base64}});
+                } else if (mime.startsWith('audio/')) {
+                  // Audio: use input_audio with base64 data and format
+                  const format = mime.split('/')[1] || 'wav';
+                  contentBlocks.push({ type: 'input_audio', input_audio: { data: base64, format: format } });
+                }
+              }
+            }
+
+            msg.content = contentBlocks;
+          } else {
+            msg.content = m.text || "";
+          }
 
           if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
             msg.tool_calls = m.tool_calls.map((tc: any) => ({
@@ -70,6 +95,7 @@ export class OpenAIAdapter implements ChatAdapter {
             }));
             if ('approvalStatus' in (msg as any)) delete (msg as any).approvalStatus;
           }
+
           return msg;
         })
       ],
