@@ -115,7 +115,7 @@
             ${copyIconRaw}
           </button>
         </div>
-        <pre class="language-${langClass}"><code>${codeVal}</code></pre>
+        <pre class="language-${langClass}"><code>${escapeHtml(codeVal)}</code></pre>
       </div>
     `;
   };
