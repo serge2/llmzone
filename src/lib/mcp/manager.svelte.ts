@@ -246,7 +246,6 @@ export class MCPServerInstance {
 
   private client: Client | null = null;
   public config: MCPServerConfig;
-  private _initialState?: MCPServerState;
   onStateChange: () => void;
 
   // ТАЙМЕРЫ И ПАРАМЕТРЫ ПЕРЕПОДКЛЮЧЕНИЯ
@@ -265,13 +264,24 @@ export class MCPServerInstance {
     this.name = config.name;
     this.url = config.url || '';
     this.headers = config.headers || {};
-    this._initialState = initialState;
     this.onStateChange = onStateChange || (() => {});
 
     if (initialState) {
       this.autoApproveAll = initialState.autoApproveAll ?? true;
       this.isExpanded = initialState.isExpanded ?? false;
       this.enabled = initialState.enabled ?? false;
+      
+      // Загружаем сохраненные инструменты прямо в this.tools
+      // Они будут восстановлены при подключении
+      if (initialState.tools && Object.keys(initialState.tools).length > 0) {
+        this.tools = Object.entries(initialState.tools).map(([name, state]) => ({
+          name,
+          description: undefined,
+          inputSchema: undefined,
+          enabled: state.enabled,
+          alwaysAllow: state.alwaysAllow
+        }));
+      }
     }
   }
 
@@ -306,6 +316,10 @@ export class MCPServerInstance {
     }
 
     return `${header}\n${this.instructions}`;
+  }
+
+  getToolByName(name: string): MCPTool | undefined {
+    return this.tools.find(t => t.name === name);
   }
 
   async callTool(toolName: string, arguments_?: any) {
@@ -379,12 +393,13 @@ export class MCPServerInstance {
 
       const response = await this.client.listTools();
       
+      // Обновляем список инструментов: сохраняем состояние для имеющихся, добавляем новые
       this.tools = response.tools.map(t => {
-        const savedTool = this._initialState?.tools?.[t.name];
+        const savedTool = this.getToolByName(t.name);
         return {
           name: t.name,
           description: t.description,
-          inputSchema: t.inputSchema, 
+          inputSchema: t.inputSchema,
           enabled: savedTool ? savedTool.enabled : true,
           alwaysAllow: savedTool ? savedTool.alwaysAllow : true
         };
@@ -500,7 +515,10 @@ export class MCPServerInstance {
       }
     }
     this.isConnected = false;
-    this.tools = [];
+    // Инструменты НЕ очищаются при дисконнекте
+    // Они очищаются только когда:
+    // 1. Нового списка нет такого инструмента (удален на сервере)
+    // 2. MCP-сервер удален из конфига (в removeWorkspace)
     this.client = null;
     this.instructions = null;
     this.protocolName = null;
@@ -599,6 +617,8 @@ export class MCPManager {
   async removeWorkspace(workspaceId: string) {
     const toRemove = this.getForWorkspace(workspaceId);
     for (const instance of toRemove) {
+      // Очищаем инструменты при удалении MCP-сервера
+      instance.tools = [];
       await instance.disconnect();
     }
     this.instances = this.instances.filter(i => i.workspaceId !== workspaceId);
