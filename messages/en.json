@@ -60,6 +60,7 @@
   "bubble_status_thinking": "AI is processing prompt...",
   "bubble_status_typing": "AI is typing...",
   "bubble_status_tools": "AI is waiting for tool result...",
+  "bubble_status_model_loading": "Loading model to server...",
 
   "bubble_action_copy": "Copy message",
   "bubble_action_regenerate": "Regenerate message",

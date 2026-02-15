@@ -1,9 +1,5 @@
 {
   "$schema": "https://inlang.com/schema/plugin-message-format",
-
- 
- 
-
   "settings_title": "Глобальные настройки",
   "settings_back": "← Назад к чатам",
   "settings_label_language": "Язык интерфейса",
@@ -64,6 +60,7 @@
   "bubble_status_thinking": "ИИ обрабатывает промпт...",
   "bubble_status_typing": "ИИ печатает...",
   "bubble_status_tools": "ИИ ждет результат работы инструмента...",
+  "bubble_status_model_loading": "Загрузка модели на сервер...",
   
   "bubble_action_copy": "Копировать сообщение",
   "bubble_action_regenerate": "Перегенерировать сообщение",

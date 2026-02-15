@@ -144,6 +144,7 @@
           history={appState.currentChat?.history || []}
           isGenerating={appState.currentChat?.isGenerating || false}
           promptProgress={appState.currentPromptProgress}
+          modelLoadProgress={appState.currentModelLoadProgress}
           isLoading={appState.isHistoryLoading} 
           bind:message
           onSendMessage={handleSend}

@@ -1,3 +1,4 @@
+<!-- src/lib/components/chat/MessageBubble.svelte -->
 <script lang="ts">
   import { marked } from 'marked';
   import Prism from 'prismjs';
@@ -43,6 +44,7 @@
     isTyping = false,
     status = null, // Новый проп статуса генерации
     promptProgress = null, // Прогресс (0...1.0)
+    modelLoadProgress = null, // Прогресс загрузки модели (0...1.0)
     fullHistory = [], 
     messages = [], // Теперь принимаем всю группу целиком
     onEdit,
@@ -59,6 +61,7 @@
     isTyping?: boolean,
     status?: 'thinking' | 'typing' | 'executing_tools' | null, // Типизация статуса
     promptProgress?: number | null,
+    modelLoadProgress?: number | null,
     fullHistory?: Message[],
     messages?: Message[], // Список связанных сообщений в группе
     onEdit?: (newText: string) => void,
@@ -466,7 +469,10 @@
             <span></span><span></span><span></span>
           </div>
           <span class="status-text">
-            {#if status === 'thinking'}
+            {#if modelLoadProgress !== null && modelLoadProgress < 1}
+              {_i18n && m.bubble_status_model_loading()}
+              <span class="progress-percent">({(modelLoadProgress * 100).toFixed(2)}%)</span>
+            {:else if status === 'thinking'}
               {_i18n && m.bubble_status_thinking()}
               {#if promptProgress !== null}
                 <span class="progress-percent">({(promptProgress * 100).toFixed(2)}%)</span>

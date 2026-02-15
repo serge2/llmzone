@@ -80,7 +80,7 @@ export class ChatService {
     chat: Chat, 
     settings: WorkspaceSettings,
     serverInstances: MCPServerInstance[], 
-    onUpdate: (metadata?: { promptProgress?: number | null }) => void,
+    onUpdate: (metadata?: { promptProgress?: number | null; modelLoadProgress?: number | null }) => void,
     abortSignal: AbortSignal,
     onRename: (newName: string) => void
   ) {
@@ -232,6 +232,11 @@ export class ChatService {
                       continue;
                     }
 
+                    if (chunk.modelLoadProgress !== undefined) {
+                      onUpdate({ modelLoadProgress: chunk.modelLoadProgress });
+                      continue;
+                    }
+
                     // Находим текущее сообщение строго по ID
                     let assistantMsg = chat.history.find(m => m.id === streamingMessageId);
 
@@ -313,8 +318,8 @@ export class ChatService {
                       }
                     }
 
-                    // При получении любого контента сбрасываем визуальный прогресс
-                    onUpdate({ promptProgress: null });
+                    // При получении любого контента сбрасываем визуальные прогрессы
+                    onUpdate({ promptProgress: null, modelLoadProgress: null });
 
                     if (chunk.isDone) break;
                   } catch (e) {
@@ -437,7 +442,7 @@ export class ChatService {
       }
     } finally {
       chat.isGenerating = false;
-      onUpdate({ promptProgress: null }); // Сброс при любом исходе
+      onUpdate({ promptProgress: null, modelLoadProgress: null }); // Сброс при любом исходе
     }
   }
 }

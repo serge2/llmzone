@@ -17,6 +17,7 @@
     currentLocale, 
     isGenerating,
     promptProgress = null, // Прогресс предварительной обработки
+    modelLoadProgress = null, // Прогресс загрузки модели
     isLoading = false, // Состояние загрузки истории с диска
     message = $bindable(),
     onSendMessage,
@@ -31,6 +32,7 @@
     currentLocale: string;
     isGenerating: boolean;
     promptProgress?: number | null;
+    modelLoadProgress?: number | null;
     isLoading?: boolean;
     message: string;
     onSendMessage: (attachments?: Attachment[]) => void;
@@ -205,6 +207,7 @@
               isTyping={isGenerating && (group.startIndex + group.messages.length >= history.length)}
               status={group.startIndex + group.messages.length >= history.length ? generationStatus : null}
               promptProgress={group.startIndex + group.messages.length >= history.length ? promptProgress : null}
+              modelLoadProgress={group.startIndex + group.messages.length >= history.length ? modelLoadProgress : null}
               fullHistory={history} 
               onEdit={(newText) => onEditMessage(group.startIndex, newText)}
               onCopy={() => {

@@ -134,7 +134,12 @@ export class LmStudioAdapter implements ChatAdapter {
       switch (event.type) {
         case 'chat.start':
         case 'model_load.start':
+          break;
         case 'model_load.progress':
+          return { 
+            // LM Studio выдает 0.0-1.0 для прогресса загрузки модели
+            modelLoadProgress: event.progress 
+          };
         case 'model_load.end':
         case 'prompt_processing.start':
           break;

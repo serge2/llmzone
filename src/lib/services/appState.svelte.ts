@@ -21,6 +21,7 @@ class AppState {
   selectedChatId = $state<string>('');
   isHistoryLoading = $state(false);
   currentPromptProgress = $state<number | null>(null);
+  currentModelLoadProgress = $state<number | null>(null);
   
   // Вспомогательные состояния для управления процессом
   abortControllers = $state<Record<string, AbortController>>({});
@@ -199,6 +200,7 @@ class AppState {
         chatSpecificServers, 
         (metadata) => {
           if (metadata?.promptProgress !== undefined) this.currentPromptProgress = metadata.promptProgress;
+          if (metadata?.modelLoadProgress !== undefined) this.currentModelLoadProgress = metadata.modelLoadProgress;
           chatWindowComponent?.scrollToBottom();
         },
         controller.signal,
@@ -207,6 +209,7 @@ class AppState {
     } finally {
       delete this.abortControllers[this.selectedChatId];
       this.currentPromptProgress = null;
+      this.currentModelLoadProgress = null;
       await this.persistChats();
     }
   }
@@ -368,12 +371,17 @@ class AppState {
       try {
         await this.chatService.send(
           this.currentChat, this.effectiveSettings, mcpManager.getForWorkspace(this.selectedWorkspaceId),
-          (m) => { if (m?.promptProgress) this.currentPromptProgress = m.promptProgress; chatWindowComponent?.scrollToBottom(); },
+          (m) => { 
+            if (m?.promptProgress !== undefined) this.currentPromptProgress = m.promptProgress; 
+            if (m?.modelLoadProgress !== undefined) this.currentModelLoadProgress = m.modelLoadProgress;
+            chatWindowComponent?.scrollToBottom(); 
+          },
           controller.signal, (name) => this.handleRenameChat(this.selectedChatId, name)
         );
       } finally {
         delete this.abortControllers[this.selectedChatId];
         this.currentPromptProgress = null;
+        this.currentModelLoadProgress = null;
         await this.persistChats();
       }
     }

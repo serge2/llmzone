@@ -7,6 +7,7 @@ export interface StreamChunkResult {
   toolCalls?: ToolCall[];
   responseId?: string;
   promptProgress?: number;
+  modelLoadProgress?: number;
   usage?: {
     prompt_tokens: number;
     completion_tokens: number;
