@@ -102,7 +102,7 @@
    * Актуально для последних версий marked. Любые теги будут отображены как текст.
    */
   renderer.html = (token: { text: string }) => {
-    return escapeHtml(token.text);
+     return escapeHtml(token.text);
   };
 
   renderer.code = (token: any) => {

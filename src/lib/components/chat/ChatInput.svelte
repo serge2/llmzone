@@ -43,6 +43,8 @@
         const base64 = event.target?.result as string;
         let type: Attachment['type'] = 'other';
         if (file.type.startsWith('image/')) type = 'image';
+        else if (file.type.includes('mp3') || file.type.includes('wav') || file.type.includes('ogg') || file.type.includes('flac')) type = 'audio';
+        else if (file.type.startsWith('video/')) type = 'video';
         else if (file.type.includes('pdf') || file.type.includes('text') || file.type.includes('word')) type = 'document';
         else if (file.type.includes('zip') || file.type.includes('rar')) type = 'archive';
         
@@ -141,7 +143,7 @@
       bind:this={fileInput} 
       onchange={handleFileSelection} 
       multiple 
-      accept="image/*,.pdf,.txt,.doc,.docx" 
+      accept="image/*,.pdf,.txt,.doc,.docx,audio/*,video/*" 
       style="display: none;" 
     />
 

@@ -11,7 +11,7 @@ export interface Attachment {
   mimeType: string;        // MIME-тип (image/png, application/pdf, и т.д.)
   base64?: string;         // Содержимое для Vision или мелких файлов
   path?: string;           // Локальный путь (для обработки через Tauri на бэкенде)
-  type: 'image' | 'document' | 'archive' | 'other';
+  type: 'image' | 'document' | 'archive' | 'audio' | 'video' | 'other'; // Категория файла для удобства обработки
 }
 
 export interface MCPToolState {
