@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { setLocale } from '$paraglide/runtime'; // getLocale больше не нужен здесь
+  import { setLocale } from '$paraglide/runtime';
   import * as m from '$paraglide/messages';
 
   let {currentLocale, onSave, onClose }: { 
@@ -12,7 +12,7 @@
   const _i18n = $derived(currentLocale);
 
   function handleLanguageChange(e: Event) {
-    const newLang = (e.target as HTMLSelectElement).value as 'ru' | 'en';
+    const newLang = (e.target as HTMLSelectElement).value as 'en' | 'ru' | 'uk' | 'de';
     
     // 1. Сначала меняем локаль в рантайме
     setLocale(newLang, { reload: false });
@@ -42,8 +42,10 @@
           onchange={handleLanguageChange}
           class="settings-select"
         >
-          <option value="ru">Русский</option>
           <option value="en">English</option>
+          <option value="ru">Русский</option>
+          <option value="uk">Українська</option>
+          <option value="de">Deutsch</option>
         </select>
       </div>
       
@@ -108,20 +110,6 @@
     font-weight: 700;
     color: #4b5563;
     text-transform: uppercase;
-  }
-
-  input, .settings-select {
-    padding: 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    font-size: 1rem;
-    outline: none;
-    background: white;
-  }
-
-  input:focus, .settings-select:focus {
-    border-color: #5865f2;
-    box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.1);
   }
 
   .footer-info {

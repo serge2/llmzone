@@ -133,7 +133,7 @@ export interface Message {
 
 export interface AppSettings {
   theme: 'system' | 'light' | 'dark';
-  language: 'ru' | 'en';
+  language: 'en' | 'ru' | 'uk' | 'de';
   lastSelectedWorkspaceId: string;
   workspaces: Omit<Workspace, 'chats'>[];
 }
