@@ -1,9 +1,11 @@
 [package]
 name = "cai-app"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Desktop AI Chat Client for LLM"
+authors = ["Sergii Polkovnikov <serge.polkovnikov@gmail.com>"]
+repository = "https://github.com/serge2/cai-app"
 edition = "2021"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
