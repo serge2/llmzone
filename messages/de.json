@@ -43,6 +43,7 @@
   "chat_stop_generating": "Generierung stoppen",
   "chat_footer_note": "KI kann Fehler machen. Überprüfen Sie wichtige Informationen.",
   "chat_loading": "Nachrichten werden geladen...",
+  "chat_generate_ai_response": "KI-Antwort generieren",
 
   "bubble_copy_code": "Code kopieren",
   "bubble_reasoning_title": "Gedankengang",

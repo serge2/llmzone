@@ -4,6 +4,8 @@
   import MessageBubble from './chat/MessageBubble.svelte';
   import ChatInput from './chat/ChatInput.svelte'; // Импорт нового компонента
   import { tick, onMount } from 'svelte';
+  import { slide } from 'svelte/transition';
+
 
   // --- Система локализации ---
   import * as m from '$paraglide/messages';
@@ -11,6 +13,7 @@
   // Импорт иконок
   import ChevronDownIcon from '$lib/assets/icons/chevron-down.svg?raw';
   import CpuIcon from '$lib/assets/icons/cpu.svg?raw'; 
+  import RefreshIcon from '$lib/assets/icons/refresh.svg?raw';
 
   let { 
     history, 
@@ -76,6 +79,17 @@
     // 3. По умолчанию (запрос ушел, ответа еще нет) — стадия раздумий
     return 'thinking';
   });
+
+  // Вычисляем, нужно ли показать кнопку продолжения (если очередь ИИ отвечать)
+  const showAiResponseButton = $derived.by(() => {
+    if (isGenerating || isLoading || history.length === 0) return false;
+    
+    const lastMsg = history[history.length - 1];
+    
+    // Кнопка нужна, если последний в истории не ассистент, и мы не стоим на паузе из-за лимитов
+    return lastMsg.role !== 'assistant' && !lastMsg.requiresLimitExtension;
+  });
+
 
   // ВЫЧИСЛЕНИЕ ПОСЛЕДНЕГО ИСПОЛЬЗОВАНИЯ ТОКЕНОВ
   const lastTokenUsage = $derived.by(() => {
@@ -218,7 +232,17 @@
               onRegenerate={() => onRegenerateMessage()}
               onApproveTool={onApproveTool} 
               onExtendLimit={onExtendLimit}  />
-          {/each} 
+          {/each}
+
+          {#if showAiResponseButton}
+            <div class="ai-suggestion-row" transition:slide>
+              <button class="generate-ai-btn" onclick={() => onSendMessage()}>
+                <span class="btn-icon">{@html RefreshIcon}</span>
+                {_i18n && m.chat_generate_ai_response()}
+              </button>
+            </div>
+          {/if}
+
         </div>
       {/if}
     {/if}
@@ -326,6 +350,49 @@
     display: flex;
     flex-direction: column;
     width: 100%;
+  }
+
+  .ai-suggestion-row {
+    display: flex;
+    justify-content: center;
+    padding: 16px 0;
+    width: 100%;
+  }
+
+  .generate-ai-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 100px;
+    color: #4b5563;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .generate-ai-btn:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+    color: #111827;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    color: #5865f2;
+  }
+
+  .btn-icon :global(svg) {
+    width: 100%;
+    height: 100%;
   }
 
   .scroll-down-btn {

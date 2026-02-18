@@ -43,6 +43,7 @@
   "chat_stop_generating": "Stop generating",
   "chat_footer_note": "AI can make mistakes. Check important information.",
   "chat_loading": "Loading messages...",
+  "chat_generate_ai_response": "Generate AI response",
 
   "bubble_copy_code": "Copy code",
   "bubble_reasoning_title": "Reasoning",

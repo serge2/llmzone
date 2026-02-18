@@ -43,6 +43,7 @@
   "chat_stop_generating": "Зупинити генерацію",
   "chat_footer_note": "AI може помилятися. Перевіряйте важливу інформацію.",
   "chat_loading": "Завантаження повідомлень...",
+  "chat_generate_ai_response": "Згенерувати відповідь ШІ",
 
   "bubble_copy_code": "Копіювати код",
   "bubble_reasoning_title": "Міркування",
