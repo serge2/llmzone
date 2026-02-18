@@ -455,7 +455,34 @@ class AppState {
 
   handleDeleteMessage(index: number) {
     if (!this.currentChat) return;
-    this.currentChat.history.splice(index, 1);
+
+    const history = this.currentChat.history;
+    const targetMsg = history[index];
+
+    // Если это сообщение пользователя или системное — удаляем только его одно
+    if (targetMsg.role === 'user' || targetMsg.role === 'system') {
+      history.splice(index, 1);
+    } 
+    // Если это сообщение ассистента (или случайно затесавшийся одиночный tool)
+    // удаляем всю последовательную цепочку ответов ИИ
+    else {
+      let countToRemove = 1;
+      
+      // Итерируемся вперед от удаляемого сообщения
+      for (let i = index + 1; i < history.length; i++) {
+        const nextRole = history[i].role;
+        // Если следующее сообщение — это результат инструмента или продолжение ответа ассистента
+        if (nextRole === 'tool' || nextRole === 'assistant') {
+          countToRemove++;
+        } else {
+          // Если встретили 'user' или 'system' — цепочка ИИ закончилась
+          break;
+        }
+      }
+      
+      history.splice(index, countToRemove);
+    }
+
     this.persistChats();
   }
 
