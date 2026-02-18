@@ -24,6 +24,15 @@ class AppState {
   currentPromptProgress = $state<number | null>(null);
   currentModelLoadProgress = $state<number | null>(null);
   
+  // Флаг для предотвращения преждевременного сохранения при инициализации
+  private isInitializing = true;
+
+  // Изолированное состояние UI
+  ui = $state({
+    sidebarVisible: true,
+    inspectorVisible: true
+  });
+
   // Вспомогательные состояния для управления процессом
   abortControllers = $state<Record<string, AbortController>>({});
   mcpServers = $state<MCPServerInstance[]>([]);
@@ -46,12 +55,37 @@ class AppState {
 
   // --- ИНИЦИАЛИЗАЦИЯ ---
   async init() {
+    this.isInitializing = true;
     const config = await loadConfig();
 
     if (config?.language) {
       setLocale(config.language, { reload: false });
       this.currentLocaleState = config.language;
     }
+
+    // Загрузка состояния панелей
+    if (config) {
+      if (config.sidebarVisible !== undefined) this.ui.sidebarVisible = config.sidebarVisible;
+      if (config.inspectorVisible !== undefined) this.ui.inspectorVisible = config.inspectorVisible;
+    }
+
+    // ИСПРАВЛЕНО: Эффект для автосохранения теперь проверяет флаг isInitializing
+    // $effect.root нужен, чтобы эффект жил всё время жизни сервиса (синглтона)
+    $effect.root(() => {
+      $effect(() => {
+        // Регистрируем зависимости для отслеживания (подписываемся на изменения видимости панелей)
+        const s = this.ui.sidebarVisible;
+        const i = this.ui.inspectorVisible;
+        
+        // Используем untrack, чтобы сохранение не вызывало бесконечных циклов
+        untrack(() => {
+          // Сохраняем ТОЛЬКО если инициализация завершена
+          if (!this.isInitializing) {
+            this.persistConfig();
+          }
+        });
+      });
+    });
     
     if (config?.workspaces && config.workspaces.length > 0) {
       const loadedWorkspaces = await Promise.all(config.workspaces.map(async (ws) => {
@@ -78,6 +112,9 @@ class AppState {
     } else {
       await this.initDefaultWorkspace();
     }
+
+    // Завершаем инициализацию и разрешаем сохранение
+    this.isInitializing = false;
   }
 
   private async initDefaultWorkspace() {
@@ -233,7 +270,6 @@ class AppState {
     this.persistChats();
   }
 
-  // ИСПРАВЛЕНО: Добавлен отсутствующий метод renameWorkspace
   renameWorkspace(id: string, newName: string) {
     const ws = this.workspaces.find(w => w.id === id);
     if (ws) {
@@ -249,7 +285,7 @@ class AppState {
       try {
         // Сначала пытаемся удалить файловые данные
         await deleteWorkspaceFolder(id);
-        
+
         // Только если удаление файлов успешно - удаляем из конфига
         mcpManager.removeWorkspace(id);
         this.workspaces = this.workspaces.filter(w => w.id !== id);
@@ -288,7 +324,7 @@ class AppState {
     try {
       // Сначала пытаемся удалить файловые данные чата
       await deleteChatFolder(this.currentWorkspace.id, chatId);
-      
+
       // Только если удаление файлов успешно - удаляем из состояния
       this.currentWorkspace.chats = this.currentWorkspace.chats.filter(c => c.id !== chatId);
       if (this.selectedChatId === chatId) {
@@ -325,6 +361,9 @@ class AppState {
   }
 
   async persistConfig() {
+    // Не сохраняем конфиг, если мы в процессе загрузки, чтобы не затереть данные пустым массивом
+    if (this.isInitializing) return;
+
     this.currentLocaleState = getLocale();
     this.workspaces.forEach(ws => {
       const instances = mcpManager.getForWorkspace(ws.id);
@@ -339,12 +378,16 @@ class AppState {
       theme: 'system',
       language: getLocale() as 'en' | 'ru',
       lastSelectedWorkspaceId: this.selectedWorkspaceId,
-      workspaces: this.workspaces.map(({ chats, ...rest }) => rest),
+      // Используем snapshot для корректного сохранения Proxy-объектов
+      workspaces: $state.snapshot(this.workspaces).map(({ chats, ...rest }: any) => rest),
+      sidebarVisible: this.ui.sidebarVisible,
+      inspectorVisible: this.ui.inspectorVisible
     };
     await saveConfig(configToSave);
   }
 
   async persistChats() {
+    if (this.isInitializing) return;
     for (const ws of this.workspaces) {
       await saveChatsForWorkspace(ws.id, $state.snapshot(ws.chats) as any);
     }
@@ -420,6 +463,18 @@ class AppState {
     const last = this.currentChat?.history.at(-1);
     if (last) last.requiresLimitExtension = false;
     await this.sendMessage("");
+  }
+
+  // Методы управления UI для биндинга или вызова из компонентов
+  toggleSidebar = () => {
+    this.ui.sidebarVisible = !this.ui.sidebarVisible;
+    // Можно оставить ручной вызов или положиться на эффект в init
+    this.persistConfig();
+  }
+
+  toggleInspector = () => {
+    this.ui.inspectorVisible = !this.ui.inspectorVisible;
+    this.persistConfig();
   }
 }
 

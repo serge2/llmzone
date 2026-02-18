@@ -1,7 +1,7 @@
 <!-- src/routes/+page.svelte -->
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  // ИСПРАВЛЕНО: Удален некорректный импорт из '$lib/components'
+
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ChatWindow from '$lib/components/ChatWindow.svelte';
   import GlobalSettings from '$lib/components/GlobalSettings.svelte';
@@ -19,8 +19,6 @@
 
   // --- Локальное состояние UI ---
   let selectedTab = $state<'chats' | 'settings'>('chats');
-  let sidebarVisible = $state(true);
-  let inspectorVisible = $state(true); 
   let searchActive = $state(false);
   let chatSearch = $state('');
   let message = $state("");
@@ -112,8 +110,8 @@
       currentLocale={appState.currentLocaleState}
       selectedWorkspaceId={appState.selectedWorkspaceId}
       currentChatName={headerChatName}
-      bind:sidebarVisible={sidebarVisible}
-      bind:inspectorVisible={inspectorVisible} 
+      bind:sidebarVisible={appState.ui.sidebarVisible}
+      bind:inspectorVisible={appState.ui.inspectorVisible} 
       onSelectWorkspace={(id: string) => appState.selectChat(appState.workspaces.find(w => w.id === id)?.chats[0]?.id || '', id)}
       onCreateWorkspace={() => appState.createWorkspace()}
       onRenameWorkspace={(id, name) => appState.renameWorkspace(id, name)}
@@ -121,7 +119,7 @@
     />
 
     <div class="main-row">
-      {#if sidebarVisible}
+      {#if appState.ui.sidebarVisible}
         <Sidebar 
           currentLocale={appState.currentLocaleState}
           bind:workspaces={appState.workspaces} 
@@ -157,7 +155,7 @@
         />
       </div>
 
-      {#if inspectorVisible}
+      {#if appState.ui.inspectorVisible}
         <InspectorComponent 
           bind:currentWorkspace={appState.currentWorkspace} 
           currentLocale={appState.currentLocaleState}

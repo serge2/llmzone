@@ -136,4 +136,6 @@ export interface AppSettings {
   language: 'en' | 'ru' | 'uk' | 'de';
   lastSelectedWorkspaceId: string;
   workspaces: Omit<Workspace, 'chats'>[];
+  sidebarVisible?: boolean;
+  inspectorVisible?: boolean;
 }
