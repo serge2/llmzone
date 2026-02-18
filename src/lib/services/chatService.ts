@@ -1,5 +1,6 @@
 // src/lib/services/chatService.ts
-import { fetch } from '@tauri-apps/plugin-http'; // ВАЖНО: Используем нативный fetch Tauri для обхода CORS
+// import { fetch } from '@tauri-apps/plugin-http'; // ВАЖНО: Используем нативный fetch Tauri для обхода CORS
+import { rustFetch as fetch } from '$lib/utils/rustFetch';
 import { toastService } from '$lib/services/toastService.svelte';
 import type { Message, Chat, WorkspaceSettings, ToolCall } from '$lib/types';
 import { type MCPServerInstance, mcpManager } from '$lib/mcp/manager.svelte';
