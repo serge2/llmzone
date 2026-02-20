@@ -183,26 +183,27 @@ export class LmStudioAdapter implements ChatAdapter {
           return { reasoning: event.content };
 
         case 'tool_call.start':
+          break;
+
+        case 'tool_call.name': {
           if (!context.activeCallId) {
             context.activeCallId = `call_${Math.random().toString(36).substring(2, 9)}`;
           }
           context.currentToolCall = {
             id: context.activeCallId,
-            name: '', 
+            server_name: event.provider_info?.server_label || 'MCP',
+            tool_name: event.tool,
             arguments: {}
           };
           return { toolCalls: [context.currentToolCall] };
-
-        case 'tool_call.name':
-          if (context.currentToolCall) {
-            context.currentToolCall.name = event.tool_name;
-            return { toolCalls: [{ ...context.currentToolCall }] };
-          }
-          break;
+        }
 
         case 'tool_call.arguments':
           if (context.currentToolCall) {
-            if (event.tool) context.currentToolCall.name = event.tool;
+            // Обновляем только если данные присутствуют в эвенте, чтобы не затереть существующие
+            if (event.tool) context.currentToolCall.tool_name = event.tool;
+            if (event.provider_info?.server_label) context.currentToolCall.server_name = event.provider_info.server_label;
+            
             context.currentToolCall.arguments = event.arguments;
             return { toolCalls: [{ ...context.currentToolCall }] };
           }
@@ -210,7 +211,9 @@ export class LmStudioAdapter implements ChatAdapter {
 
         case 'tool_call.success':
           if (context.currentToolCall) {
-            if (event.tool) context.currentToolCall.name = event.tool;
+            if (event.tool) context.currentToolCall.tool_name = event.tool;
+            if (event.provider_info?.server_label) context.currentToolCall.server_name = event.provider_info.server_label;
+            
             context.currentToolCall.arguments = event.arguments;
             const finalCall = { ...context.currentToolCall };
             context.currentToolCall = null;

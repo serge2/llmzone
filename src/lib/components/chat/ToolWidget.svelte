@@ -52,7 +52,14 @@
         {:else}
           {_i18n && m.bubble_tool_label()}
         {/if} 
-        <strong>{call.name}</strong>
+        
+        <span class="tool-name-container">
+          {#if call.server_name}
+            <span class="server-prefix">{call.server_name}:</span><strong class="tool-accent">{call.tool_name}</strong>
+          {:else}
+            <strong class="tool-accent">{call.tool_name}</strong>
+          {/if}
+        </span>
       </span>
       <span class="status-icon" class:rotated={isOpen}>{@html chevronDownIconRaw}</span>
     </summary>
@@ -136,6 +143,28 @@
     color: #475569;
     user-select: none;
   }
+
+  /* Стили для разделения Сервера и Инструмента */
+  .tool-name-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 4px;
+  }
+
+  .server-prefix {
+    opacity: 0.6;
+    font-weight: 400;
+    font-size: 0.8rem;
+  }
+
+  .tool-accent {
+    color: #2563eb; /* Акцентный синий для самого инструмента */
+  }
+
+  .success .tool-accent { color: #166534; }
+  .error .tool-accent { color: #991b1b; }
+  .pending .tool-accent { color: #92400e; }
 
   .tool-summary.success {
     background-color: #f0fdf4;

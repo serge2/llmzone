@@ -307,7 +307,8 @@ export class ChatService {
                             updatedCalls[foundIdx] = {
                               ...updatedCalls[foundIdx],
                               ...newCall,
-                              name: newCall.name || updatedCalls[foundIdx].name,
+                              server_name: newCall.server_name || updatedCalls[foundIdx].server_name,
+                              tool_name: newCall.tool_name || updatedCalls[foundIdx].tool_name,
                               arguments: newCall.arguments ?? updatedCalls[foundIdx].arguments
                             };
                           } else {
@@ -355,13 +356,16 @@ export class ChatService {
           }
 
           let needsUserApproval = false;
+
           for (const call of assistantMsg.tool_calls as ToolCall[]) {
             if (call.approvalStatus === 'approved' || call.approvalStatus === 'rejected') continue;
             
-            const toolBinding = requestContext?.toolLookupMap?.get(call.name);
-            if (toolBinding) {
-              const isAuto = toolBinding.server.autoApproveAll || 
-                           toolBinding.server.tools.find((t: any) => t.name === toolBinding.originalName)?.alwaysAllow;
+            // ПРЯМОЙ ПОИСК В СПИСКЕ СЕРВЕРОВ (БЕЗ КОНТЕКСТА АДАПТЕРА)
+            const targetServer = filteredServers.find(s => s.name === call.server_name);
+            const targetTool = targetServer?.tools.find((t: any) => t.name === call.tool_name);
+
+            if (targetServer && targetTool) {
+              const isAuto = targetServer.autoApproveAll || targetTool.alwaysAllow;
               
               if (!isAuto) {
                 call.approvalStatus = 'pending';
@@ -394,11 +398,11 @@ export class ChatService {
             }
 
             try {
-              const toolBinding = requestContext?.toolLookupMap?.get(call.name);
-              if (!toolBinding) throw new Error(m.chat_error_tool_not_found({ name: call.name }));
+              // ПРЯМОЙ ВЫЗОВ НА ОСНОВЕ РАЗДЕЛЬНЫХ ИМЕН
+              const targetServer = filteredServers.find(s => s.name === call.server_name);
+              if (!targetServer) throw new Error(m.chat_error_tool_not_found({ name: `${call.server_name}:${call.tool_name}` }));
 
-              // Теперь callTool вызывается на объекте, который гарантированно имеет этот метод
-              const result = await toolBinding.server.callTool(toolBinding.originalName, call.arguments);
+              const result = await targetServer.callTool(call.tool_name, call.arguments);
               
               chat.history.push({
                 id: crypto.randomUUID(),

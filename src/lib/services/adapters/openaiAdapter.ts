@@ -21,20 +21,36 @@ export class OpenAIAdapter implements ChatAdapter {
     return headers;
   }
 
+  techname(serverName: string, toolName: string): string {
+    // Техническое имя для OpenRouter формируем как "server__tool", чтобы гарантировать уникальность.
+    // Чистим имена от пробелов и спецсимволов, заменяя их на подчеркивания.
+    const cleanServer = serverName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanTool = toolName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    return `${cleanServer}__${cleanTool}`;
+  }
+
   preparePayload(messages: Message[], settings: WorkspaceSettings, serverInstances: any[], finalSystemPrompt: string) {
     const toolLookupMap = new Map();
     const tools: any[] = [];
 
     if (serverInstances) {
       for (const instance of serverInstances) {
-        // Мы НЕ проверяем здесь enabled, так как ChatService уже прислал только разрешенное
+        // ChatService уже отфильтровал выключенные сервера и инструменты.
+        // Просто собираем то, что разрешено.
         for (const tool of instance.tools) {
-          const uniqueName = `${instance.name}_${tool.name}`.replace(/[^a-zA-Z0-9_-]/g, '_');
-          toolLookupMap.set(uniqueName, { server: instance, originalName: tool.name });
+          const techName = this.techname(instance.name, tool.name);
+                    
+          // Сохраняем расширенную информацию
+          const toolData = { 
+            server_name: instance.name, 
+            tool_name: tool.name,
+          };
+          toolLookupMap.set(techName, toolData);
+
           tools.push({
             type: 'function',
             function: {
-              name: uniqueName,
+              name: techName,
               description: tool.description,
               parameters: tool.inputSchema
             }
@@ -85,14 +101,26 @@ export class OpenAIAdapter implements ChatAdapter {
           }
 
           if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
-            msg.tool_calls = m.tool_calls.map((tc: any) => ({
-              id: tc.id,
-              type: 'function',
-              function: {
-                name: tc.name,
-                arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments || {})
+            msg.tool_calls = m.tool_calls.map((tc: any) => {
+              // При отправке истории обратно, нужно вернуть техническое имя, которое понимает API.
+              // Ищем техническое имя по displayName, если в tc.name уже наш красивый формат.
+              let technicalName = this.techname(tc.server_name, tc.tool_name);
+              for (const [key, value] of toolLookupMap.entries()) {
+                if (value.tool_name === tc.tool_name && value.server_name === tc.server_name) {
+                  technicalName = key;
+                  break;
+                }
               }
-            }));
+
+              return {
+                id: tc.id,
+                type: 'function',
+                function: {
+                  name: technicalName,
+                  arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments || {})
+                }
+              };
+            });
             if ('approvalStatus' in (msg as any)) delete (msg as any).approvalStatus;
           }
 
@@ -157,14 +185,19 @@ export class OpenAIAdapter implements ChatAdapter {
       if (delta?.tool_calls) {
         for (const tc of delta.tool_calls) {
           if (tc.index === undefined) continue;
+
           if (!context.currentToolCalls[tc.index]) {
             context.currentToolCalls[tc.index] = { id: tc.id || '', name: '', arguments: '' };
           }
+          
           const currentCall = context.currentToolCalls[tc.index];
           if (tc.id) currentCall.id = tc.id;
           if (tc.function?.name) {
-            if (!currentCall.name) currentCall.name = tc.function.name;
-            else if (!currentCall.name.includes(tc.function.name)) currentCall.name += tc.function.name;
+            // Подменяем техническое имя на красивое {server}:{tool} для отображения
+            const binding = context.toolLookupMap?.get(tc.function.name);
+            
+            currentCall.server_name = binding?.server_name || tc.function.name;
+            currentCall.tool_name = binding?.tool_name || tc.function.name;
           }
           if (tc.function?.arguments) currentCall.arguments += tc.function.arguments;
         }

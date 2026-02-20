@@ -98,9 +98,10 @@ export interface Workspace {
 }
 
 export interface ToolCall {
-  id: string;            // Уникальный ID вызова от LLM
-  name: string;          // Имя вида "server__tool"
-  arguments: any;        // Распаршенные аргументы (объект)
+  id: string;             // Уникальный ID вызова от LLM
+  server_name: string;    // Имя вида "server"
+  tool_name: string;      // Имя инструмента (например, "search" или "calculator")
+  arguments: any;         // Распаршенные аргументы (объект)
   raw_arguments?: string; // Еще не распаршенные аргументы
   approvalStatus?: 'pending' | 'approved' | 'rejected';
 }
