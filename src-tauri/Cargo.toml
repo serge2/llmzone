@@ -1,9 +1,9 @@
 [package]
-name = "cai-app"
+name = "llmzone"
 version = "0.1.0"
 description = "Desktop AI Chat Client for LLM"
 authors = ["Sergii Polkovnikov <serge.polkovnikov@gmail.com>"]
-repository = "https://github.com/serge2/cai-app"
+repository = "https://github.com/serge2/llmzone"
 edition = "2021"
 license = "MIT"
 
@@ -13,7 +13,7 @@ license = "MIT"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "cai_app_lib"
+name = "llmzone_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

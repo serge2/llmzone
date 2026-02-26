@@ -2,7 +2,7 @@
 import { writeTextFile, readTextFile, mkdir, exists, BaseDirectory, remove } from '@tauri-apps/plugin-fs';
 import type { Chat, Message } from '$lib/types';
 
-const BASE_DIR = 'cai/workspaces';
+const BASE_DIR = 'workspaces';
 
 // Вспомогательные функции для путей
 const getWorkspaceDir = (wsId: string) => `${BASE_DIR}/${wsId}`;
