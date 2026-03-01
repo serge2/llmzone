@@ -160,5 +160,11 @@
   "chat_tool_image_msg_prefix": "Ось зображення, які повернув інструмент:",
   "chat_error_api": "Помилка API ({status}): {message}",
   "chat_limit_reached_info": "Досягнуто ліміт кроків. Моделі може знадобитися продовження для завершення завдання.",
-  "chat_continue_button": "Продовжити генерацію"
+  "chat_continue_button": "Продовжити генерацію",
+
+  "about_title": "Про LLM Zone",
+  "about_description": "{app_name} — це клієнт для роботи з ШІ.",
+  "about_libs_title": "Сторонні бібліотеки",
+  "about_copy": "Copyright © 2026 Сергій Полковников",
+  "about_ai_note": "Створено за допомогою ШІ"
 }

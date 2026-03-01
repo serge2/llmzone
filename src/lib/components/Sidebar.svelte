@@ -1,4 +1,3 @@
-<!-- src/lib/components/Sidebar.svelte -->
 <script lang="ts">
   import { tick } from 'svelte';
   import { slide } from 'svelte/transition';
@@ -16,6 +15,7 @@
   import CloseIcon from '$lib/assets/icons/close.svg?raw';
   import EditIcon from '$lib/assets/icons/edit.svg?raw';
   import SettingsIcon from '$lib/assets/icons/settings.svg?raw';
+  import InfoIcon from '$lib/assets/icons/info.svg?raw';
     
   // Используем деструктуризацию пропсов Svelte 5
   let { 
@@ -29,7 +29,8 @@
     onSelectChat,
     onRenameChat,
     onDeleteChat,
-    onOpenSettings
+    onOpenSettings,
+    onOpenAbout
   }: {
     workspaces: Workspace[],
     currentLocale: string,
@@ -41,7 +42,8 @@
     onSelectChat: (chatId: string, wsId: string) => void,
     onRenameChat: (chatId: string, newName: string) => void,
     onDeleteChat: (chatId: string) => void,
-    onOpenSettings: () => void
+    onOpenSettings: () => void,
+    onOpenAbout: () => void
   } = $props();
 
   // ВКЛЮЧАЕМ РЕАКТИВНОСТЬ
@@ -263,6 +265,9 @@
       <span class="footer-icon">{@html SettingsIcon}</span>
       <span>{_i18n && m.sidebar_settings()}</span>
     </button>
+    <button class="footer-btn" onclick={onOpenAbout} title="About LLM Zone">
+      <span class="footer-icon">{@html InfoIcon}</span>
+    </button>
   </div>
 </aside>
 
@@ -449,10 +454,11 @@
     padding: 12px;
     border-top: 1px solid #f3f4f6;
     background: #f9fafb;
+    display: flex;
+    gap: 4px;
   }
 
   .footer-btn {
-    width: 100%;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -465,6 +471,9 @@
     font-size: 0.9rem;
     transition: background 0.2s;
   }
+  
+  /* Кнопка настроек занимает основное место, кнопка инфо компактная */
+  .footer-btn:first-child { flex: 1; }
 
   .footer-btn:hover { background: #f3f4f6; color: #111827; }
 

@@ -160,5 +160,11 @@
   "chat_tool_image_msg_prefix": "Вот изображение(я), которое вернул инструмент:",
   "chat_error_api": "Ошибка API ({status}): {message}",
   "chat_limit_reached_info": "Достигнут лимит шагов. Модели может потребоваться продолжение для завершения задачи.",
-  "chat_continue_button": "Продолжить генерацию"
+  "chat_continue_button": "Продолжить генерацию",
+
+  "about_title": "О программе LLM Zone",
+  "about_description": "{app_name} — это десктопный клиент для работы с ИИ.",
+  "about_libs_title": "Сторонние библиотеки",
+  "about_copy": "Copyright © 2026 Сергей Полковников",
+  "about_ai_note": "Создано при помощи ИИ"
 }

@@ -160,5 +160,11 @@
   "chat_tool_image_msg_prefix": "Hier sind die vom Werkzeug zurückgegebenen Bilder:",
   "chat_error_api": "API-Fehler ({status}): {message}",
   "chat_limit_reached_info": "Schrittlimit erreicht. Das Modell muss möglicherweise fortfahren, um die Aufgabe abzuschließen.",
-  "chat_continue_button": "Generierung fortsetzen"
+  "chat_continue_button": "Generierung fortsetzen",
+
+  "about_title": "Über LLM Zone",
+  "about_description": "{app_name} ist ein Desktop-KI-Client.",
+  "about_libs_title": "Drittanbieter-Bibliotheken",
+  "about_copy": "Copyright © 2026 Sergii Polkovnikov",
+  "about_ai_note": "Erstellt mit KI-Unterstützung"
 }

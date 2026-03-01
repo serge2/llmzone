@@ -1,4 +1,3 @@
-<!-- src/routes/+page.svelte -->
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
 
@@ -7,6 +6,8 @@
   import GlobalSettings from '$lib/components/GlobalSettings.svelte';
   import AppHeader from '$lib/components/AppHeader.svelte';
   import InspectorComponent from '$lib/components/Inspector.svelte';
+  // --- Импорт окна "О приложении" ---
+  import AboutModal from '$lib/components/AboutModal.svelte';
 
   // --- Импорт централизованного состояния ---
   import { appState } from '$lib/services/appState.svelte';
@@ -19,6 +20,7 @@
 
   // --- Локальное состояние UI ---
   let selectedTab = $state<'chats' | 'settings'>('chats');
+  let aboutVisible = $state(false); // Состояние для отображения окна About
   let searchActive = $state(false);
   let chatSearch = $state('');
   let message = $state("");
@@ -105,6 +107,14 @@
       </div>
     {/if}
 
+    {#if aboutVisible}
+      <div class="modal-layer" onclick={() => aboutVisible = false} role="presentation">
+        <div onclick={(e) => e.stopPropagation()} role="presentation">
+          <AboutModal onClose={() => aboutVisible = false} />
+        </div>
+      </div>
+    {/if}
+
     <AppHeader 
       bind:workspaces={appState.workspaces}
       currentLocale={appState.currentLocaleState}
@@ -132,6 +142,7 @@
           onRenameChat={(id, name) => appState.handleRenameChat(id, name)}
           onDeleteChat={(id) => appState.handleDeleteChat(id)}
           onOpenSettings={() => { selectedTab = 'settings'; }}
+          onOpenAbout={() => { aboutVisible = true; }} 
         />
       {/if}
 

@@ -1,6 +1,6 @@
 # LLM Zone
 
-**LLM Zone** is a lightweight, high-performance desktop AI client built with **Tauri 2** and **Svelte 5**. Designed for power users, it focuses on task-oriented workflows, seamless remote API integration, and unrestricted tool use via the Model Context Protocol (MCP).
+**LLM Zone** is a desktop AI client built with **Tauri 2** and **Svelte 5**. Designed for power users, it focuses on task-oriented workflows, seamless remote API integration, and unrestricted tool use via the Model Context Protocol (MCP).
 
 ## ✨ Key Features
 

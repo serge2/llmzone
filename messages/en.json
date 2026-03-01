@@ -160,5 +160,11 @@
   "chat_tool_image_msg_prefix": "Here are the image(s) returned by the tool:",
   "chat_error_api": "API Error ({status}): {message}",
   "chat_limit_reached_info": "Step limit reached. The model may need to continue to complete the task.",
-  "chat_continue_button": "Continue Generation"
+  "chat_continue_button": "Continue Generation",
+
+  "about_title": "About LLM Zone",
+  "about_description": "{app_name} is a desktop AI client.",
+  "about_libs_title": "Third-party Libraries",
+  "about_copy": "Copyright © 2026 Sergii Polkovnikov",
+  "about_ai_note": "Built with AI assistance"
 }
