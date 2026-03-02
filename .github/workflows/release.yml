@@ -21,8 +21,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-
+          # Убираем кеш здесь, чтобы избежать конфликтов нативных модулей
+          
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -35,15 +35,11 @@ jobs:
           node -e "
           const fs = require('fs');
           const newVersion = '${{ steps.get_version.outputs.VERSION }}';
-          
-          // Функция для обновления JSON
           function updateJson(path) {
             const content = JSON.parse(fs.readFileSync(path, 'utf8'));
             content.version = newVersion;
             fs.writeFileSync(path, JSON.stringify(content, null, 2) + '\n');
-            console.log('Updated ' + path + ' to ' + newVersion);
           }
-
           updateJson('package.json');
           updateJson('src-tauri/tauri.conf.json');
           "
@@ -53,12 +49,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Build frontend
-        run: npm run build
 
       - name: Build the app (Windows/macOS)
         if: matrix.platform != 'ubuntu-22.04'
@@ -71,6 +61,7 @@ jobs:
           releaseBody: 'See the assets below for the latest installers.'
           releaseDraft: true
           prerelease: false
+          # tauri-action сам выполнит npm install и npm run build корректно для каждой платформы
 
       - name: Build the app (Linux Docker)
         if: matrix.platform == 'ubuntu-22.04'
@@ -86,5 +77,7 @@ jobs:
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/deb/*.deb
           tag_name: ${{ github.ref_name }}
+          # Делаем так, чтобы Linux не перезаписывал релиз, а дополнял его
+          append_body: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
