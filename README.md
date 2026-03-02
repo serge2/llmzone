@@ -59,30 +59,47 @@ You can find the latest installers for your OS in the [Releases](https://github.
 ### Building from Source
 1. **Prerequisites**: [Rust](https://www.rust-lang.org/tools/install) and [Node.js](https://nodejs.org/) (v20+).
 2. **Clone & Install**:
+
    ```bash
    git clone https://github.com/serge2/llmzone.git
    cd llmzone
    npm install
+   ```
 
-    Run Dev Mode:
-    Bash
+3. **Run Dev Mode**:
 
+    ```bash
     npm run tauri dev
+    ```
 
 ## 📦 Production Build & Artifacts
 
+### Standard Build
 To create an optimized production bundle for your current OS, run:
-Bash
 
-npm run tauri build
+    npm run tauri build
+
+### Linux Compatible Build (Docker)
+To ensure the AppImage works across different Linux distributions (resolving GLIBC compatibility issues), we use a Docker-based build environment (Ubuntu 22.04).
+1. **Initialize the Docker environment**:
+
+    ```bash
+    ./init-docker.sh
+    ```
+
+2. **Run the build**:
+
+    ```bash
+    ./build.sh
+    ```
 
 Once the build is complete, you can find the installer artifacts in the following directory:
 
-    Path: src-tauri/target/release/bundle/
+    src-tauri/target/release/bundle/
 
 Depending on your OS, look into the specific subfolders (e.g., appimage/ or nsis/) for the final .AppImage or .exe files.
 
-### Third-Party Libraries
+## Third-Party Libraries
 This project is made possible by the following open-source libraries:
 - **[Tauri](https://tauri.app/)** — Desktop GUI framework (MIT/Apache 2.0)
 - **[Svelte 5](https://svelte.dev/)** — Frontend framework (MIT)
@@ -91,7 +108,7 @@ This project is made possible by the following open-source libraries:
 - **[Marked](https://marked.js.org/)** — Markdown parsing (MIT)
 - **[PrismJS](https://prismjs.com/)** — Syntax highlighting (MIT)
 
-### Assets & Design
+## Assets & Design
 - **UI Icons**: Conceptually generated using AI and manually optimized for the LLM Zone interface.
 - **Technology logos**: (Tauri, Svelte, etc.) are trademarks of their respective owners.
 # Disclaimer
