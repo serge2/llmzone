@@ -21,8 +21,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          # Убираем кеш здесь, чтобы избежать конфликтов нативных модулей
-          
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -50,6 +49,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
 
+      - name: Clean and Install dependencies (Windows/macOS)
+        if: matrix.platform != 'ubuntu-22.04'
+        # Удаляем lock-файл, чтобы npm не тащил старые платформозависимые биндинги
+        run: |
+          rm -f package-lock.json
+          npm install
+        shell: bash
+
       - name: Build the app (Windows/macOS)
         if: matrix.platform != 'ubuntu-22.04'
         uses: tauri-apps/tauri-action@v0
@@ -61,7 +68,6 @@ jobs:
           releaseBody: 'See the assets below for the latest installers.'
           releaseDraft: true
           prerelease: false
-          # tauri-action сам выполнит npm install и npm run build корректно для каждой платформы
 
       - name: Build the app (Linux Docker)
         if: matrix.platform == 'ubuntu-22.04'
@@ -77,7 +83,6 @@ jobs:
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/deb/*.deb
           tag_name: ${{ github.ref_name }}
-          # Делаем так, чтобы Linux не перезаписывал релиз, а дополнял его
           append_body: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
