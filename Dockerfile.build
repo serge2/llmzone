@@ -1,8 +1,6 @@
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-# Эта переменная — магия, которая заставляет инструменты сборки AppImage
-# работать внутри Docker без FUSE
 ENV APPIMAGE_EXTRACT_AND_RUN=1
 
 RUN apt-get update && apt-get install -y \
@@ -16,7 +14,6 @@ RUN apt-get update && apt-get install -y \
     librsvg2-dev \
     javascriptcoregtk-4.1 \
     xdg-utils \
-    # Добавляем эти три пакета:
     libfuse2 \
     file \
     binutils \
@@ -32,7 +29,10 @@ WORKDIR /app
 
 CMD npm install && npm run tauri build; \
     EXIT_CODE=$?; \
-    echo "Fixing permissions..."; \
-    chown -R $(stat -c '%u:%g' /app) /app/src-tauri/target /app/node_modules; \
+    if [ "$CI" != "true" ]; then \
+        echo "Local build detected. Fixing permissions..."; \
+        chown -R $(stat -c '%u:%g' /app) /app/src-tauri/target /app/node_modules || true; \
+    else \
+        echo "CI build detected. Skipping chown."; \
+    fi; \
     exit $EXIT_CODE
-    
