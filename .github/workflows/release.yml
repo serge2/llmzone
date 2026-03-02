@@ -28,6 +28,7 @@ jobs:
       - name: Extract version from tag
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        shell: bash
 
       - name: Update version in config files
         run: |
@@ -37,7 +38,9 @@ jobs:
           function updateJson(path) {
             const content = JSON.parse(fs.readFileSync(path, 'utf8'));
             content.version = newVersion;
-            fs.writeFileSync(path, JSON.stringify(content, null, 2) + '\n');
+            // Явно пишем в utf8, чтобы Windows не чудил с кодировкой
+            fs.writeFileSync(path, JSON.stringify(content, null, 2) + '\n', 'utf8');
+            console.log('Updated ' + path + ' to ' + newVersion);
           }
           updateJson('package.json');
           updateJson('src-tauri/tauri.conf.json');
@@ -51,7 +54,6 @@ jobs:
 
       - name: Clean and Install dependencies (Windows/macOS)
         if: matrix.platform != 'ubuntu-22.04'
-        # Удаляем lock-файл, чтобы npm не тащил старые платформозависимые биндинги
         run: |
           rm -f package-lock.json
           npm install
@@ -68,6 +70,8 @@ jobs:
           releaseBody: 'See the assets below for the latest installers.'
           releaseDraft: true
           prerelease: false
+          # Явно указываем путь к конфигу для Windows
+          projectPath: .
 
       - name: Build the app (Linux Docker)
         if: matrix.platform == 'ubuntu-22.04'
