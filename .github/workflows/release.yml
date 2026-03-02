@@ -32,11 +32,21 @@ jobs:
 
       - name: Update version in config files
         run: |
-          # Обновляем версию в package.json
-          sed -i 's/"version": ".*"/"version": "${{ steps.get_version.outputs.VERSION }}"/' package.json
-          # Обновляем версию в tauri.conf.json
-          sed -i 's/"version": ".*"/"version": "${{ steps.get_version.outputs.VERSION }}"/' src-tauri/tauri.conf.json
-        shell: bash
+          node -e "
+          const fs = require('fs');
+          const newVersion = '${{ steps.get_version.outputs.VERSION }}';
+          
+          // Функция для обновления JSON
+          function updateJson(path) {
+            const content = JSON.parse(fs.readFileSync(path, 'utf8'));
+            content.version = newVersion;
+            fs.writeFileSync(path, JSON.stringify(content, null, 2) + '\n');
+            console.log('Updated ' + path + ' to ' + newVersion);
+          }
+
+          updateJson('package.json');
+          updateJson('src-tauri/tauri.conf.json');
+          "
 
       - name: Install dependencies (Ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
